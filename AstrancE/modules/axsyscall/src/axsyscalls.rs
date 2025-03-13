@@ -69,20 +69,20 @@ pub const SYS_TIME: u32 = 1062;
 
 
 pub fn syscall(id: u32, args: [usize; 6]) -> isize {
-    let mut ret: isize;
-    unsafe {
-        asm!(
-            "ecall",
-            inlateout("a0") args[0] => ret, // a0 是输入输出寄存器 (x10)
-            in("a1") args[1],  // a1 = x11
-            in("a2") args[2],  // a2 = x12
-            in("a3") args[3],  // a3 = x13
-            in("a4") args[4],  // a4 = x14
-            in("a5") args[5],  // a5 = x15
-            in("a7") id,       // a7 = x17 (系统调用号)
-            options(nostack)   // 避免栈操作干扰
-        );
-    }
+    let mut ret: isize = 1;
+    // unsafe {
+    //     asm!(
+    //         "ecall",
+    //         inlateout("a0") args[0] => ret, // a0 是输入输出寄存器 (x10)
+    //         in("a1") args[1],  // a1 = x11
+    //         in("a2") args[2],  // a2 = x12
+    //         in("a3") args[3],  // a3 = x13
+    //         in("a4") args[4],  // a4 = x14
+    //         in("a5") args[5],  // a5 = x15
+    //         in("a7") id,       // a7 = x17 (系统调用号)
+    //         options(nostack)   // 避免栈操作干扰
+    //     );
+    // }
     ret
 }
 
