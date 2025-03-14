@@ -1,16 +1,13 @@
 [package]
 name = "testcase"
-version.workspace = true
-edition.workspace = true
-authors.workspace = true
-license.workspace = true
-homepage.workspace = true
-documentation.workspace = true
-repository.workspace = true
-keywords.workspace = true
-categories.workspace = true
+version = "0.1.0"
+edition = "2024"
 
+[workspace]
 [features]
 [dependencies]
-axstd = { workspace = true}
-axfs = { workspace = true}
+axstd = { path = "../../ulib/axstd"}
+axfs = { path = "../../modules/axfs"}
+axalloc = { path = "../../modules/axalloc"}
+[build-dependencies]
+acbat = { path = "../../modules/acbat"}

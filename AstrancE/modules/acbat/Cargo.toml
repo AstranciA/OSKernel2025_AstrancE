@@ -12,4 +12,9 @@ keywords.workspace = true
 categories.workspace = true
 
 [dependencies]
-pico-args = "0.5.0"
+path-clean = "1.0.1"
+pathdiff = "0.2.3"
+relative-path = "1.9.3"
+
+[dev-dependencies]
+tempfile = "3.19.0"
