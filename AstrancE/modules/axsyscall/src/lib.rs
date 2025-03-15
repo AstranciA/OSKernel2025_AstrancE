@@ -10,17 +10,17 @@ pub use syscall_imp::*;
 use crate::io::*;
 use crate::fs::*;
 
-pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> isize {
+pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
     let sys_id = Sysno::from(sys_id as u32);//检查id与测例是否适配
 
-    let ret: isize = match sys_id {
+    let ret = match sys_id {
         Sysno::write => {
             let fd = args[0];
             let buf_ptr = args[1];
             let size = args[2];
             let buf = unsafe { core::slice::from_raw_parts(buf_ptr as *const u8, size) };
             if size == 0 {
-                return 0;
+                return Err(-1);
             } else {
                 sys_write(fd, buf)
             }
@@ -31,7 +31,7 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> isize {
             let size = args[2];
             let buf = unsafe { core::slice::from_raw_parts_mut(buf_ptr as *mut u8, size) };
             if size == 0 {
-                return 0;
+                return Err(-1);
             } else {
                 sys_read(fd, buf)
             }
@@ -117,7 +117,7 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> isize {
             todo!()
         }
         _ => {
-            -1 // Return error code for unsupported syscall_imp
+            Err(-1) // Return error code for unsupported syscall_imp
         }
     };
 
