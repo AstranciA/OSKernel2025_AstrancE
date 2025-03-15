@@ -2,12 +2,13 @@
 mod test;
 
 use syscalls::Sysno;
+/// sysno参考[参考文件](file:///root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/syscall_imp-0.6.18/src/arch/riscv64.rs)
 // 声明 axsyscalls 模块
-pub mod axsyscalls;
-// 声明 sys_fs 模块（对应 sys_fs 目录）
-pub mod sys_fs; 
-pub use sys_fs::io::*;
-
+// 声明 syscall_imp 模块（对应 syscall_imp 目录）
+pub mod syscall_imp;
+pub use syscall_imp::*;
+use crate::io::*;
+use crate::fs::*;
 
 pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> isize {
     let sys_id = Sysno::from(sys_id as u32);//检查id与测例是否适配
@@ -35,8 +36,88 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> isize {
                 sys_read(fd, buf)
             }
         }
+        // 文件操作相关系统调用
+        Sysno::openat => {
+            let dirfd = args[0];//类型检查与转化！
+            let fname = args[1];
+            let flages = args[2];
+            let mode = args[3];
+            todo!()
+        }
+        Sysno::close => {
+            todo!()
+        }
+        Sysno::statfs => {
+            todo!()
+        }
+        Sysno::fstat => {
+            todo!()
+        }
+        Sysno::lseek => {
+            todo!()
+        }
+        Sysno::mmap => {
+            todo!()
+        }
+        Sysno::munmap => {
+            todo!()
+        }
+        
+        // 进程控制相关系统调用
+        Sysno::exit => {
+            todo!()
+        }
+        Sysno::getpid => {
+            todo!()
+        }
+        Sysno::clone => {
+            todo!()
+        }
+        Sysno::execve => {
+            todo!()
+        }
+        Sysno::wait4 => {
+            todo!()
+        }
+        
+        // 时间相关系统调用
+        Sysno::times => {
+            todo!()
+        }
+        Sysno::gettimeofday => {
+            todo!()
+        }
+        Sysno::nanosleep => {
+            todo!()
+        }
+        
+        // 其他系统调用
+        Sysno::brk => {
+            todo!()
+        }
+        Sysno::uname => {
+            todo!()
+        }
+        Sysno::getcwd => {
+            todo!()
+        }
+        Sysno::dup => {
+            todo!()
+        }
+        Sysno::dup3 => {
+            todo!()
+        }
+        Sysno::chdir => {
+            todo!()
+        }
+        Sysno::mkdirat => {
+            todo!()
+        }
+        Sysno::getdents64 => {
+            todo!()
+        }
         _ => {
-            -1 // Return error code for unsupported syscalls
+            -1 // Return error code for unsupported syscall_imp
         }
     };
 
