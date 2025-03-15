@@ -9,7 +9,7 @@ pub fn getpid() -> Result<isize, isize> {
     Ok(ret)
 }
 
-pub fn exit(code: c_int) -> Result<isize, isize>{
+pub fn exit(code:c_int) -> Result<isize, isize>{
     api::sys_exit(code);
     Ok(2)
 }

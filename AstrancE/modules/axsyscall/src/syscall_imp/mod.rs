@@ -1,3 +1,3 @@
 pub mod io;
 pub mod fs;
-mod task;
+pub mod task;

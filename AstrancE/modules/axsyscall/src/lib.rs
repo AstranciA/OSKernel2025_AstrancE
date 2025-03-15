@@ -9,6 +9,9 @@ pub mod syscall_imp;
 pub use syscall_imp::*;
 use crate::io::*;
 use crate::fs::*;
+use crate::task::*;
+use core::ffi::c_int;
+
 
 pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
     let sys_id = Sysno::from(sys_id as u32);//检查id与测例是否适配
@@ -65,10 +68,11 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
         
         // 进程控制相关系统调用
         Sysno::exit => {
-            todo!()
+            let code = args[0] as c_int;
+            exit(code)
         }
         Sysno::getpid => {
-            todo!()
+            getpid()
         }
         Sysno::clone => {
             todo!()
