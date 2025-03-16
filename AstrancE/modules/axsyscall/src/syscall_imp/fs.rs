@@ -6,7 +6,7 @@ use arceos_posix_api::ctypes;
 
 
 
-pub fn sys_openat(dirfd: c_int,
+pub fn ax_openat(dirfd: c_int,
                   filename: *const c_char,
                   flags: c_int,
                   mode: ctypes::mode_t,

@@ -3,7 +3,7 @@ use core::ffi::c_char;
 use core::ffi::c_int;
 use std::ffi::c_void;
 use arceos_posix_api::ctypes;
-pub fn sys_read(fd: usize,buf:&mut[u8]) -> Result<isize, isize> {
+pub fn ax_read(fd: usize,buf:&mut[u8]) -> Result<isize, isize> {
     let ret: isize;
     //检查读取的位置的权限安全性
     ret = api::sys_read(fd as i32, buf.as_mut_ptr() as *mut c_void, buf.len());
@@ -13,7 +13,7 @@ pub fn sys_read(fd: usize,buf:&mut[u8]) -> Result<isize, isize> {
         Ok(ret)
     }
 }
-pub fn sys_write(fd: usize,buf:&[u8]) -> Result<isize, isize> {
+pub fn ax_write(fd: usize,buf:&[u8]) -> Result<isize, isize> {
     let ret: isize;
     if fd == 1 || fd == 2{
         ret = api::sys_write(fd as i32, buf.as_ptr() as *mut c_void, buf.len());

@@ -11,7 +11,8 @@ use crate::io::*;
 use crate::fs::*;
 use crate::task::*;
 use core::ffi::c_int;
-
+use arceos_posix_api::ctypes;
+use crate::time::*;
 
 pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
     let sys_id = Sysno::from(sys_id as u32);//检查id与测例是否适配
@@ -25,7 +26,7 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
             if size == 0 {
                 return Err(-1);
             } else {
-                sys_write(fd, buf)
+                ax_write(fd, buf)
             }
         }
         Sysno::read => {
@@ -36,7 +37,7 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
             if size == 0 {
                 return Err(-1);
             } else {
-                sys_read(fd, buf)
+                ax_read(fd, buf)
             }
         }
         // 文件操作相关系统调用
@@ -69,10 +70,10 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
         // 进程控制相关系统调用
         Sysno::exit => {
             let code = args[0] as c_int;
-            exit(code)
+            ax_exit(code)
         }
         Sysno::getpid => {
-            getpid()
+            ax_getpid()
         }
         Sysno::clone => {
             todo!()
@@ -83,16 +84,23 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
         Sysno::wait4 => {
             todo!()
         }
-        
+        Sysno::sched_yield => {
+            ax_yield()
+        }
         // 时间相关系统调用
-        Sysno::times => {
-            todo!()
+        Sysno::clock_gettime => {
+            let cls = args[0];
+            let ts: *mut ctypes::timespec= args[1] as *mut ctypes::timespec;
+            ax_clock_gettime(cls as ctypes::clockid_t, ts)
         }
         Sysno::gettimeofday => {
-            todo!()
+            let ts: *mut ctypes::timeval= args[0] as *mut ctypes::timeval;
+            ax_get_time_of_day(ts)
         }
         Sysno::nanosleep => {
-            todo!()
+            let req : *const ctypes::timespec = args[0] as *const ctypes::timespec;
+            let rem: *mut ctypes::timespec = args[1] as *mut ctypes::timespec;
+            ax_nanosleep(req, rem)
         }
         
         // 其他系统调用
