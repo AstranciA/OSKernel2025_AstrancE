@@ -2,9 +2,6 @@
 mod test;
 
 use syscalls::Sysno;
-/// sysno参考[参考文件](file:///root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/syscall_imp-0.6.18/src/arch/riscv64.rs)
-// 声明 axsyscalls 模块
-// 声明 syscall_imp 模块（对应 syscall_imp 目录）
 mod syscall_imp;
 use core::ffi::*;
 use arceos_posix_api::ctypes;
