@@ -122,6 +122,11 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
         Sysno::getdents64 => {
             todo!()
         }
+        
+        //网络相关
+        Sysno::socket => {
+            
+        }
         _ => {
             Err(-1) // Return error code for unsupported syscall_imp
         }
