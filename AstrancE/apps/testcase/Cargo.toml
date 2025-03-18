@@ -6,8 +6,18 @@ edition = "2024"
 [workspace]
 [features]
 [dependencies]
-axstd = { path = "../../ulib/axstd"}
+axstd = { path = "../../ulib/axstd", features = ["paging"]}
+axhal = { path = "../../modules/axhal", features = ["uspace"]}
+axerrno = "0.1"
 axfs = { path = "../../modules/axfs"}
+axruntime = { path = "../../modules/axruntime", features = ["multitask"]}
+arceos_posix_api = { path = "../../api/arceos_posix_api", features = ["uspace"] }
+axlog = { path = "../../modules/axlog"}
+axsync = { path = "../../modules/axsync"}
 axalloc = { path = "../../modules/axalloc"}
+axmm = { path = "../../modules/axmm"}
+xmas-elf = "0.9.1"
+kernel-elf-parser = "0.3.2"
+linkme = "0.3.32"
 [build-dependencies]
 acbat = { path = "../../modules/acbat"}

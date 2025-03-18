@@ -19,7 +19,9 @@ apps := $(wildcard $(app_dir)/*.rs)
 elfs := $(patsubst $(app_dir)/%.rs, $(target_dir)/%, $(apps))
 asms := $(patsubst %, %.asm, $(elfs))
 
+
 build_args := --target $(target) -Zbuild-std=core
+
 ifeq ($(MODE), release)
   build_args += --release
 endif
@@ -32,6 +34,7 @@ export RUSTFLAGS=$(rust_flags)
 all: build
 
 elf:
+	export RUSTFLAGS="-C link-arg=-Tsrc/linker.ld"
 	cargo build $(build_args)
 
 clippy:

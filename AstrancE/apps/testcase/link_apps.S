@@ -4,20 +4,20 @@
     .global _num_app
 _num_app:
     .quad 2
-    .quad app_0029360fc5_start
-    .quad app_0143baff87_start
-    .quad app_0143baff87_end
+    .quad app_00de866969_start
+    .quad app_01a5ead8a9_start
+    .quad app_01a5ead8a9_end
 
     .section .data
-    .global app_0029360fc5_start
-    .global app_0029360fc5_end
-app_0029360fc5_start:
-    .incbin "../../testcases/simple/build/x86_64/hello"
-app_0029360fc5_end:
+    .global app_00de866969_start
+    .global app_00de866969_end
+app_00de866969_start:
+    .incbin "../../testcases/simple/build/riscv64/hello"
+app_00de866969_end:
 
     .section .data
-    .global app_0143baff87_start
-    .global app_0143baff87_end
-app_0143baff87_start:
-    .incbin "../../testcases/simple/build/x86_64/fib"
-app_0143baff87_end:
+    .global app_01a5ead8a9_start
+    .global app_01a5ead8a9_end
+app_01a5ead8a9_start:
+    .incbin "../../testcases/simple/build/riscv64/fib"
+app_01a5ead8a9_end:

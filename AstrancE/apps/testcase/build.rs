@@ -4,8 +4,8 @@ use acbat::BatBuilder;
 
 const TESTCASES: [&str; 2] = [
     //"../../testcases/nimbos/build/x86_64/test_hello_world"
-    "../../testcases/simple/build/x86_64/hello",
-    "../../testcases/simple/build/x86_64/fib"
+    "../../testcases/simple/build/riscv64/hello",
+    "../../testcases/simple/build/riscv64/fib"
 ];
 const LINKER_FILE: &str = "./link_apps.S";
 
