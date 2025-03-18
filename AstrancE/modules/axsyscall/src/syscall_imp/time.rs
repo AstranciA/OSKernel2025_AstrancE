@@ -1,9 +1,5 @@
-use arceos_posix_api::{self as api, ctypes::mode_t};
-use core::ffi::c_char;
-use core::ffi::c_int;
-use std::ffi::c_void;
-use syscalls::Sysno;
-use arceos_posix_api::ctypes;
+use arceos_posix_api::{self as api, ctypes};
+
 
 pub fn ax_clock_gettime(clk: ctypes::clockid_t, ts: *mut ctypes::timespec) -> Result<isize, isize> {
     let ret = unsafe { api::sys_clock_gettime(clk, ts) } as isize;

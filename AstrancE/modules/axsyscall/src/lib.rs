@@ -4,16 +4,10 @@ mod test;
 use syscalls::Sysno;
 /// sysno参考[参考文件](file:///root/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/syscall_imp-0.6.18/src/arch/riscv64.rs)
 // 声明 axsyscalls 模块
-// 声明 syscall_imp 模块（对应 syscall_imp 目录）
-pub mod syscall_imp;
-pub use syscall_imp::*;
-use crate::io::*;
-use crate::fs::*;
-use crate::task::*;
+// 声明 syscall_imp 模块（对应 syscall_imp 目录） 
+mod syscall_imp;
 use core::ffi::c_int;
 use arceos_posix_api::ctypes;
-use crate::time::*;
-
 pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
     let sys_id = Sysno::from(sys_id as u32);//检查id与测例是否适配
 
@@ -26,7 +20,7 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
             if size == 0 {
                 return Err(-1);
             } else {
-                ax_write(fd, buf)
+                syscall_imp::io::ax_write(fd, buf)
             }
         }
         Sysno::read => {
@@ -37,7 +31,7 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
             if size == 0 {
                 return Err(-1);
             } else {
-                ax_read(fd, buf)
+                syscall_imp::io::ax_read(fd, buf)
             }
         }
         // 文件操作相关系统调用
@@ -70,10 +64,10 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
         // 进程控制相关系统调用
         Sysno::exit => {
             let code = args[0] as c_int;
-            ax_exit(code)
+            syscall_imp::task::ax_exit(code)
         }
         Sysno::getpid => {
-            ax_getpid()
+            syscall_imp::task::ax_getpid()
         }
         Sysno::clone => {
             todo!()
@@ -85,22 +79,22 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
             todo!()
         }
         Sysno::sched_yield => {
-            ax_yield()
+            syscall_imp::task::ax_yield()
         }
         // 时间相关系统调用
         Sysno::clock_gettime => {
             let cls = args[0];
             let ts: *mut ctypes::timespec= args[1] as *mut ctypes::timespec;
-            ax_clock_gettime(cls as ctypes::clockid_t, ts)
+            syscall_imp::time::ax_clock_gettime(cls as ctypes::clockid_t, ts)
         }
         Sysno::gettimeofday => {
             let ts: *mut ctypes::timeval= args[0] as *mut ctypes::timeval;
-            ax_get_time_of_day(ts)
+            syscall_imp::time::ax_get_time_of_day(ts)
         }
         Sysno::nanosleep => {
             let req : *const ctypes::timespec = args[0] as *const ctypes::timespec;
             let rem: *mut ctypes::timespec = args[1] as *mut ctypes::timespec;
-            ax_nanosleep(req, rem)
+            syscall_imp::time::ax_nanosleep(req, rem)
         }
         
         // 其他系统调用
@@ -135,3 +129,4 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
 
     ret
 }
+

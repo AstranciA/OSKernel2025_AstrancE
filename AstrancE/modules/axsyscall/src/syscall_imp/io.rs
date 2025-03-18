@@ -1,8 +1,7 @@
-use arceos_posix_api::{self as api, ctypes::mode_t};
+use arceos_posix_api::{self as api, ctypes};
 use core::ffi::c_char;
 use core::ffi::c_int;
 use std::ffi::c_void;
-use arceos_posix_api::ctypes;
 pub fn ax_read(fd: usize,buf:&mut[u8]) -> Result<isize, isize> {
     let ret: isize;
     //检查读取的位置的权限安全性
