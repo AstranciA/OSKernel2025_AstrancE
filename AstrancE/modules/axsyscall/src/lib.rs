@@ -5,6 +5,10 @@ use syscalls::Sysno;
 mod syscall_imp;
 use core::ffi::*;
 use arceos_posix_api::ctypes;
+
+
+
+
 pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
     let sys_id = Sysno::from(sys_id as u32);//检查id与测例是否适配
 
@@ -14,22 +18,18 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
             let buf_ptr = args[1];
             let size = args[2];
             let buf = unsafe { core::slice::from_raw_parts(buf_ptr as *const u8, size) };
-            if size == 0 {
-                return Err(-1);
-            } else {
-                syscall_imp::io::ax_write(fd, buf)
-            }
+            syscall_imp::io::ax_write(fd, buf)
+            // call_with_args!(syscall_imp::io::ax_write,args)
         }
+        //宏承接参数！！！！！！！！
+        // sysmatch!(Sysno::read, handler, 3)
+        // #[sysmatch(Sysno::read)]
         Sysno::read => {
             let fd = args[0];
             let buf_ptr = args[1];
             let size = args[2];
             let buf = unsafe { core::slice::from_raw_parts_mut(buf_ptr as *mut u8, size) };
-            if size == 0 {
-                return Err(-1);
-            } else {
                 syscall_imp::io::ax_read(fd, buf)
-            }
         }
         // 文件操作相关系统调用
         Sysno::openat => {
