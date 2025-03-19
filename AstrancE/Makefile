@@ -167,10 +167,11 @@ debug: build
 	sleep 1
 	$(GDB) $(OUT_ELF) \
 	  -ex 'target remote localhost:1234' \
-	  -ex 'b rust_entry' \
-	  -ex 'continue' \
+	  -ex 'b main' \
 	  -ex 'disp /16i $$pc'
 
+	  #-ex 'continue' \
+	  #-ex 'b rust_entry' \
 clippy: oldconfig
 ifeq ($(origin ARCH), command line)
 	$(call cargo_clippy,--target $(TARGET))

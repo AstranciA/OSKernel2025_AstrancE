@@ -1,9 +1,4 @@
-use core::arch::asm;
-
-use axhal::{
-    arch::{TaskContext, UspaceContext},
-    mem::VirtAddr,
-};
+use axhal::mem::VirtAddr;
 use xmas_elf::ElfFile;
 
 use crate::elf::ELFInfo;
@@ -37,9 +32,9 @@ pub fn load_app(idx: usize) -> &'static [u8] {
     src
 }
 
-pub fn load_elf(idx: usize) -> ELFInfo {
+pub fn load_elf(idx: usize, uspace_base: VirtAddr) -> ELFInfo {
     let app_slice = load_app(idx);
     let elf_file = ElfFile::new(app_slice).unwrap();
-    let elf_info = ELFInfo::new(elf_file);
+    let elf_info = ELFInfo::new(elf_file, uspace_base);
     elf_info
 }

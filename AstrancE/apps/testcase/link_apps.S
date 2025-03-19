@@ -3,21 +3,13 @@
     .section .data
     .global _num_app
 _num_app:
-    .quad 2
-    .quad app_00de866969_start
-    .quad app_01a5ead8a9_start
-    .quad app_01a5ead8a9_end
+    .quad 1
+    .quad app_0007e4a833_start
+    .quad app_0007e4a833_end
 
     .section .data
-    .global app_00de866969_start
-    .global app_00de866969_end
-app_00de866969_start:
-    .incbin "../../testcases/simple/build/riscv64/hello"
-app_00de866969_end:
-
-    .section .data
-    .global app_01a5ead8a9_start
-    .global app_01a5ead8a9_end
-app_01a5ead8a9_start:
-    .incbin "../../testcases/simple/build/riscv64/fib"
-app_01a5ead8a9_end:
+    .global app_0007e4a833_start
+    .global app_0007e4a833_end
+app_0007e4a833_start:
+    .incbin "../../testcases/nimbos/build/riscv64/nothing"
+app_0007e4a833_end:

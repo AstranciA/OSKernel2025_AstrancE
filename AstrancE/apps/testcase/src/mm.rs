@@ -1,25 +1,22 @@
 use alloc::string::ToString;
-use axalloc::global_init;
 use axerrno::AxResult;
 use axhal::{
     mem::VirtAddr,
     paging::MappingFlags,
     trap::{PAGE_FAULT, register_trap_handler},
 };
-use axmm::{AddrSpace, init_memory_management};
+use axmm::AddrSpace;
 
 use crate::{
-    config::{self, HEAP_SIZE},
+    config::{self},
     loader,
 };
 
-const HEAP: [usize; HEAP_SIZE] = [0; HEAP_SIZE];
-
-pub fn init_mm() {
-    //global_init(HEAP.as_ptr() as usize, HEAP.len());
-    //init_memory_management();
-}
-
+/// load app to memory
+/// # Returns
+/// - The first return value is the entry point of the user app.
+/// - The second return value is the top of the user stack.
+/// - The third return value is the address space of the user app.
 pub fn load_user_app(app_name: &str) -> AxResult<(VirtAddr, VirtAddr, AddrSpace)> {
     let mut uspace = axmm::new_user_aspace(
         VirtAddr::from_usize(config::USER_SPACE_BASE),
@@ -34,9 +31,8 @@ pub fn map_elf_sections(
     uspace: &mut AddrSpace,
 ) -> Result<(VirtAddr, VirtAddr), axerrno::AxError> {
     //let elf_info = loader::load_elf(app_name, uspace.base());
-    let mut elf_info = loader::load_elf(0);
+    let mut elf_info = loader::load_elf(0, uspace.base());
     for segement in elf_info.segments.iter() {
-        println!("");
         debug!(
             "Mapping ELF segment: [{:#x?}, {:#x?}) flags: {:#x?}",
             segement.start_va,
@@ -49,8 +45,7 @@ pub fn map_elf_sections(
             continue;
         }
 
-        uspace.write(segement.start_va + segement.elf_offset, segement.data)?;
-
+        uspace.write(segement.start_va + segement.offset, segement.data)?;
         // TDOO: flush the I-cache
     }
 
@@ -66,7 +61,7 @@ pub fn map_elf_sections(
         ustack_start, ustack_end
     );
     // FIXME: Add more arguments and environment variables
-    let stack_vec = kernel_elf_parser::app_stack_region(
+    let stack_data = kernel_elf_parser::app_stack_region(
         &[app_name.to_string()],
         &[],
         elf_info.auxv.as_mut_slice(),
@@ -80,11 +75,9 @@ pub fn map_elf_sections(
         true,
     )?;
 
-    uspace.write(
-        VirtAddr::from_usize(stack_vec.as_ptr() as usize),
-        stack_vec.as_slice(),
-    )?;
-    Ok((elf_info.entry, VirtAddr::from_ptr_of(stack_vec.as_ptr())))
+    uspace.write(ustack_start, stack_data.as_slice())?;
+    //Ok((elf_info.entry, VirtAddr::from_ptr_of(stack_data.as_ptr())))
+    Ok((elf_info.entry, ustack_end))
 }
 
 #[register_trap_handler(PAGE_FAULT)]
