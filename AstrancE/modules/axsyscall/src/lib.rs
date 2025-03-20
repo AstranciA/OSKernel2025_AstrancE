@@ -1,13 +1,13 @@
 //! syscall impl for AstrancE
+// #![no_std]
+#![cfg_attr(not(test), no_std)]
+// #![cfg(test)]
 mod test;
 
 use syscalls::Sysno;
 mod syscall_imp;
 use core::ffi::*;
 use arceos_posix_api::ctypes;
-
-
-
 
 pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
     let sys_id = Sysno::from(sys_id as u32);//检查id与测例是否适配
@@ -32,6 +32,7 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
                 syscall_imp::io::ax_read(fd, buf)
         }
         // 文件操作相关系统调用
+        #[cfg(all(feature = "fs", feature = "fd"))]
         Sysno::openat => {
             let dirfd = args[0];//类型检查与转化！
             let fname = args[1];
@@ -121,20 +122,21 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
         }
 
         //网络相关
+        #[cfg(feature = "net")]
         Sysno::socket => {
             let domain = args[0] as c_int;
             let socktype = args[1] as c_int;
             let protocol = args[2] as c_int;
             syscall_imp::net::ax_socket(domain, socktype, protocol)
         }
-
+        #[cfg(feature = "net")]
         Sysno::bind => {
             let fd = args[0] as c_int;
             let addr = args[1] as *const ctypes::sockaddr;
             let addrlen = args[2] as ctypes::socklen_t;
             syscall_imp::net::ax_bind(fd, addr, addrlen)
         }
-
+        #[cfg(feature = "net")]
         // fd, addr, addrlen
         Sysno::connect => {
             let fd = args[0] as c_int;
@@ -142,7 +144,7 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
             let addrlen = args[2] as ctypes::socklen_t;
             syscall_imp::net::ax_connect(fd, addr, addrlen)
         }
-
+        #[cfg(feature = "net")]
         // fd, buf, len, flags, addr, addrlen
         Sysno::sendto => {
             let fd = args[0] as c_int;
@@ -153,7 +155,7 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
             let addrlen = args[5] as ctypes::socklen_t;
             syscall_imp::net::ax_sendto(fd, buf, len, flags, addr, addrlen)
         }
-
+        #[cfg(feature = "net")]
         // fd, buf, len, flags
         Sysno::sendmsg => {
             let fd = args[0] as c_int;
@@ -162,7 +164,7 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
             let flags = args[3] as c_int;
             syscall_imp::net::ax_send(fd, buf, len, flags)
         }
-
+        #[cfg(feature = "net")]
         // fd, buf, len, flags, addr, addrlen
         Sysno::recvfrom => {
             let fd = args[0] as c_int;
@@ -173,7 +175,7 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
             let addrlen = args[5] as *mut ctypes::socklen_t;
             unsafe { syscall_imp::net::ax_recvfrom(fd, buf, len, flags, addr, addrlen) }
         }
-
+        #[cfg(feature = "net")]
         // fd, buf, len, flags
         Sysno::recvmsg => {
             let fd = args[0] as c_int;
@@ -182,14 +184,14 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
             let flags = args[3] as c_int;
             syscall_imp::net::ax_recv(fd, buf, len, flags)
         }
-
+        #[cfg(feature = "net")]
         // fd, backlog
         Sysno::listen => {
             let fd = args[0] as c_int;
             let backlog = args[1] as c_int;
             syscall_imp::net::ax_listen(fd, backlog)
         }
-
+        #[cfg(feature = "net")]
         // fd, addr, addrlen
         Sysno::accept => {
             let fd = args[0] as c_int;
@@ -197,14 +199,14 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
             let addrlen = args[2] as *mut ctypes::socklen_t;
             unsafe { syscall_imp::net::ax_accept(fd, addr, addrlen) }
         }
-
+        #[cfg(feature = "net")]
         // fd, how
         Sysno::shutdown => {
             let fd = args[0] as c_int;
             let how = args[1] as c_int;
             syscall_imp::net::ax_shutdown(fd, how)
         }
-        
+        #[cfg(feature = "net")]
         // fd, addr, addrlen
         Sysno::getsockname => {
             let fd = args[0] as c_int;
@@ -212,7 +214,7 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
             let addrlen = args[2] as *mut ctypes::socklen_t;
             unsafe { syscall_imp::net::ax_getsockname(fd, addr, addrlen) }
         }
-
+        #[cfg(feature = "net")]
         // fd, addr, addrlen
         Sysno::getpeername => {
             let fd = args[0] as c_int;

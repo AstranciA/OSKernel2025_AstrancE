@@ -9,7 +9,9 @@ documentation.workspace = true
 repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
-
+[features]
+fs = []
+net = []
 [dependencies]
-syscalls = "0.6.18"
-arceos_posix_api = { workspace = true , features = ["fd","fs","net"] }
+syscalls = { version = "0.6.18", default-features = false }
+arceos_posix_api = { workspace = true }
