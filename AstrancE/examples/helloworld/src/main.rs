@@ -5,7 +5,7 @@
 use axstd::println;
 use axsyscall::syscall_handler;
 
-const s:  &str = "Hello, wgfdfcszorld!";
+const s:  &str = "Hello, axsyscall!";
 #[cfg_attr(feature = "axstd", unsafe(no_mangle))]
 fn main() {
     println!("Hello, world!");
