@@ -66,7 +66,7 @@ axruntime = { path = "modules/axruntime" }
 axsync = { path = "modules/axsync" }
 axtask = { path = "modules/axtask" }
 axdma = { path = "modules/axdma" }
-
+axsyscall = { path = "modules/axsyscall"}
 acbat = { path = "modules/acbat" }
 
 #[patch.crates-io]

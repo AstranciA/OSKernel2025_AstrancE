@@ -39,12 +39,16 @@ fn write_impl(fd: c_int, buf: *const c_void, count: usize) -> LinuxResult<ctypes
     {
         Ok(get_file_like(fd)?.write(src)? as ctypes::ssize_t)
     }
+    
     #[cfg(not(feature = "fd"))]
-    match fd {
-        0 => Err(LinuxError::EPERM),
-        1 | 2 => Ok(super::stdio::stdout().write(src)? as ctypes::ssize_t),
-        _ => Err(LinuxError::EBADF),
+    {
+         match fd {
+                0 => Err(LinuxError::EPERM),
+                1 | 2 => Ok(super::stdio::stdout().write(src)? as ctypes::ssize_t),
+                _ => Err(LinuxError::EBADF),
+            }
     }
+   
 }
 
 /// Write data to the file indicated by `fd`.

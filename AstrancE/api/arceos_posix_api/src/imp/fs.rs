@@ -164,20 +164,17 @@ pub fn sys_openat(
         return sys_open(filename.as_ptr() as _, flags, mode);
     }
 
-    match Directory::from_fd(dirfd).and_then(|dir| {
+    Directory::from_fd(dirfd).and_then(|dir| {
         add_file_or_directory_fd(
             |filename, options| dir.inner.lock().open_file_at(filename, options),
             |filename, options| dir.inner.lock().open_dir_at(filename, options),
             filename,
             &flags_to_options(flags, mode),
         )
-    }) {
-        Ok(fd) => fd,
-        Err(e) => {
-            debug!("sys_openat => {}", e);
-            -1
-        }
-    }
+    }).unwrap_or_else(|e| {
+        debug!("sys_openat => {}", e);
+        -1
+    })
 }
 
 /// Use the function to open file or directory, then add into file descriptor table.
