@@ -29,6 +29,7 @@ use axhal::{arch::UspaceContext, mem::VirtAddr};
 use axmm::{kernel_aspace, AddrSpace};
 use axstd::println;
 use axsync::Mutex;
+use axsyscall::syscall_handler;
 use mm::load_user_app;
 
 global_asm!(include_str!("../link_apps.S"));
@@ -43,17 +44,22 @@ fn main() {
         entry_vaddr, ustack_top, uspace
     );
     let uctx = UspaceContext::new(entry_vaddr.into(), ustack_top, 2333);
-    println!("User task created");
     let user_task = task::spawn_user_task(Arc::new(Mutex::new(uspace)), uctx);
-    println!("User task spawned" );
     let exit_code = user_task.join();
     info!("User task exited with code: {:?}", exit_code);
 }
 
 #[register_trap_handler(SYSCALL)]
 fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
-    debug!("syscall_handler: {:?}", syscall_num);
-    todo!();
+    let args = [tf.arg0(), tf.arg1(), tf.arg2(), tf.arg3(), tf.arg4(), tf.arg5()];
+    let result = syscall_handler(syscall_num, args);
+    let result  = match result {
+        Ok(r) => r,
+        Err(e) => e
+    };
+    println!("syscall_handler result: {:}", result);
+    result
+
 }
 
 /// If the target architecture requires it, the kernel portion of the address

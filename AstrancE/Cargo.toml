@@ -17,8 +17,6 @@ members = [
     "modules/axsync",
     "modules/axtask",
 
-    "modules/acbat",
-
     "api/axfeat",
     "api/arceos_api",
     "api/arceos_posix_api",
@@ -30,7 +28,9 @@ members = [
     "examples/httpclient",
     "examples/httpserver",
     "examples/httpserver",
-    "examples/shell", "modules/acbat", "modules/axsyscall",
+    "examples/shell", 
+    "modules/acbat", 
+    "modules/axsyscall", 
 ]
 
 [workspace.package]

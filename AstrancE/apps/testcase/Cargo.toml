@@ -12,6 +12,7 @@ axerrno = "0.1"
 axfs = { path = "../../modules/axfs"}
 axtask = { path = "../../modules/axtask"}
 axruntime = { path = "../../modules/axruntime", features = ["multitask"]}
+axsyscall = { path = "../../modules/axsyscall"}
 arceos_posix_api = { path = "../../api/arceos_posix_api", features = ["uspace","fd"] }
 axlog = { path = "../../modules/axlog"}
 axns = { path = "../../modules/axns", features = ["thread-local"]}
@@ -28,7 +29,7 @@ syscalls = {version = "0.6.18",default-features = false }
 crate_interface = "0.1.4"
 memory_addr = "0.3.2"
 [build-dependencies]
-acbat = { path = "../../modules/acbat"}
+acbat = { path = "../../libs/acbat"}
 toml_edit = "0.22.24"
 
 [patch.crates-io]

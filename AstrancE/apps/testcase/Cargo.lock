@@ -413,6 +413,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "axsyscall"
+version = "0.1.0"
+dependencies = [
+ "arceos_posix_api",
+ "syscalls",
+]
+
+[[package]]
 name = "axtask"
 version = "0.1.0"
 dependencies = [
@@ -1302,6 +1310,7 @@ dependencies = [
  "axruntime",
  "axstd",
  "axsync",
+ "axsyscall",
  "axtask",
  "bitflags 2.9.0",
  "crate_interface",
