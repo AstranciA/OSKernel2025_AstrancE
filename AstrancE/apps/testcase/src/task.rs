@@ -192,6 +192,7 @@ impl Drop for TaskExt {
         if !cfg!(target_arch = "aarch64") && !cfg!(target_arch = "loongarch64") {
             // See [`crate::new_user_aspace`]
 
+
             let kernel = kernel_aspace().lock();
 
             self.aspace
@@ -334,23 +335,26 @@ pub fn exec(program_name: &str) -> AxResult<()> {
     aspace.unmap_user_areas()?;
     axhal::arch::flush_tlb(None);
 
-    let (entry_point, user_stack_base) = crate::mm::map_elf_sections(&program_name, &mut aspace)
-        .map_err(|_| {
-            error!("Failed to load app {}", program_name);
-            AxError::NotFound
-        })?;
-    current_task.set_name(&program_name);
-
-    let task_ext = unsafe { &mut *(current_task.task_ext_ptr() as *mut TaskExt) };
-    task_ext.uctx = UspaceContext::new(entry_point.as_usize(), user_stack_base, 0);
-
-    unsafe {
-        task_ext.uctx.enter_uspace(
-            current_task
-                .kernel_stack_top()
-                .expect("No kernel stack top"),
-        );
-    }
+    todo!();
+/*
+ *    let (entry_point, user_stack_base) = crate::mm::map_elf_sections(&program_name, &mut aspace)
+ *        .map_err(|_| {
+ *            error!("Failed to load app {}", program_name);
+ *            AxError::NotFound
+ *        })?;
+ *    current_task.set_name(&program_name);
+ *
+ *    let task_ext = unsafe { &mut *(current_task.task_ext_ptr() as *mut TaskExt) };
+ *    task_ext.uctx = UspaceContext::new(entry_point.as_usize(), user_stack_base, 0);
+ *
+ *    unsafe {
+ *        task_ext.uctx.enter_uspace(
+ *            current_task
+ *                .kernel_stack_top()
+ *                .expect("No kernel stack top"),
+ *        );
+ *    }
+ */
 }
 
 pub fn time_stat_from_kernel_to_user() {

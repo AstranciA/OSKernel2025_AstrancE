@@ -3,9 +3,10 @@
     .section .data
     .global _num_app
 _num_app:
-    .quad 1
+    .quad 2
     .quad app_00002798b7_start
-    .quad app_00002798b7_end
+    .quad app_019f4eca3f_start
+    .quad app_019f4eca3f_end
 
     .section .data
     .global app_00002798b7_start
@@ -13,3 +14,10 @@ _num_app:
 app_00002798b7_start:
     .incbin "../../testcases/nimbos/build/riscv64/hello_world"
 app_00002798b7_end:
+
+    .section .data
+    .global app_019f4eca3f_start
+    .global app_019f4eca3f_end
+app_019f4eca3f_start:
+    .incbin "../../testcases/nimbos/build/riscv64/getpid"
+app_019f4eca3f_end:

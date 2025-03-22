@@ -14,4 +14,4 @@ fs = []
 net = []
 [dependencies]
 syscalls = { version = "0.6.18", default-features = false }
-arceos_posix_api = { workspace = true }
+arceos_posix_api = { workspace = true, features = ["multitask"] }

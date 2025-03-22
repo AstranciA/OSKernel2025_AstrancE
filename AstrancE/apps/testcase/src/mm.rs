@@ -9,7 +9,10 @@ use axmm::AddrSpace;
 use axstd::os::arceos::modules::axconfig;
 
 use crate::{
-    config::{self}, copy_from_kernel, loader
+    config::{self},
+    copy_from_kernel,
+    elf::ELFInfo,
+    loader,
 };
 
 fn new_user_aspace_empty() -> AxResult<AddrSpace> {
@@ -24,21 +27,24 @@ fn new_user_aspace_empty() -> AxResult<AddrSpace> {
 /// - The first return value is the entry point of the user app.
 /// - The second return value is the top of the user stack.
 /// - The third return value is the address space of the user app.
-pub fn load_user_app(app_name: &str) -> AxResult<(VirtAddr, VirtAddr, AddrSpace)> {
-    let mut uspace = new_user_aspace_empty().and_then(|mut it|{
-        copy_from_kernel(&mut it)?;
-        Ok(it)
-    }).expect("Failed ot create user address space");
-    let (entry, ustack_pointer) = map_elf_sections(app_name, &mut uspace)?;
+pub fn load_user_app(app_name: &str, app_id: usize) -> AxResult<(VirtAddr, VirtAddr, AddrSpace)> {
+    let mut uspace = new_user_aspace_empty()
+        .and_then(|mut it| {
+            copy_from_kernel(&mut it)?;
+            Ok(it)
+        })
+        .expect("Failed ot create user address space");
+    let (entry, ustack_pointer) = map_elf_sections(app_name, app_id, &mut uspace)?;
     Ok((entry, ustack_pointer, uspace))
 }
 
 pub fn map_elf_sections(
     app_name: &str,
+    app_id: usize,
     uspace: &mut AddrSpace,
 ) -> Result<(VirtAddr, VirtAddr), axerrno::AxError> {
     //let elf_info = loader::load_elf(app_name, uspace.base());
-    let mut elf_info = loader::load_elf(0, uspace.base());
+    let mut elf_info = ELFInfo::new(loader::load_app_elf(app_id), uspace.base());
     for segement in elf_info.segments.iter() {
         debug!(
             "Mapping ELF segment: [{:#x?}, {:#x?}) flags: {:#x?}",

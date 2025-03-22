@@ -32,9 +32,7 @@ pub fn load_app(idx: usize) -> &'static [u8] {
     src
 }
 
-pub fn load_elf(idx: usize, uspace_base: VirtAddr) -> ELFInfo {
+pub fn load_app_elf(idx: usize) -> ElfFile<'static> {
     let app_slice = load_app(idx);
-    let elf_file = ElfFile::new(app_slice).unwrap();
-    let elf_info = ELFInfo::new(elf_file, uspace_base);
-    elf_info
+    ElfFile::new(app_slice).unwrap()
 }

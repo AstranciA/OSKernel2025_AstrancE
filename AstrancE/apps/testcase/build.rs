@@ -6,10 +6,11 @@ use toml_edit::{DocumentMut, Item, Table};
 
 use acbat::BatBuilder;
 
-const TESTCASES: [&str; 1] = [
+const TESTCASES: [&str; 2] = [
     //"../../testcases/nimbos/build/x86_64/test_hello_world"
     //"../../testcases/simple/build/riscv64/hello",
     "../../testcases/nimbos/build/riscv64/hello_world",
+    "../../testcases/nimbos/build/riscv64/getpid",
     //"../../testcases/nimbos/build/riscv64/nothing",
 ];
 const LINKER_FILE: &str = "./link_apps.S";
