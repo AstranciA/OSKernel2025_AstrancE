@@ -108,7 +108,8 @@ pub unsafe extern "C" fn setjmp(_buf: *mut ctypes::__jmp_buf_tag) {
     );
     #[cfg(all(target_arch = "loongarch64", feature = "fp_simd"))]
     core::arch::naked_asm!(
-        "st.d     $ra, $a0, 0
+        "
+        st.d     $ra, $a0, 0
         st.d     $sp, $a0, 1 * 8
         st.d     $s0, $a0, 2 * 8
         st.d     $s1, $a0, 3 * 8
@@ -121,7 +122,6 @@ pub unsafe extern "C" fn setjmp(_buf: *mut ctypes::__jmp_buf_tag) {
         st.d     $s8, $a0, 10 * 8
         st.d     $fp, $a0, 11 * 8
         st.d     $r1, $a0, 12 * 8
-        
         fst.d    $f24, $a0, 13 * 8
         fst.d    $f25, $a0, 14 * 8
         fst.d    $f26, $a0, 15 * 8
@@ -130,14 +130,13 @@ pub unsafe extern "C" fn setjmp(_buf: *mut ctypes::__jmp_buf_tag) {
         fst.d    $f29, $a0, 18 * 8
         fst.d    $f30, $a0, 19 * 8
         fst.d    $f31, $a0, 20 * 8
-
         li.w  $a0, 0
-        ret
-        ",
+        ret",
     );
     #[cfg(all(target_arch = "loongarch64", not(feature = "fp_simd")))]
     core::arch::naked_asm!(
-        "st.d     $ra, $a0, 0
+        "
+        st.d     $ra, $a0, 0
         st.d     $sp, $a0, 1 * 8
         st.d     $s0, $a0, 2 * 8
         st.d     $s1, $a0, 3 * 8
@@ -150,7 +149,6 @@ pub unsafe extern "C" fn setjmp(_buf: *mut ctypes::__jmp_buf_tag) {
         st.d     $s8, $a0, 10 * 8
         st.d     $fp, $a0, 11 * 8
         st.d     $r1, $a0, 12 * 8
-
         li.w  $a0, 0
         ret",
     );
@@ -274,10 +272,10 @@ pub unsafe extern "C" fn longjmp(_buf: *mut ctypes::__jmp_buf_tag, _val: c_int) 
         add a0, a0, a1
         ret",
     );
-
     #[cfg(all(target_arch = "loongarch64", feature = "fp_simd"))]
     core::arch::naked_asm!(
-        "ld.d     $ra, $a1, 0
+        "
+        ld.d     $ra, $a1, 0
         ld.d     $s0, $a1, 2 * 8
         ld.d     $s1, $a1, 3 * 8
         ld.d     $s2, $a1, 4 * 8
@@ -290,7 +288,6 @@ pub unsafe extern "C" fn longjmp(_buf: *mut ctypes::__jmp_buf_tag, _val: c_int) 
         ld.d     $fp, $a1, 11 * 8
         ld.d     $sp, $a1, 1 * 8
         ld.d     $r21, $a1, 12 * 8
-        
         fld.d    $f24, $a0, 13 * 8
         fld.d    $f25, $a0, 14 * 8
         fld.d    $f26, $a0, 15 * 8
@@ -299,15 +296,14 @@ pub unsafe extern "C" fn longjmp(_buf: *mut ctypes::__jmp_buf_tag, _val: c_int) 
         fld.d    $f29, $a0, 18 * 8
         fld.d    $f30, $a0, 19 * 8
         fld.d    $f31, $a0, 20 * 8
-        
         sltui    $a0, $a1, 1
         add.d    $a0, $a0, $a1
-        jirl     $zero,$ra, 0
-        "
+        jirl     $zero,$ra, 0"
     );
     #[cfg(all(target_arch = "loongarch64", not(feature = "fp_simd")))]
     core::arch::naked_asm!(
-        "ld.d     $ra, $a1, 0
+        "
+        ld.d     $ra, $a1, 0
         ld.d     $s0, $a1, 2 * 8
         ld.d     $s1, $a1, 3 * 8
         ld.d     $s2, $a1, 4 * 8
@@ -320,10 +316,8 @@ pub unsafe extern "C" fn longjmp(_buf: *mut ctypes::__jmp_buf_tag, _val: c_int) 
         ld.d     $fp, $a1, 11 * 8
         ld.d     $sp, $a1, 1 * 8
         ld.d     $r21, $a1, 12 * 8
-
         sltui    $a0, $a1, 1
         add.d    $a0, $a0, $a1
-        jirl     $zero,$ra, 0
-        ",
+        jirl     $zero,$ra, 0",
     );
 }

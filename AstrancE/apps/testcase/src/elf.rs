@@ -28,16 +28,18 @@ pub struct ELFInfo {
 }
 
 impl ELFInfo {
-    pub fn new(elf: ElfFile<'static>) -> Self {
+    pub fn new(elf: ElfFile<'static>, uspace_base: VirtAddr) -> Self {
         let elf_header = elf.header;
 
         // will be checked in parser
         //Self::assert_magic(&elf_header);
 
+        println!("uspace_base:{:x}", uspace_base.as_usize());
         Self::check_arch(&elf_header).unwrap();
-        let elf_parser = kernel_elf_parser::ELFParser::new(&elf, 0, None, 0).unwrap();
+        let elf_parser = kernel_elf_parser::ELFParser::new(&elf, 0, None, uspace_base.as_usize()).unwrap();
 
         let elf_offset = elf_parser.base();
+        println!("elf_offset: {:x}", elf_offset);
 
         let segments = elf
             .program_iter()
@@ -61,15 +63,16 @@ impl ELFInfo {
                 };
 
                 ELFSegment {
-                    elf_offset,
                     flags,
                     start_va: st_va_align,
                     size,
                     data,
+                    offset: st_va.align_offset_4k()
                 }
             })
             .collect();
 
+        info!("{:x}, {:x}", elf.header.pt2.entry_point(), elf_offset);
         ELFInfo {
             entry: VirtAddr::from(elf.header.pt2.entry_point() as usize + elf_offset),
             segments,
@@ -98,16 +101,16 @@ impl ELFInfo {
     }
 }
 pub struct ELFSegment {
-    pub elf_offset: usize,
     pub start_va: VirtAddr,
     pub size: usize,
     pub flags: MappingFlags,
     pub data: &'static [u8],
+    pub offset: usize,
 }
 
 impl ELFSegment {
     pub fn into_to_mapping_flag(ph_flags: Flags) -> MappingFlags {
-        let mut ret = MappingFlags::empty();
+        let mut ret = MappingFlags::USER;
         if ph_flags.is_read() {
             ret |= MappingFlags::READ;
         }

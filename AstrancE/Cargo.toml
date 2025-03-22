@@ -69,9 +69,13 @@ axdma = { path = "modules/axdma" }
 axsyscall = { path = "modules/axsyscall"}
 acbat = { path = "modules/acbat" }
 
-[patch.crates-io]
-page_table_multiarch = { git = "https://github.com/oscomp/page_table_multiarch.git", rev = "c8a13b0"}
-page_table_entry = { git = "https://github.com/oscomp/page_table_multiarch.git", rev = "c8a13b0" }
+#[patch.crates-io]
+#page_table_multiarch = { git = "https://github.com/oscomp/page_table_multiarch.git", rev = "c8a13b0"}
+#page_table_entry = { git = "https://github.com/oscomp/page_table_multiarch.git", rev = "c8a13b0" }
 
 [profile.release]
 lto = true
+
+[patch.crates-io]
+page_table_multiarch = { git = "https://github.com/Mivik/page_table_multiarch.git", rev = "19ededd" }
+page_table_entry = { git = "https://github.com/Mivik/page_table_multiarch.git", rev = "19ededd" }
