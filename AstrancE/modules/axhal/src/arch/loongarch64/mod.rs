@@ -1,12 +1,13 @@
 #[macro_use]
+mod macros;
+
 mod context;
 mod trap;
 
 use core::arch::asm;
-use loongArch64::register::{
-    crmd, ecfg, eentry, euen, pgd, pgdh, pgdl, pwch, pwcl, stlbps, tlbidx, tlbrehi, tlbrentry,
-};
+use loongArch64::register::{crmd, ecfg, eentry, pgdh, pgdl, stlbps, tlbidx, tlbrehi, tlbrentry};
 use memory_addr::{PhysAddr, VirtAddr};
+use page_table_multiarch::loongarch64::LA64MetaData;
 
 pub use self::context::{TaskContext, TrapFrame};
 
@@ -42,24 +43,38 @@ pub fn wait_for_irqs() {
 /// Halt the current CPU.
 #[inline]
 pub fn halt() {
-    unsafe { loongArch64::asm::idle() }
     disable_irqs();
+    unsafe { loongArch64::asm::idle() }
 }
 
-/// Reads the register that stores the current page table root.
+/// Reads the register that stores the current kernel page table root.
 ///
-/// Returns the physical address of the page table root.
+/// Returns the physical address of the kernel page table root.
 #[inline]
 pub fn read_page_table_root() -> PhysAddr {
-    PhysAddr::from(pgd::read().base())
+    PhysAddr::from(pgdh::read().base())
+}
+
+/// Reads the register that stores the current user page table root.
+///
+/// Returns the physical address of the user page table root.
+#[inline]
+pub fn read_page_table_root0() -> PhysAddr {
+    PhysAddr::from(pgdl::read().base())
 }
 
 /// Writes the `pgdl` register.
 ///
 /// # Safety
 ///
-/// This function is unsafe as it changes the virtual memory address space.
+/// This function is unsafe as it changes the user virtual memory address space.
 pub unsafe fn write_page_table_root0(root_paddr: PhysAddr) {
+    let old_root = read_page_table_root0();
+    trace!(
+        "set user page table root: {:#x} => {:#x}",
+        old_root, root_paddr
+    );
+
     pgdl::set_base(root_paddr.as_usize() as _);
     flush_tlb(None);
 }
@@ -68,7 +83,7 @@ pub unsafe fn write_page_table_root0(root_paddr: PhysAddr) {
 ///
 /// # Safety
 ///
-/// This function is unsafe as it changes the virtual memory address space.
+/// This function is unsafe as it changes the kernel virtual memory address space.
 /// NOTE: Compiler optimize inline on release mode, kernel raise error about
 /// page table. So we prohibit inline operation.
 #[inline(never)]
@@ -114,23 +129,39 @@ pub fn flush_tlb(vaddr: Option<VirtAddr>) {
 
 /// Writes Exception Entry Base Address Register (`eentry`).
 ///
-/// - ecfg: <https://loongson.github.io/LoongArch-Documentation/LoongArch-Vol1-EN.html#exception-configuration>
-/// - eentry: <https://loongson.github.io/LoongArch-Documentation/LoongArch-Vol1-EN.html#exception-entry-base-address>
+/// - ECFG: <https://loongson.github.io/LoongArch-Documentation/LoongArch-Vol1-EN.html#exception-configuration>
+/// - EENTRY: <https://loongson.github.io/LoongArch-Documentation/LoongArch-Vol1-EN.html#exception-entry-base-address>
 #[inline]
-pub fn set_trap_vector_base(eentry: usize) {
+pub fn set_exception_entry_base(eentry: usize) {
     ecfg::set_vs(0);
     eentry::set_eentry(eentry);
 }
 
-/// Writes TLB Refill Entry Address Register (`tlbrentry`)
+/// Sets the PWC (Page Walk Controller) registers.
 ///
-/// tlbrentry: <https://loongson.github.io/LoongArch-Documentation/LoongArch-Vol1-EN.html#tlb-refill-exception-entry-base-address>
+/// # Safety
+///
+/// This function uses `unsafe` inline assembly to write values to
+/// `LA_CSR_PWCL` and `LA_CSR_PWCH`.
+///
+/// - `PWCL` <https://loongson.github.io/LoongArch-Documentation/LoongArch-Vol1-EN.html#page-walk-controller-for-lower-half-address-space>
+/// - `PWCH` <https://loongson.github.io/LoongArch-Documentation/LoongArch-Vol1-EN.html#page-walk-controller-for-higher-half-address-space>
 #[inline]
-pub fn set_tlb_refill(tlbrentry: usize) {
-    tlbrentry::set_tlbrentry(tlbrentry);
+pub fn set_pwc(pwcl: u32, pwch: u32) {
+    unsafe {
+        asm!(
+            include_asm_macros!(),
+            "csrwr {}, LA_CSR_PWCL",
+            "csrwr {}, LA_CSR_PWCH",
+            in(reg) pwcl,
+            in(reg) pwch
+        )
+    }
 }
 
 /// Init the TLB configuration and set tlb refill handler.
+///
+/// TLBRENTY: <https://loongson.github.io/LoongArch-Documentation/LoongArch-Vol1-EN.html#tlb-refill-exception-entry-base-address>
 pub fn init_tlb() {
     // Page Size 4KB
     const PS_4K: usize = 0x0c;
@@ -138,23 +169,13 @@ pub fn init_tlb() {
     stlbps::set_ps(PS_4K);
     tlbrehi::set_ps(PS_4K);
 
-    // Set Page table entry width
-    pwcl::set_pte_width(8);
-    // Set Page table width and offset
-    pwcl::set_ptbase(12);
-    pwcl::set_ptwidth(9);
-    pwcl::set_dir1_base(21);
-    pwcl::set_dir1_width(9);
-    pwcl::set_dir2_base(30);
-    pwcl::set_dir2_width(9);
-    pwch::set_dir3_base(39);
-    pwch::set_dir3_width(9);
+    set_pwc(LA64MetaData::PWCL_VALUE, LA64MetaData::PWCH_VALUE);
 
     unsafe extern "C" {
         fn handle_tlb_refill();
     }
     let paddr = crate::mem::virt_to_phys(va!(handle_tlb_refill as usize));
-    crate::arch::set_tlb_refill(paddr.as_usize());
+    tlbrentry::set_tlbrentry(paddr.as_usize());
 }
 
 /// Reads the thread pointer of the current CPU.
@@ -181,11 +202,11 @@ pub unsafe fn write_thread_pointer(tp: usize) {
 
 /// Initializes CPU states on the current CPU.
 pub fn cpu_init() {
-    // Enable floating point
-    euen::set_fpe(true);
+    #[cfg(feature = "fp_simd")]
+    loongArch64::register::euen::set_fpe(true);
 
     unsafe extern "C" {
-        fn trap_vector_base();
+        fn exception_entry_base();
     }
-    set_trap_vector_base(trap_vector_base as usize);
+    set_exception_entry_base(exception_entry_base as usize);
 }

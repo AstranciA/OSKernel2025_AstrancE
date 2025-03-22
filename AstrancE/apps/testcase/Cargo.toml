@@ -26,5 +26,11 @@ numeric-enum-macro = { git = "https://github.com/mexus/numeric-enum-macro" }
 num_enum = {version = "0.7.3",default-features = false }
 syscalls = {version = "0.6.18",default-features = false }
 crate_interface = "0.1.4"
+memory_addr = "0.3.2"
 [build-dependencies]
 acbat = { path = "../../modules/acbat"}
+toml_edit = "0.22.24"
+
+[patch.crates-io]
+page_table_multiarch = { git = "https://github.com/Mivik/page_table_multiarch.git", rev = "19ededd" }
+page_table_entry = { git = "https://github.com/Mivik/page_table_multiarch.git", rev = "19ededd" }

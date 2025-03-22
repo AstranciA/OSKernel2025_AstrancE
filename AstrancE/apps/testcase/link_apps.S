@@ -4,12 +4,12 @@
     .global _num_app
 _num_app:
     .quad 1
-    .quad app_0007e4a833_start
-    .quad app_0007e4a833_end
+    .quad app_00002798b7_start
+    .quad app_00002798b7_end
 
     .section .data
-    .global app_0007e4a833_start
-    .global app_0007e4a833_end
-app_0007e4a833_start:
-    .incbin "../../testcases/nimbos/build/riscv64/nothing"
-app_0007e4a833_end:
+    .global app_00002798b7_start
+    .global app_00002798b7_end
+app_00002798b7_start:
+    .incbin "../../testcases/nimbos/build/riscv64/hello_world"
+app_00002798b7_end:

@@ -6,11 +6,18 @@ use axhal::{
     trap::{PAGE_FAULT, register_trap_handler},
 };
 use axmm::AddrSpace;
+use axstd::os::arceos::modules::axconfig;
 
 use crate::{
-    config::{self},
-    loader,
+    config::{self}, copy_from_kernel, loader
 };
+
+fn new_user_aspace_empty() -> AxResult<AddrSpace> {
+    AddrSpace::new_empty(
+        VirtAddr::from_usize(config::USER_SPACE_BASE),
+        config::USER_SPACE_SIZE,
+    )
+}
 
 /// load app to memory
 /// # Returns
@@ -18,10 +25,10 @@ use crate::{
 /// - The second return value is the top of the user stack.
 /// - The third return value is the address space of the user app.
 pub fn load_user_app(app_name: &str) -> AxResult<(VirtAddr, VirtAddr, AddrSpace)> {
-    let mut uspace = axmm::new_user_aspace(
-        VirtAddr::from_usize(config::USER_SPACE_BASE),
-        config::USER_SPACE_SIZE,
-    )?;
+    let mut uspace = new_user_aspace_empty().and_then(|mut it|{
+        copy_from_kernel(&mut it)?;
+        Ok(it)
+    }).expect("Failed ot create user address space");
     let (entry, ustack_pointer) = map_elf_sections(app_name, &mut uspace)?;
     Ok((entry, ustack_pointer, uspace))
 }

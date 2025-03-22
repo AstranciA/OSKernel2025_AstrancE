@@ -33,12 +33,16 @@ qemu_args-x86_64 := \
 qemu_args-riscv64 := \
   -machine $(machine) \
   -bios default \
-  -kernel $(OUT_BIN)
+  -kernel $(FINAL_IMG)
 
 qemu_args-aarch64 := \
   -cpu cortex-a72 \
   -machine $(machine) \
-  -kernel $(OUT_BIN)
+  -kernel $(FINAL_IMG)
+
+qemu_args-loongarch64 := \
+  -machine $(machine) \
+  -kernel $(OUT_ELF)
 
 qemu_args-loongarch64 := \
   -kernel $(OUT_ELF)
