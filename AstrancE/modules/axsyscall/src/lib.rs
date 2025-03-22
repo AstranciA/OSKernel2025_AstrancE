@@ -2,14 +2,32 @@
 // #![no_std]
 #![cfg_attr(not(test), no_std)]
 // #![cfg(test)]
+
 mod test;
 
 use syscalls::Sysno;
 mod syscall_imp;
 use core::ffi::*;
 use arceos_posix_api::ctypes;
+use syscall_imp::errno::LinuxError;
 
-pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
+pub enum SyscallResult{ Success(isize), Error(LinuxError) }
+
+impl From<SyscallResult> for isize {
+    fn from(result: SyscallResult) -> isize {
+        match result {
+            SyscallResult::Success(val) => val as isize,
+            SyscallResult::Error(e) => {
+                -(e as isize)
+            }
+        }
+    }
+}
+///SyscallResult 可直接into为有符号整数，其中错误值以负数返回，linuxError有
+/// 方法as_str返回对应错误的具体文字描述
+
+
+pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> SyscallResult {
     let sys_id = Sysno::from(sys_id as u32);//检查id与测例是否适配
 
     let ret = match sys_id {
@@ -224,7 +242,7 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<isize,isize> {
         }
 
         _ => {
-            Err(-1) // Return error code for unsupported syscall_imp
+            SyscallResult::Error(LinuxError::ENOSYS)
         }
     };
 
