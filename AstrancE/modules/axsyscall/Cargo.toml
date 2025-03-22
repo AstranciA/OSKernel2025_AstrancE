@@ -12,3 +12,4 @@ categories.workspace = true
 
 [dependencies]
 syscalls = "0.6.18"
+arceos_posix_api = { workspace = true , features = ["fd","fs","net"] }

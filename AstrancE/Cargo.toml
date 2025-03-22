@@ -30,7 +30,7 @@ members = [
     "examples/httpclient",
     "examples/httpserver",
     "examples/httpserver",
-    "examples/shell", "modules/acbat", "modules/axsyscall",
+    "examples/shell", "apps/testcase", "modules/acbat", "modules/axsyscall",
 ]
 
 [workspace.package]
