@@ -11,12 +11,14 @@ const TESTCASES: [&str; 1] = [
 const LINKER_FILE: &str = "./link_apps.S";
 
 fn main() {
-    println!("cargo:rerun-if-changed=../../testcases/simple");
-    let status = Command::new("make").current_dir("../../testcases/simple").args(&[
-        "ARCH=riscv64",
-        "build"
-    ]).status();
-    assert!(status.unwrap().success());
+    /*
+     *println!("cargo:rerun-if-changed=../../testcases/simple");
+     *let status = Command::new("make").current_dir("../../testcases/simple").args(&[
+     *    "ARCH=riscv64",
+     *    "build"
+     *]).status();
+     *assert!(status.unwrap().success());
+     */
     let mut bat_builer = BatBuilder::default();
     for testcase in TESTCASES {
         println!("cargo:rerun-if-changed={}", testcase);
