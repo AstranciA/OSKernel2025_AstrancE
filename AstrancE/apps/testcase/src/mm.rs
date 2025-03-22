@@ -1,0 +1,98 @@
+use alloc::string::ToString;
+use axalloc::global_init;
+use axerrno::AxResult;
+use axhal::{
+    mem::VirtAddr,
+    paging::MappingFlags,
+    trap::{PAGE_FAULT, register_trap_handler},
+};
+use axmm::{AddrSpace, init_memory_management};
+
+use crate::{
+    config::{self, HEAP_SIZE},
+    loader,
+};
+
+const HEAP: [usize; HEAP_SIZE] = [0; HEAP_SIZE];
+
+pub fn init_mm() {
+    //global_init(HEAP.as_ptr() as usize, HEAP.len());
+    //init_memory_management();
+}
+
+pub fn load_user_app(app_name: &str) -> AxResult<(VirtAddr, VirtAddr, AddrSpace)> {
+    let mut uspace = axmm::new_user_aspace(
+        VirtAddr::from_usize(config::USER_SPACE_BASE),
+        config::USER_SPACE_SIZE,
+    )?;
+    let (entry, ustack_pointer) = map_elf_sections(app_name, &mut uspace)?;
+    Ok((entry, ustack_pointer, uspace))
+}
+
+pub fn map_elf_sections(
+    app_name: &str,
+    uspace: &mut AddrSpace,
+) -> Result<(VirtAddr, VirtAddr), axerrno::AxError> {
+    //let elf_info = loader::load_elf(app_name, uspace.base());
+    let mut elf_info = loader::load_elf(0);
+    for segement in elf_info.segments.iter() {
+        println!("");
+        debug!(
+            "Mapping ELF segment: [{:#x?}, {:#x?}) flags: {:#x?}",
+            segement.start_va,
+            segement.start_va + segement.size,
+            segement.flags
+        );
+        uspace.map_alloc(segement.start_va, segement.size, segement.flags, true)?;
+
+        if segement.data.is_empty() {
+            continue;
+        }
+
+        uspace.write(segement.start_va + segement.elf_offset, segement.data)?;
+
+        // TDOO: flush the I-cache
+    }
+
+    // The user stack is divided into two parts:
+    // `ustack_start` -> `ustack_pointer`: It is the stack space that users actually read and write.
+    // `ustack_pointer` -> `ustack_end`: It is the space that contains the arguments, environment variables and auxv passed to the app.
+    //  When the app starts running, the stack pointer points to `ustack_pointer`.
+    let ustack_end = VirtAddr::from_usize(config::USER_STACK_TOP);
+    let ustack_size = config::USER_STACK_SIZE;
+    let ustack_start = ustack_end - ustack_size;
+    debug!(
+        "Mapping user stack: {:#x?} -> {:#x?}",
+        ustack_start, ustack_end
+    );
+    // FIXME: Add more arguments and environment variables
+    let stack_vec = kernel_elf_parser::app_stack_region(
+        &[app_name.to_string()],
+        &[],
+        elf_info.auxv.as_mut_slice(),
+        ustack_start,
+        ustack_size,
+    );
+    uspace.map_alloc(
+        ustack_start,
+        ustack_size,
+        MappingFlags::READ | MappingFlags::WRITE | MappingFlags::USER,
+        true,
+    )?;
+
+    uspace.write(
+        VirtAddr::from_usize(stack_vec.as_ptr() as usize),
+        stack_vec.as_slice(),
+    )?;
+    Ok((elf_info.entry, VirtAddr::from_ptr_of(stack_vec.as_ptr())))
+}
+
+#[register_trap_handler(PAGE_FAULT)]
+fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool) -> bool {
+    debug!(
+        "Page fault at {:#x?}, flags: {:#x?}, is_user: {:?}",
+        vaddr, access_flags, is_user
+    );
+    todo!();
+    true
+}
