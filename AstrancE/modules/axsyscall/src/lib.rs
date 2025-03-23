@@ -11,6 +11,8 @@ use core::ffi::*;
 use arceos_posix_api::ctypes;
 use syscall_imp::errno::LinuxError;
 
+///SyscallResult 可直接into为有符号整数，其中错误值以负数返回，linuxError有
+/// 方法as_str返回对应错误的具体文字描述
 pub enum SyscallResult{ Success(isize), Error(LinuxError) }
 
 impl From<SyscallResult> for isize {
@@ -23,19 +25,15 @@ impl From<SyscallResult> for isize {
         }
     }
 }
-///SyscallResult 可直接into为有符号整数，其中错误值以负数返回，linuxError有
-/// 方法as_str返回对应错误的具体文字描述
-
 
 pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> SyscallResult {
     let sys_id = Sysno::from(sys_id as u32);//检查id与测例是否适配
 
+
     let ret = match sys_id {
         Sysno::write => {
-            let fd = args[0];
-            let buf_ptr = args[1];
-            let size = args[2];
-            let buf = unsafe { core::slice::from_raw_parts(buf_ptr as *const u8, size) };
+            let [fd, buf_ptr, size, ..] = args;
+            let buf = unsafe { core::slice::from_raw_parts(buf_ptr as _ , size) };
             syscall_imp::io::ax_write(fd, buf)
             // call_with_args!(syscall_imp::io::ax_write,args)
         }
@@ -43,36 +41,74 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> SyscallResult {
         // sysmatch!(Sysno::read, handler, 3)
         // #[sysmatch(Sysno::read)]
         Sysno::read => {
-            let fd = args[0];
-            let buf_ptr = args[1];
-            let size = args[2];
+            let [fd, buf_ptr, size, ..] = args;
             let buf = unsafe { core::slice::from_raw_parts_mut(buf_ptr as *mut u8, size) };
                 syscall_imp::io::ax_read(fd, buf)
         }
         // 文件操作相关系统调用
         #[cfg(all(feature = "fs", feature = "fd"))]
         Sysno::openat => {
-            let dirfd = args[0];//类型检查与转化！
-            let fname = args[1];
-            let flages = args[2];
-            let mode = args[3];
-            todo!()
+            let [dirfd,fname, flags,mode,..] = args;
+            syscall_imp::fs::ax_openat(dirfd as _,fname as _,flags as _,mode as _)
         }
+        
+        #[cfg(all(feature = "fs", feature = "fd"))]
         Sysno::close => {
-            todo!()
+            let fd =args[0];
+            syscall_imp::fd::ax_close(fd as _)
         }
+        
+        #[cfg(all(feature = "fs", feature = "fd"))]
         Sysno::statfs => {
             todo!()
         }
+        
+        #[cfg(all(feature = "fs", feature = "fd"))]
         Sysno::fstat => {
-            todo!()
+            let [fd,buf,..] = args;
+            unsafe { syscall_imp::fs::ax_fstat(fd as _, buf as _) }
         }
+        
+        #[cfg(all(feature = "fs", feature = "fd"))]
         Sysno::lseek => {
+            let [fd,offset,whence,..] = args;
+            syscall_imp::fs::ax_lseek(fd as _,offset as _,whence as _)
+        }
+
+        #[cfg(all(feature = "fs", feature = "fd"))]
+        Sysno::getcwd => {
+            let [buf,size,..] = args;
+            syscall_imp::fs::ax_getcwd(buf as _,size as _)
+        }
+
+        #[cfg(all(feature = "fs", feature = "fd"))]
+        Sysno::renameat => {
+            let [old,new,..] = args;
+            syscall_imp::fs::ax_rename(old as _,new as _)
+        }
+
+        #[cfg(all(feature = "fs", feature = "fd"))]
+        Sysno::dup => {
+            let old_fd = args[0];
+            syscall_imp::fd::ax_dup(old_fd as _)
+        }
+
+        #[cfg(all(feature = "fs", feature = "fd"))]
+        Sysno::dup3 => {
             todo!()
         }
+
+        #[cfg(all(feature = "fs", feature = "fd"))]
+        Sysno::fcntl => {
+            let [fd,cmd,arg,..] = args;
+            syscall_imp::fd::ax_fcntl(fd as _,cmd as _,arg as _)
+        }
+
+
         Sysno::mmap => {
             todo!()
         }
+        
         Sysno::munmap => {
             todo!()
         }
@@ -120,15 +156,7 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> SyscallResult {
         Sysno::uname => {
             todo!()
         }
-        Sysno::getcwd => {
-            todo!()
-        }
-        Sysno::dup => {
-            todo!()
-        }
-        Sysno::dup3 => {
-            todo!()
-        }
+
         Sysno::chdir => {
             todo!()
         }
@@ -142,104 +170,83 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> SyscallResult {
         //网络相关
         #[cfg(feature = "net")]
         Sysno::socket => {
-            let domain = args[0] as c_int;
-            let socktype = args[1] as c_int;
-            let protocol = args[2] as c_int;
-            syscall_imp::net::ax_socket(domain, socktype, protocol)
+            let [domain,socktype,protocol,..] =args;
+            syscall_imp::net::ax_socket(domain as _, socktype as _, protocol as _)
         }
         #[cfg(feature = "net")]
         Sysno::bind => {
-            let fd = args[0] as c_int;
-            let addr = args[1] as *const ctypes::sockaddr;
-            let addrlen = args[2] as ctypes::socklen_t;
-            syscall_imp::net::ax_bind(fd, addr, addrlen)
+            let [fd,addr,addrlen,..] = args;
+            syscall_imp::net::ax_bind(fd as _, addr as _, addrlen as _)
         }
         #[cfg(feature = "net")]
         // fd, addr, addrlen
         Sysno::connect => {
-            let fd = args[0] as c_int;
-            let addr = args[1] as *const ctypes::sockaddr;
-            let addrlen = args[2] as ctypes::socklen_t;
-            syscall_imp::net::ax_connect(fd, addr, addrlen)
+            let [fd,addr,addrlen,..] = args;
+            syscall_imp::net::ax_connect(fd as _, addr as _, addrlen as _)
         }
         #[cfg(feature = "net")]
         // fd, buf, len, flags, addr, addrlen
         Sysno::sendto => {
-            let fd = args[0] as c_int;
-            let buf = args[1] as *const c_void;
-            let len = args[2] as usize;
-            let flags = args[3] as c_int;
-            let addr = args[4] as *const ctypes::sockaddr;
-            let addrlen = args[5] as ctypes::socklen_t;
-            syscall_imp::net::ax_sendto(fd, buf, len, flags, addr, addrlen)
+            let [fd, buf, len, flags, addr, addrlen, ..] = args;
+            syscall_imp::net::ax_sendto(fd as _, buf as _, len as _, flags as _, addr as _, addrlen as _)
         }
+
         #[cfg(feature = "net")]
         // fd, buf, len, flags
         Sysno::sendmsg => {
-            let fd = args[0] as c_int;
-            let buf = args[1] as *const c_void;
-            let len = args[2] as usize;
-            let flags = args[3] as c_int;
-            syscall_imp::net::ax_send(fd, buf, len, flags)
+            let [fd, buf, len, flags, ..] = args;
+            syscall_imp::net::ax_send(fd as _, buf as _, len as _, flags as _)
         }
+
         #[cfg(feature = "net")]
         // fd, buf, len, flags, addr, addrlen
         Sysno::recvfrom => {
-            let fd = args[0] as c_int;
-            let buf = args[1] as *mut c_void;
-            let len = args[2] as usize;
-            let flags = args[3] as c_int;
-            let addr = args[4] as *mut ctypes::sockaddr;
-            let addrlen = args[5] as *mut ctypes::socklen_t;
-            unsafe { syscall_imp::net::ax_recvfrom(fd, buf, len, flags, addr, addrlen) }
+            let [fd, buf, len, flags, addr, addrlen, ..] = args;
+            unsafe { syscall_imp::net::ax_recvfrom(fd as _, buf as _, len as _, flags as _, addr as _, addrlen as _) }
         }
+
         #[cfg(feature = "net")]
         // fd, buf, len, flags
         Sysno::recvmsg => {
-            let fd = args[0] as c_int;
-            let buf = args[1] as *mut c_void;
-            let len = args[2] as usize;
-            let flags = args[3] as c_int;
-            syscall_imp::net::ax_recv(fd, buf, len, flags)
+            let [fd, buf, len, flags, ..] = args;
+            syscall_imp::net::ax_recv(fd as _, buf as _, len as _, flags as _)
         }
+
         #[cfg(feature = "net")]
         // fd, backlog
         Sysno::listen => {
-            let fd = args[0] as c_int;
-            let backlog = args[1] as c_int;
-            syscall_imp::net::ax_listen(fd, backlog)
+            let [fd, backlog, ..] = args;
+            syscall_imp::net::ax_listen(fd as _, backlog as _)
         }
+
         #[cfg(feature = "net")]
         // fd, addr, addrlen
         Sysno::accept => {
-            let fd = args[0] as c_int;
-            let addr = args[1] as *mut ctypes::sockaddr;
-            let addrlen = args[2] as *mut ctypes::socklen_t;
-            unsafe { syscall_imp::net::ax_accept(fd, addr, addrlen) }
+            let [fd, addr, addrlen, ..] = args;
+            unsafe { syscall_imp::net::ax_accept(fd as _, addr as _, addrlen as _) }
         }
+
         #[cfg(feature = "net")]
         // fd, how
         Sysno::shutdown => {
-            let fd = args[0] as c_int;
-            let how = args[1] as c_int;
-            syscall_imp::net::ax_shutdown(fd, how)
+            let [fd, how, ..] = args;
+            syscall_imp::net::ax_shutdown(fd as _, how as _)
         }
+
         #[cfg(feature = "net")]
         // fd, addr, addrlen
         Sysno::getsockname => {
-            let fd = args[0] as c_int;
-            let addr = args[1] as *mut ctypes::sockaddr;
-            let addrlen = args[2] as *mut ctypes::socklen_t;
-            unsafe { syscall_imp::net::ax_getsockname(fd, addr, addrlen) }
+            let [fd, addr, addrlen, ..] = args;
+            unsafe { syscall_imp::net::ax_getsockname(fd as _, addr as _, addrlen as _) }
         }
+
         #[cfg(feature = "net")]
         // fd, addr, addrlen
         Sysno::getpeername => {
-            let fd = args[0] as c_int;
-            let addr = args[1] as *mut ctypes::sockaddr;
-            let addrlen = args[2] as *mut ctypes::socklen_t;
-            unsafe { syscall_imp::net::ax_getpeername(fd, addr, addrlen) }
+            let [fd, addr, addrlen, ..] = args;
+            unsafe { syscall_imp::net::ax_getpeername(fd as _, addr as _, addrlen as _) }
         }
+
 
         _ => {
             SyscallResult::Error(LinuxError::ENOSYS)
