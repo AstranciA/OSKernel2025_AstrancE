@@ -2,20 +2,8 @@
 resolver = "2"
 
 members = [
-    "modules/axalloc",
-    "modules/axconfig",
-    "modules/axdisplay",
-    "modules/axdriver",
-    "modules/axfs",
-    "modules/axhal",
-    "modules/axlog",
-    "modules/axmm",
-    "modules/axdma",
-    "modules/axnet",
-    "modules/axns",
-    "modules/axruntime",
-    "modules/axsync",
-    "modules/axtask",
+    "modules/*",
+    "crates/*",
 
     "api/axfeat",
     "api/arceos_api",
@@ -29,8 +17,6 @@ members = [
     "examples/httpserver",
     "examples/httpserver",
     "examples/shell", 
-    "modules/acbat", 
-    "modules/axsyscall", 
 ]
 
 [workspace.package]

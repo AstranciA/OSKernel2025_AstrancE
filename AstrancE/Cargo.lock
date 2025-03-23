@@ -31,7 +31,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "ae-builder"
+name = "acbuilder"
 version = "0.1.0"
 
 [[package]]
