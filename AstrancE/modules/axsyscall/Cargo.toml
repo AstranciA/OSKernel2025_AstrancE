@@ -13,6 +13,7 @@ categories.workspace = true
 fs = ["arceos_posix_api/fs"]
 fd = ["arceos_posix_api/fd"]
 net = ["arceos_posix_api/net"]
+pipe = ["arceos_posix_api/pipe"]
 [dependencies]
 syscalls = { version = "0.6.18", default-features = false }
 arceos_posix_api = { workspace = true }
