@@ -461,7 +461,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2314ebe07a2fef7b1c1a7d15ab817941cd306ace651bb50024b5a8b3e8485359"
 dependencies = [
  "axerrno",
- "bitflags 2.8.0",
+ "bitflags 2.9.0",
  "log",
 ]
 
@@ -476,7 +476,7 @@ dependencies = [
  "axalloc",
  "axconfig",
  "axlog",
- "bitflags 2.8.0",
+ "bitflags 2.9.0",
  "cfg-if",
  "dw_apb_uart",
  "handler_table",
@@ -550,6 +550,30 @@ dependencies = [
  "memory_addr",
  "memory_set",
  "page_table_multiarch",
+]
+
+[[package]]
+name = "axmono"
+version = "0.1.0"
+dependencies = [
+ "arceos_posix_api",
+ "axconfig",
+ "axerrno",
+ "axfeat",
+ "axfs",
+ "axhal",
+ "axlog",
+ "axmm",
+ "axns",
+ "axsync",
+ "axtask",
+ "bitflags 2.9.0",
+ "crate_interface",
+ "kernel-elf-parser",
+ "linkme",
+ "memory_addr",
+ "numeric-enum-macro",
+ "xmas-elf",
 ]
 
 [[package]]
@@ -674,7 +698,7 @@ version = "0.69.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "271383c67ccabffb7381723dea0672a673f292304fcb45c01cc648c7a8d58088"
 dependencies = [
- "bitflags 2.8.0",
+ "bitflags 2.9.0",
  "cexpr",
  "clang-sys",
  "itertools",
@@ -711,9 +735,9 @@ checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
 name = "bitflags"
-version = "2.8.0"
+version = "2.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f68f53c83ab957f72c32642f3868eec03eb974d1fb82e453128456482613d36"
+checksum = "5c8214115b7bf84099f1309324e63141d4c5d7cc26862f97a0a857dbefe165bd"
 
 [[package]]
 name = "bitmap-allocator"
@@ -754,7 +778,7 @@ version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c9b24894fa5f73bbf9c72196e7f495a1f81d6218a548280a09ada4a937157692"
 dependencies = [
- "bitflags 2.8.0",
+ "bitflags 2.9.0",
 ]
 
 [[package]]
@@ -996,7 +1020,7 @@ name = "fatfs"
 version = "0.4.0"
 source = "git+https://github.com/rafalh/rust-fatfs?rev=85f06e0#85f06e08edbd3368e1b0562f2fc1b6d178bf7b8a"
 dependencies = [
- "bitflags 2.8.0",
+ "bitflags 2.9.0",
  "log",
 ]
 
@@ -1174,6 +1198,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "kernel-elf-parser"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "102999b07d80f34c1dca0d9e8f24adaa8028708842d39a3e5b98f4f085755627"
+dependencies = [
+ "axerrno",
+ "cfg-if",
+ "log",
+ "memory_addr",
+ "page_table_entry",
+ "xmas-elf",
+]
+
+[[package]]
 name = "kernel_guard"
 version = "0.1.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1237,18 +1275,18 @@ source = "git+https://github.com/arceos-org/linked_list.git?tag=v0.1.0#34c8db301
 
 [[package]]
 name = "linkme"
-version = "0.3.31"
+version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "566336154b9e58a4f055f6dd4cbab62c7dc0826ce3c0a04e63b2d2ecd784cdae"
+checksum = "22d227772b5999ddc0690e733f734f95ca05387e329c4084fe65678c51198ffe"
 dependencies = [
  "linkme-impl",
 ]
 
 [[package]]
 name = "linkme-impl"
-version = "0.3.31"
+version = "0.3.32"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "edbe595006d355eaf9ae11db92707d4338cd2384d16866131cc1afdbdd35d8d9"
+checksum = "71a98813fa0073a317ed6a8055dcd4722a49d9b862af828ee68449adb799b6be"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1360,6 +1398,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "numeric-enum-macro"
+version = "0.2.0"
+source = "git+https://github.com/mexus/numeric-enum-macro#20aef288b2ecd2381ab6627c2a6c9e0436d8c8ff"
+
+[[package]]
 name = "once_cell"
 version = "1.20.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1371,7 +1414,7 @@ version = "0.5.3"
 source = "git+https://github.com/Mivik/page_table_multiarch.git?rev=19ededd#19ededdb806ab3b22efb4880661790524fa421a5"
 dependencies = [
  "aarch64-cpu 10.0.0",
- "bitflags 2.8.0",
+ "bitflags 2.9.0",
  "memory_addr",
  "x86_64 0.15.2",
 ]
@@ -1534,7 +1577,7 @@ version = "11.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c6928fa44c097620b706542d428957635951bade7143269085389d42c8a4927e"
 dependencies = [
- "bitflags 2.8.0",
+ "bitflags 2.9.0",
 ]
 
 [[package]]
@@ -1641,7 +1684,7 @@ version = "0.38.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fdb5bc1ae2baa591800df16c9ca78619bf65c0488b41b96ccec5d11220d8c154"
 dependencies = [
- "bitflags 2.8.0",
+ "bitflags 2.9.0",
  "errno",
  "libc",
  "linux-raw-sys 0.4.15",
@@ -1654,7 +1697,7 @@ version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f7178faa4b75a30e269c71e61c353ce2748cf3d76f0c44c393f4e60abf49b825"
 dependencies = [
- "bitflags 2.8.0",
+ "bitflags 2.9.0",
  "errno",
  "libc",
  "linux-raw-sys 0.9.3",
@@ -1890,7 +1933,7 @@ version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "aa40e09453618c7a927c08c5a990497a2954da7c2aaa6c65e0d4f0fc975f6114"
 dependencies = [
- "bitflags 2.8.0",
+ "bitflags 2.9.0",
  "log",
  "zerocopy",
 ]
@@ -2095,7 +2138,7 @@ version = "0.33.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3268f3d866458b787f390cf61f4bbb563b922d091359f9608842999eaee3943c"
 dependencies = [
- "bitflags 2.8.0",
+ "bitflags 2.9.0",
 ]
 
 [[package]]
@@ -2129,7 +2172,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c101112411baafbb4bf8d33e4c4a80ab5b02d74d2612331c61e8192fc9710491"
 dependencies = [
  "bit_field",
- "bitflags 2.8.0",
+ "bitflags 2.9.0",
  "rustversion",
  "volatile 0.4.6",
 ]
@@ -2141,7 +2184,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0f042214de98141e9c8706e8192b73f56494087cc55ebec28ce10f26c5c364ae"
 dependencies = [
  "bit_field",
- "bitflags 2.8.0",
+ "bitflags 2.9.0",
  "rustversion",
  "volatile 0.4.6",
 ]
@@ -2155,6 +2198,21 @@ dependencies = [
  "cfg-if",
  "x86_64 0.15.2",
 ]
+
+[[package]]
+name = "xmas-elf"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "42c49817e78342f7f30a181573d82ff55b88a35f86ccaf07fc64b3008f56d1c6"
+dependencies = [
+ "zero",
+]
+
+[[package]]
+name = "zero"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2fe21bcc34ca7fe6dd56cc2cb1261ea59d6b93620215aefb5ea6032265527784"
 
 [[package]]
 name = "zerocopy"

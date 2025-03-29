@@ -1,0 +1,36 @@
+[package]
+name = "axmono"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[features]
+default = ["process", "mm"]
+process = ["axns", "axtask", "axfeat/multitask"]
+mm = ["axmm"]
+
+[dependencies]
+axfeat = { workspace = true }
+axconfig = { workspace = true }
+axhal = { workspace = true }
+axlog = { workspace = true }
+arceos_posix_api = { workspace = true }
+axfs = { workspace = true }
+axmm = { workspace = true, optional = true }
+axtask = { workspace = true, optional = true }
+axsync = { workspace = true }
+axns = { workspace = true, optional = true }
+axerrno = "0.1"
+memory_addr = "0.3.2"
+bitflags = "2.9.0"
+crate_interface = "0.1.4"
+xmas-elf = "0.9.1"
+kernel-elf-parser = "0.3.2"
+linkme = "0.3.32"
+numeric-enum-macro = { git = "https://github.com/mexus/numeric-enum-macro" }

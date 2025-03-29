@@ -68,6 +68,9 @@ impl TrapFrame {
     pub const fn is_user(&self) -> bool {
         self.cs & 0b11 == 3
     }
+    pub fn set_ret_code(&mut self, ret: usize){
+        self.rax = ret as u64;
+    }
 }
 
 /// Context to enter user space.
