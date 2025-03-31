@@ -8,8 +8,9 @@ extern crate alloc;
 #[macro_use]
 extern crate axlog;
 
-mod ctypes;
+pub mod ctypes;
 use axerrno::AxResult;
+use axmm::kernel_aspace;
 
 pub mod elf;
 pub mod loader;

@@ -12,7 +12,10 @@ use core::{
 };
 use memory_addr::{VirtAddr, VirtAddrRange};
 
-use crate::{copy_from_kernel, ctypes::{CloneFlags, TimeStat, WaitStatus}};
+use crate::{
+    copy_from_kernel,
+    ctypes::{CloneFlags, TimeStat, WaitStatus},
+};
 
 use axhal::{
     arch::{TrapFrame, UspaceContext},
@@ -32,7 +35,7 @@ pub fn new_user_aspace_empty() -> AxResult<AddrSpace> {
      */
     AddrSpace::new_empty(
         VirtAddr::from_usize(axconfig::plat::USER_SPACE_BASE),
-        axconfig::plat::USER_SPACE_SIZE
+        axconfig::plat::USER_SPACE_SIZE,
     )
 }
 
@@ -74,76 +77,6 @@ impl TaskExt {
         }
     }
 
-    pub fn clone_task(
-        &self,
-        flags: usize,
-        stack: Option<usize>,
-        _ptid: usize,
-        _tls: usize,
-        _ctid: usize,
-    ) -> AxResult<u64> {
-        axconfig::plat::KERNEL_STACK_SIZE;
-        // TODO: support all flags
-        let clone_flags = CloneFlags::from_bits((flags & !0x3f) as u32).unwrap();
-
-        let mut new_task = TaskInner::new(
-            || {
-                let curr = axtask::current();
-                let kstack_top = curr.kernel_stack_top().unwrap();
-                info!(
-                    "Enter user space: entry={:#x}, ustack={:#x}, kstack={:#x}",
-                    curr.task_ext().uctx.get_ip(),
-                    curr.task_ext().uctx.get_sp(),
-                    kstack_top,
-                );
-                unsafe { curr.task_ext().uctx.enter_uspace(kstack_top) };
-            },
-            String::from(current().id_name()),
-            axconfig::plat::KERNEL_STACK_SIZE,
-        );
-
-        let current_task = current();
-
-        let mut current_aspace = current_task.task_ext().aspace.lock();
-        let mut new_aspace;
-
-        if clone_flags.contains(CloneFlags::CLONE_VM) {
-            new_aspace = current_aspace.clone_or_err()?;
-        } else {
-            new_aspace = new_user_aspace_empty().expect("Failed ot create user address space");
-        }
-        copy_from_kernel(&mut new_aspace);
-
-        new_task
-            .ctx_mut()
-            .set_page_table_root(new_aspace.page_table_root());
-
-        let mut trap_frame =
-            read_trapframe_from_kstack(current_task.get_kernel_stack_top().unwrap());
-        trap_frame.set_ret_code(0);
-        // TODO: loongarch64
-        trap_frame.inc_sepc();
-
-        if let Some(stack) = stack {
-            trap_frame.set_user_sp(stack);
-        }
-
-        let new_uctx = UspaceContext::from(&trap_frame);
-
-        let return_id: u64 = new_task.id().as_u64();
-        let mut new_task_ext = TaskExt::new(
-            return_id as usize,
-            new_uctx,
-            Arc::new(Mutex::new(new_aspace)),
-        );
-        new_task_ext.ns_init_new();
-        new_task.init_task_ext(new_task_ext);
-        let new_task_ref = axtask::spawn_task(new_task);
-        current_task.task_ext().children.lock().push(new_task_ref);
-
-        Ok(return_id)
-    }
-
     pub(crate) fn clear_child_tid(&self) -> u64 {
         self.clear_child_tid
             .load(core::sync::atomic::Ordering::Relaxed)
@@ -166,8 +99,12 @@ impl TaskExt {
     /// TODO: from parent task
     pub(crate) fn ns_init_new(&self) {
         FD_TABLE.create(&self.ns).init_new(FD_TABLE.copy_inner());
-        CURRENT_DIR.create(&self.ns).init_new(CURRENT_DIR.copy_inner());
-        CURRENT_DIR_PATH.create(&self.ns).init_new(CURRENT_DIR_PATH.copy_inner());
+        CURRENT_DIR
+            .create(&self.ns)
+            .init_new(CURRENT_DIR.copy_inner());
+        CURRENT_DIR_PATH
+            .create(&self.ns)
+            .init_new(CURRENT_DIR_PATH.copy_inner());
     }
 
     pub(crate) fn time_stat_from_kernel_to_user(&self, current_tick: usize) {
@@ -240,11 +177,11 @@ impl AxNamespaceIf for AxNamespaceImpl {
 
 axtask::def_task_ext!(TaskExt);
 
-pub fn spawn_user_task(
+pub fn spawn_user_task_inner(
     app_name: &str,
     aspace: Arc<Mutex<AddrSpace>>,
     uctx: UspaceContext,
-) -> AxTaskRef {
+) -> TaskInner {
     let mut task = TaskInner::new(
         move || {
             // TODO: no current
@@ -267,9 +204,17 @@ pub fn spawn_user_task(
 
     // TODO:
     task.task_ext().ns_init_new();
-    axtask::spawn_task(task)
+    task
 }
 
+pub fn spawn_user_task(
+    app_name: &str,
+    aspace: Arc<Mutex<AddrSpace>>,
+    uctx: UspaceContext,
+) -> AxTaskRef {
+    let task_inner = spawn_user_task_inner(app_name, aspace, uctx);
+    axtask::spawn_task(task_inner)
+}
 pub fn write_trapframe_to_kstack(kstack_top: usize, trap_frame: &TrapFrame) {
     let trap_frame_size = core::mem::size_of::<TrapFrame>();
     let trap_frame_ptr = (kstack_top - trap_frame_size) as *mut TrapFrame;
@@ -350,16 +295,44 @@ pub fn wait_pid(pid: i32, exit_code_ptr: *mut i32) -> Result<u64, WaitStatus> {
 /// fork current task
 /// **Return**
 /// - `Ok(new_task_ref)` if fork successfully
-pub fn fork(current_task: AxTaskRef) -> AxResult<AxTaskRef> {
+pub fn fork(current_task: AxTaskRef, from_umode: bool) -> AxResult<AxTaskRef> {
+    clone_task(current_task, CloneFlags::CLONE_VM, None, from_umode)
+}
+
+pub fn clone_task(
+    current_task: AxTaskRef,
+    clone_flags: CloneFlags,
+    stack: Option<usize>,
+    from_umode: bool,
+    /*
+     *_ptid: usize,
+     *_tls: usize,
+     *_ctid: usize,
+     */
+) -> AxResult<AxTaskRef> {
+    axconfig::plat::KERNEL_STACK_SIZE;
+    // TODO: support all flags
+
     let current_task_ext = current_task.task_ext();
     // new task with same ip and sp of current task
+    let mut trap_frame = read_trapframe_from_kstack(current_task.get_kernel_stack_top().unwrap());
+    if from_umode {
+        trap_frame.set_ret_code(0);
+        // TODO: loongarch64
+        trap_frame.inc_sepc();
+    }
 
-    let trap_frame = read_trapframe_from_kstack(current_task.get_kernel_stack_top().unwrap());
-    //trap_frame.set_ret_code(0);
-    //trap_frame.sepc += 4;
+    if let Some(stack) = stack {
+        trap_frame.set_user_sp(stack);
+    }
 
     let mut current_aspace = current_task_ext.aspace.lock();
-    let mut new_aspace = current_aspace.clone_or_err()?;
+    let mut new_aspace;
+    if clone_flags.contains(CloneFlags::CLONE_VM) {
+        new_aspace = current_aspace.clone_or_err()?;
+    } else {
+        new_aspace = new_user_aspace_empty().expect("Failed ot create user address space");
+    }
     copy_from_kernel(&mut new_aspace);
 
     // stack is copied meanwhilst addr space is copied
@@ -374,13 +347,13 @@ pub fn fork(current_task: AxTaskRef) -> AxResult<AxTaskRef> {
         Arc::new(Mutex::new(new_aspace)),
         new_uctx,
     );
+    //let new_task_ref = axtask::spawn_task(new_task);
     write_trapframe_to_kstack(new_task_ref.kernel_stack_top().unwrap().into(), &trap_frame);
 
     current_task_ext.children.lock().push(new_task_ref.clone());
 
     Ok(new_task_ref)
 }
-
 pub fn exec(program_name: &str) -> AxResult<()> {
     let current_task = current();
 

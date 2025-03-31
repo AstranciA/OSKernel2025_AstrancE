@@ -34,3 +34,5 @@ xmas-elf = "0.9.1"
 kernel-elf-parser = "0.3.2"
 linkme = "0.3.32"
 numeric-enum-macro = { git = "https://github.com/mexus/numeric-enum-macro" }
+page_table_entry = "0.5"
+page_table_multiarch = "0.5"
