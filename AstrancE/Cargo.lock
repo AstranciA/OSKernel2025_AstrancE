@@ -638,7 +638,11 @@ name = "axsyscall"
 version = "0.1.0"
 dependencies = [
  "arceos_posix_api",
+ "axconfig",
  "axerrno",
+ "axlog",
+ "axmono",
+ "axtask",
  "syscalls",
 ]
 
@@ -1299,7 +1303,7 @@ dependencies = [
 [[package]]
 name = "lwext4_rust"
 version = "0.2.0"
-source = "git+https://github.com/Azure-stars/lwext4_rust.git#ee5131ca3fbb03f39ea0878431aadb521d191122"
+source = "git+https://github.com/Azure-stars/lwext4_rust.git?rev=ee5131#ee5131ca3fbb03f39ea0878431aadb521d191122"
 dependencies = [
  "log",
 ]
@@ -1375,7 +1379,8 @@ checksum = "42f5e15c9953c5e4ccceeb2e7382a716482c34515315f7b03532b8b4e8393d2d"
 
 [[package]]
 name = "page_table_entry"
-version = "0.5.4"
+version = "0.5.3"
+source = "git+https://github.com/Mivik/page_table_multiarch.git?rev=19ededd#19ededdb806ab3b22efb4880661790524fa421a5"
 dependencies = [
  "aarch64-cpu 10.0.0",
  "bitflags 2.9.0",
@@ -1385,7 +1390,8 @@ dependencies = [
 
 [[package]]
 name = "page_table_multiarch"
-version = "0.5.4"
+version = "0.5.3"
+source = "git+https://github.com/Mivik/page_table_multiarch.git?rev=19ededd#19ededdb806ab3b22efb4880661790524fa421a5"
 dependencies = [
  "log",
  "memory_addr",

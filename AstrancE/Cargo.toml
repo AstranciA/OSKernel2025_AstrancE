@@ -11,7 +11,7 @@ members = [
 
     "ulib/axstd",
     "ulib/axlibc",
-
+    
     "examples/helloworld",
     "examples/httpclient",
     "examples/httpserver",
@@ -33,7 +33,7 @@ categories = ["os", "no-std"]
 [workspace.dependencies]
 axstd = { path = "ulib/axstd" }
 axlibc = { path = "ulib/axlibc" }
-
+axmono = {path = "ulib/axmono"}
 arceos_api = { path = "api/arceos_api" }
 arceos_posix_api = { path = "api/arceos_posix_api" }
 axfeat = { path = "api/axfeat" }
@@ -62,9 +62,9 @@ acbat = { path = "modules/acbat" }
 [profile.release]
 lto = true
 
-#[patch.crates-io]
-#page_table_multiarch = { git = "https://github.com/Mivik/page_table_multiarch.git", rev = "19ededd" }
-#page_table_entry = { git = "https://github.com/Mivik/page_table_multiarch.git", rev = "19ededd" }
 [patch.crates-io]
-page_table_multiarch = { path = "./crates/page_table_multiarch/page_table_multiarch" }
-page_table_entry = { path = "./crates/page_table_multiarch/page_table_entry" }
+page_table_multiarch = { git = "https://github.com/Mivik/page_table_multiarch.git", rev = "19ededd" }
+page_table_entry = { git = "https://github.com/Mivik/page_table_multiarch.git", rev = "19ededd" }
+#[patch.crates-io]
+#page_table_multiarch = { path = "./crates/page_table_multiarch/page_table_multiarch" }
+#page_table_entry = { path = "./crates/page_table_multiarch/page_table_entry" }

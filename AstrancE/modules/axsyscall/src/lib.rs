@@ -4,7 +4,8 @@
 // #![cfg(test)]
 
 mod test;
-
+#[macro_use]
+extern crate axlog;
 use syscalls::Sysno;
 mod syscall_imp;
 use core::ffi::*;
@@ -35,11 +36,8 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> SyscallResult {
             let [fd, buf_ptr, size, ..] = args;
             let buf = unsafe { core::slice::from_raw_parts(buf_ptr as _ , size) };
             syscall_imp::io::ae_write(fd, buf)
-            // call_with_args!(syscall_imp::io::ae_write,args)
         }
-        //宏承接参数！！！！！！！！
-        // sysmatch!(Sysno::read, handler, 3)
-        // #[sysmatch(Sysno::read)]
+
         Sysno::read => {
             let [fd, buf_ptr, size, ..] = args;
             let buf = unsafe { core::slice::from_raw_parts_mut(buf_ptr as *mut u8, size) };

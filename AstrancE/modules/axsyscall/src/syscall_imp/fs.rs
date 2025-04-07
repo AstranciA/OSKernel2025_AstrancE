@@ -39,7 +39,7 @@ pub unsafe fn ae_stat(path: *const c_char, buf: *mut ctypes::stat) -> SyscallRes
 
 #[cfg(feature = "fs")]
 pub unsafe fn ae_fstat(fd: c_int, buf: *mut ctypes::stat) -> SyscallResult{
-    let ret = api::sys_fstat(fd,buf) as isize;
+    let ret = unsafe { api::sys_fstat(fd, buf) } as isize;
     if ret < 0 {
         SyscallResult::Error((-ret).try_into().unwrap())
     } else {
