@@ -160,7 +160,7 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> SyscallResult {
         
         // 其他系统调用
         Sysno::brk => {
-            todo!()
+            syscall_imp::task::ae_brk(args[0] as _)
         }
         Sysno::uname => {
             todo!()
