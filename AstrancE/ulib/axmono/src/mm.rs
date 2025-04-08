@@ -33,7 +33,7 @@ pub fn load_elf_to_mem(
     elf_file: ElfFile<'static>,
     args: Option<&[String]>,
     envs: Option<&[String]>,
-) -> AxResult<(VirtAddr, VirtAddr, AddrSpace)> {
+) -> AxResult<(VirtAddr, VirtAddr, AddrSpace, usize)> {
     let mut uspace = new_user_aspace_empty()
         .and_then(|mut it| {
             copy_from_kernel(&mut it)?;
@@ -41,16 +41,22 @@ pub fn load_elf_to_mem(
         })
         .expect("Failed ot create user address space");
     let elf_info = ELFInfo::new(elf_file, uspace.base());
-    let (entry, ustack_pointer) = map_elf_sections(elf_info, &mut uspace, args, envs)?;
-    Ok((entry, ustack_pointer, uspace))
+    let (entry, ustack_pointer, sp_offset) = map_elf_sections(elf_info, &mut uspace, args, envs)?;
+    Ok((entry, ustack_pointer, uspace, sp_offset))
 }
 
+/// TODO: doc
+/// init stack with args, envs, argc and argv.
+/// Return:
+/// ...
+/// ...
+/// sp_offset: usize, initial value of sp should be stack_top - sp_offset. 
 pub fn map_elf_sections(
     mut elf_info: ELFInfo,
     uspace: &mut AddrSpace,
     args: Option<&[String]>,
     envs: Option<&[String]>,
-) -> Result<(VirtAddr, VirtAddr), axerrno::AxError> {
+) -> Result<(VirtAddr, VirtAddr, usize), axerrno::AxError> {
     //let elf_info = loader::load_elf(app_name, uspace.base());
     //let mut elf_info = ELFInfo::new(loader::load_app_from_disk(app_path), uspace.base());
     //let mut elf_info = elf_info.borrow_mut();
@@ -98,9 +104,10 @@ pub fn map_elf_sections(
         true,
     )?;
 
-    uspace.write(ustack_start, stack_data.as_slice())?;
+    uspace.write(ustack_end - stack_data.len(), stack_data.as_slice())?;
+    let sp_offset = stack_data.len();
     //Ok((elf_info.entry, VirtAddr::from_ptr_of(stack_data.as_ptr())))
-    Ok((elf_info.entry, ustack_end))
+    Ok((elf_info.entry, ustack_end, sp_offset))
 }
 
 #[register_trap_handler(PAGE_FAULT)]
