@@ -93,7 +93,7 @@ impl TrapFrame {
     
     /// increase sepc
     pub fn inc_sepc(&mut self) {
-        self.sepc += 4;
+        self.sepc += 4usize;
     }
 }
 
@@ -195,6 +195,12 @@ impl UspaceContext {
                 options(noreturn),
             )
         }
+    }
+}
+
+impl Clone for UspaceContext {
+    fn clone(&self) -> Self {
+        Self::from(&self.0)
     }
 }
 

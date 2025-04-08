@@ -180,6 +180,12 @@ impl UspaceContext {
     }
 }
 
+impl Clone for UspaceContext {
+    fn clone(&self) -> Self {
+        Self::from(&self.0)
+    }
+}
+
 /// Saved hardware states of a task.
 ///
 /// The context usually includes:

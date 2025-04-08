@@ -158,6 +158,22 @@ impl UspaceContext {
     }
 }
 
+impl Clone for UspaceContext {
+    fn clone(&self) -> Self {
+        Self::from(&self.0)
+    }
+}
+impl Clone for UspaceContext {
+    fn clone(&self) -> Self {
+        Self::from(&self.0)
+    }
+}
+impl Clone for UspaceContext {
+    fn clone(&self) -> Self {
+        Self::from(&self.0)
+    }
+}
+
 /// FP & SIMD registers.
 #[repr(C, align(16))]
 #[derive(Debug, Default)]

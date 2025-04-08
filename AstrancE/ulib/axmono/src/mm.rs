@@ -112,7 +112,7 @@ pub fn map_elf_sections(
 
 #[register_trap_handler(PAGE_FAULT)]
 fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool) -> bool {
-    trace!(
+    debug!(
         "Page fault at {:#x?}, flags: {:#x?}, is_user: {:?}",
         vaddr, access_flags, is_user
     );

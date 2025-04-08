@@ -91,7 +91,7 @@ impl AddrSpace {
 
                 trace!(
                     "Trying to remap frame tracker {:?} to {:?}.",
-                    vaddr,  new_frame
+                    vaddr, new_frame
                 );
                 self.areas.remap_frame(vaddr, new_frame);
                 true
@@ -374,27 +374,6 @@ impl AddrSpace {
         Ok(())
     }
 
-    /// Updates mapping within the specified virtual address range.
-    /// Skip the populate step.
-    ///
-    /// Returns an error if the address range is out of the address space or not
-    /// aligned.
-    pub fn protect_ignore_populate(
-        &mut self,
-        start: VirtAddr,
-        size: usize,
-        flags: MappingFlags,
-    ) -> AxResult {
-        self.validate_region(start, size)?;
-
-        error!("flags: {flags:?}, start: {start:?}, size: {size:?}");
-        self.areas
-            .protect(start, size, |_| Some(flags), &mut self.pt)
-            .map_err(mapping_err_to_ax_err)?;
-
-        Ok(())
-    }
-
     /// Removes all mappings in the address space.
     pub fn clear(&mut self) {
         self.areas.clear(&mut self.pt).unwrap();
@@ -515,6 +494,8 @@ impl AddrSpace {
     /// Clone a [`AddrSpace`] by re-mapping all [`MemoryArea`]s in a new page table and change flags without coping data in user space.
     #[cfg(feature = "COW")]
     pub fn clone_on_write(&mut self) -> AxResult<Self> {
+        use alloc::vec::Vec;
+
         let mut new_aspace = Self::new_empty(self.base(), self.size())?;
 
         for area in self.areas.iter() {
@@ -538,6 +519,20 @@ impl AddrSpace {
 
                 new_aspace.pt.map(vaddr, addr, PageSize::Size4K, flags);
             }
+        }
+
+        let cow_areas: Vec<(VirtAddr, usize, MappingFlags)> = self
+            .areas
+            .iter()
+            .filter(|area| area.flags().contains(MappingFlags::COW))
+            .map(|area| (area.start(), area.size(), area.flags()))
+            .collect();
+        for (start, size, flags) in cow_areas {
+            self.protect(
+                start,
+                size,
+                (flags - MappingFlags::WRITE) | MappingFlags::COW,
+            );
         }
 
         Ok(new_aspace)

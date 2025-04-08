@@ -20,7 +20,7 @@ pub static PAGE_FAULT: [fn(VirtAddr, MappingFlags, bool) -> bool];
 /// A slice of syscall handler functions.
 #[cfg(feature = "uspace")]
 #[def_trap_handler]
-pub static SYSCALL: [fn(&TrapFrame, usize) -> isize];
+pub static SYSCALL: [fn(&TrapFrame, usize) -> Option<isize>];
 
 #[allow(unused_macros)]
 macro_rules! handle_trap {
@@ -39,7 +39,31 @@ macro_rules! handle_trap {
 }
 
 /// Call the external syscall handler.
+/// Handlers can overlap each other but only one of them can return Some(isize).
 #[cfg(feature = "uspace")]
 pub(crate) fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
-    SYSCALL[0](tf, syscall_num)
+    let mut result = None;
+    let mut result_count: usize = 0;
+    let args = [
+        tf.arg0(),
+        tf.arg1(),
+        tf.arg2(),
+        tf.arg3(),
+        tf.arg4(),
+        tf.arg5(),
+    ];
+
+    debug!("handling syscall: {} with args: {:?}", syscall_num, args);
+    for handler in SYSCALL {
+        if let Some(r) = handler(tf, syscall_num) {
+            if result_count > 1 {
+                panic!("Multiple syscall handlers returned a value");
+            }
+            result = Some(r);
+            result_count += 1;
+        }
+    }
+
+    debug!("syscall_handler result: {:?}", result);
+    result.expect("None of syscall handlers returned a value")
 }

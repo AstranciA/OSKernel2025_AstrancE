@@ -26,9 +26,12 @@ impl From<SyscallResult> for isize {
     }
 }
 
-pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> SyscallResult {
-    let sys_id = Sysno::from(sys_id as u32);//检查id与测例是否适配
+pub enum SyscallErr {
+    Unimplemented
+}
 
+pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<SyscallResult, SyscallErr> {
+    let sys_id = Sysno::from(sys_id as u32);//检查id与测例是否适配
 
     let ret = match sys_id {
         Sysno::write => {
@@ -133,13 +136,13 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> SyscallResult {
             syscall_imp::task::ae_getpid()
         }
         Sysno::clone => {
-            todo!()
+            return Err(SyscallErr::Unimplemented);
         }
         Sysno::execve => {
             todo!()
-        }
+        },
         Sysno::wait4 => {
-            todo!()
+            return Err(SyscallErr::Unimplemented);
         }
         Sysno::sched_yield => {
             syscall_imp::task::ae_yield()
@@ -264,6 +267,6 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> SyscallResult {
         }
     };
 
-    ret
+    Ok(ret)
 }
 

@@ -15,6 +15,7 @@ default = ["process", "mm"]
 process = ["axns", "axtask", "axfeat/multitask"]
 mm = ["axmm"]
 COW = ["axmm/COW"]
+irq = ["axfeat/irq"]
 
 [dependencies]
 axfeat = { workspace = true }
@@ -37,3 +38,4 @@ linkme = "0.3.32"
 numeric-enum-macro = { git = "https://github.com/mexus/numeric-enum-macro" }
 page_table_entry = "0.5"
 page_table_multiarch = "0.5"
+syscalls = { workspace = true }

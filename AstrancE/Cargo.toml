@@ -55,6 +55,8 @@ axdma = { path = "modules/axdma" }
 axsyscall = { path = "modules/axsyscall"}
 acbat = { path = "modules/acbat" }
 
+syscalls = { version = "0.6.18", default-features = false }
+
 
 #[patch.crates-io]
 #page_table_multiarch = { git = "https://github.com/oscomp/page_table_multiarch.git", rev = "c8a13b0"}

@@ -561,6 +561,7 @@ dependencies = [
  "numeric-enum-macro",
  "page_table_entry",
  "page_table_multiarch",
+ "syscalls",
  "xmas-elf",
 ]
 
@@ -1299,7 +1300,7 @@ dependencies = [
 [[package]]
 name = "lwext4_rust"
 version = "0.2.0"
-source = "git+https://github.com/Azure-stars/lwext4_rust.git#ee5131ca3fbb03f39ea0878431aadb521d191122"
+source = "git+https://github.com/Azure-stars/lwext4_rust.git?rev=ee5131#ee5131ca3fbb03f39ea0878431aadb521d191122"
 dependencies = [
  "log",
 ]

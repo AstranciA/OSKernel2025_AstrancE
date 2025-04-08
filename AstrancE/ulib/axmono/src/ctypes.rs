@@ -44,6 +44,8 @@ bitflags! {
         const CLONE_CHILD_SETTID = 1 << 24;
         /// New pid namespace.
         const CLONE_NEWPID = 1 << 29;
+
+        const FORK = 0;
     }
 
     pub struct WaitFlags: u32 {
