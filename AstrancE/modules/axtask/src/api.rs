@@ -114,6 +114,11 @@ pub fn spawn_task(task: TaskInner) -> AxTaskRef {
     task_ref
 }
 
+/// Adds the given task ref to the run queue, returns the task reference.
+pub fn spawn_task_by_ref(task_ref: AxTaskRef) {
+    select_run_queue::<NoPreemptIrqSave>(&task_ref).add_task(task_ref.clone());
+}
+
 /// Spawns a new task with the given parameters.
 ///
 /// Returns the task reference.

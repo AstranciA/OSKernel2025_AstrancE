@@ -1,7 +1,11 @@
+use alloc::sync::Arc;
 use axhal::paging::{MappingFlags, PageTable};
-use memory_addr::{PhysAddr, VirtAddr};
+use memory_addr::{FrameTracker, PageIter4K, PhysAddr, VirtAddr, VirtAddrRange};
 
-use super::Backend;
+use super::{
+    Backend,
+    frame::{FrameTrackerImpl, FrameTrackerMap, FrameTrackerRef},
+};
 
 impl Backend {
     /// Creates a new linear mapping backend.
@@ -15,7 +19,7 @@ impl Backend {
         flags: MappingFlags,
         pt: &mut PageTable,
         pa_va_offset: usize,
-    ) -> bool {
+    ) -> Result<FrameTrackerMap, ()> {
         let va_to_pa = |va: VirtAddr| PhysAddr::from(va.as_usize() - pa_va_offset);
         debug!(
             "map_linear: [{:#x}, {:#x}) -> [{:#x}, {:#x}) {:?}",
@@ -26,8 +30,15 @@ impl Backend {
             flags
         );
         pt.map_region(start, va_to_pa, size, flags, false, false)
-            .map(|tlb| tlb.ignore()) // TLB flush on map is unnecessary, as there are no outdated mappings.
-            .is_ok()
+            .map(|tlb| tlb.ignore())
+            .unwrap_or(()); // TLB flush on map is unnecessary, as there are no outdated mappings.
+
+        let frame_map: FrameTrackerMap = PageIter4K::new(start, start + size)
+            .unwrap()
+            .map(|vaddr| (vaddr, Arc::new(FrameTrackerImpl::new(va_to_pa(vaddr)))))
+            .collect();
+
+        Ok(frame_map)
     }
 
     pub(crate) fn unmap_linear(

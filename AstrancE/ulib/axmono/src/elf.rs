@@ -1,8 +1,5 @@
-use alloc::{
-    string::{String},
-    vec::Vec,
-};
 use alloc::string::ToString;
+use alloc::{string::String, vec::Vec};
 use axhal::{
     mem::{MemoryAddr, PAGE_SIZE_4K, VirtAddr},
     paging::MappingFlags,
@@ -35,7 +32,8 @@ impl ELFInfo {
         //Self::assert_magic(&elf_header);
 
         Self::check_arch(&elf_header).unwrap();
-        let elf_parser = kernel_elf_parser::ELFParser::new(&elf, 0, None, uspace_base.as_usize()).unwrap();
+        let elf_parser =
+            kernel_elf_parser::ELFParser::new(&elf, 0, None, uspace_base.as_usize()).unwrap();
 
         let elf_offset = elf_parser.base();
 
@@ -65,7 +63,7 @@ impl ELFInfo {
                     start_va: st_va_align,
                     size,
                     data,
-                    offset: st_va.align_offset_4k()
+                    offset: st_va.align_offset_4k(),
                 }
             })
             .collect();
@@ -113,7 +111,14 @@ impl ELFSegment {
             ret |= MappingFlags::READ;
         }
         if ph_flags.is_write() {
-            ret |= MappingFlags::WRITE;
+            #[cfg(feature = "COW")]
+            {
+                ret = (ret - MappingFlags::COW) & MappingFlags::WRITE;
+            }
+            #[cfg(not(feature = "COW"))]
+            {
+                ret |= MappingFlags::WRITE;
+            }
         }
         if ph_flags.is_execute() {
             ret |= MappingFlags::EXECUTE;

@@ -9,6 +9,10 @@ homepage.workspace = true
 repository = "https://github.com/arceos-org/arceos/tree/main/modules/axmm"
 documentation = "https://arceos-org.github.io/arceos/axmm/index.html"
 
+[features]
+RAII = ["memory_set/RAII", "memory_addr/RAII"]
+COW = ["RAII"]
+
 [dependencies]
 axhal = { workspace = true, features = ["paging"] }
 axalloc = { workspace = true }
@@ -19,5 +23,5 @@ axerrno = "0.1"
 lazyinit = "0.2"
 memory_addr = "0.3"
 kspin = "0.1"
-memory_set = "0.3"
+memory_set = "0.3.2"
 page_table_multiarch = "0.5"

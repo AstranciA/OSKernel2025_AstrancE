@@ -282,7 +282,8 @@ impl TaskInner {
         t
     }
 
-    pub(crate) fn into_arc(self) -> AxTaskRef {
+    //pub(crate) fn into_arc(self) -> AxTaskRef {
+    pub fn into_arc(self) -> AxTaskRef {
         Arc::new(AxTask::new(self))
     }
 

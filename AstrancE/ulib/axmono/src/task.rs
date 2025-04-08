@@ -187,7 +187,7 @@ pub fn spawn_user_task_inner(
             // TODO: no current
             let curr = axtask::current();
             let kstack_top = curr.kernel_stack_top().unwrap();
-            info!(
+            trace!(
                 "Enter user space: entry={:#x}, ustack={:#x}, kstack={:#x}",
                 curr.task_ext().uctx.get_ip(),
                 curr.task_ext().uctx.get_sp(),
@@ -212,8 +212,11 @@ pub fn spawn_user_task(
     aspace: Arc<Mutex<AddrSpace>>,
     uctx: UspaceContext,
 ) -> AxTaskRef {
-    let task_inner = spawn_user_task_inner(app_name, aspace, uctx);
-    axtask::spawn_task(task_inner)
+    spawn_user_task_inner(app_name, aspace, uctx).into_arc()
+    /*
+     *let task_inner = spawn_user_task_inner(app_name, aspace, uctx);
+     *axtask::spawn_task(task_inner)
+     */
 }
 pub fn write_trapframe_to_kstack(kstack_top: usize, trap_frame: &TrapFrame) {
     let trap_frame_size = core::mem::size_of::<TrapFrame>();
@@ -229,7 +232,7 @@ pub fn read_trapframe_from_kstack(kstack_top: usize) -> TrapFrame {
     unsafe { *trap_frame_ptr }
 }
 
-pub fn wait_pid(pid: i32, exit_code_ptr: *mut i32) -> Result<u64, WaitStatus> {
+pub fn wait_pid(task: AxTaskRef, pid: i32, exit_code_ptr: *mut i32) -> Result<u64, WaitStatus> {
     let curr_task = current();
     let mut exit_task_id: usize = 0;
     let mut answer_id: u64 = 0;
@@ -328,8 +331,18 @@ pub fn clone_task(
 
     let mut current_aspace = current_task_ext.aspace.lock();
     let mut new_aspace;
+    // TODO: COW
     if clone_flags.contains(CloneFlags::CLONE_VM) {
-        new_aspace = current_aspace.clone_or_err()?;
+        #[cfg(feature = "COW")]
+        {
+            //new_aspace = AddrSpace::new_empty_like(&current_aspace).expect("Failed ot create user address space");
+            //new_aspace.copy_mappings_from(&current_aspace, true);
+            new_aspace = current_aspace.clone_on_write()?;
+        }
+        #[cfg(not(feature = "COW"))]
+        {
+            new_aspace = current_aspace.clone_or_err()?;
+        }
     } else {
         new_aspace = new_user_aspace_empty().expect("Failed ot create user address space");
     }
@@ -350,6 +363,7 @@ pub fn clone_task(
     //let new_task_ref = axtask::spawn_task(new_task);
     write_trapframe_to_kstack(new_task_ref.kernel_stack_top().unwrap().into(), &trap_frame);
 
+    // TODO: children task management
     current_task_ext.children.lock().push(new_task_ref.clone());
 
     Ok(new_task_ref)
@@ -413,4 +427,12 @@ pub fn time_stat_output() -> (usize, usize, usize, usize) {
         stime_ns / NANOS_PER_SEC as usize,
         stime_ns / NANOS_PER_MICROS as usize,
     )
+}
+
+pub fn test(task: AxTaskRef) {
+    let task_ext = task.task_ext();
+    let mut buf = [0u8; 16];
+    task_ext.aspace.lock().read(0x1161c.into(), &mut buf).unwrap();
+    info!("{:x?}", buf);
+
 }

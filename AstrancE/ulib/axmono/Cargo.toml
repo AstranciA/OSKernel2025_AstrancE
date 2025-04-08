@@ -14,6 +14,7 @@ categories.workspace = true
 default = ["process", "mm"]
 process = ["axns", "axtask", "axfeat/multitask"]
 mm = ["axmm"]
+COW = ["axmm/COW"]
 
 [dependencies]
 axfeat = { workspace = true }
