@@ -27,9 +27,12 @@ impl From<SyscallResult> for isize {
     }
 }
 
-pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> SyscallResult {
-    let sys_id = Sysno::from(sys_id as u32);//检查id与测例是否适配
+pub enum SyscallErr {
+    Unimplemented
+}
 
+pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<SyscallResult, SyscallErr> {
+    let sys_id = Sysno::from(sys_id as u32);//检查id与测例是否适配
 
     let ret = match sys_id {
         Sysno::write => {
@@ -131,19 +134,19 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> SyscallResult {
             syscall_imp::task::ae_getpid()
         }
         Sysno::clone => {
-            todo!()
+            return Err(SyscallErr::Unimplemented);
         }
         Sysno::execve => {
             todo!()
-        }
+        },
         Sysno::wait4 => {
-            todo!()
+            return Err(SyscallErr::Unimplemented);
         }
         Sysno::sched_yield => {
             syscall_imp::task::ae_yield()
         }
         // 时间相关系统调用
-        Sysno::clock_gettime => {
+        Sysno::clock_gettime | Sysno::clock_gettime64 => {
             let cls = args[0];
             let ts: *mut ctypes::timespec= args[1] as *mut ctypes::timespec;
             syscall_imp::time::ae_clock_gettime(cls as ctypes::clockid_t, ts)
@@ -152,12 +155,20 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> SyscallResult {
             let ts: *mut ctypes::timeval= args[0] as *mut ctypes::timeval;
             syscall_imp::time::ae_get_time_of_day(ts)
         }
-        Sysno::nanosleep => {
+        Sysno::nanosleep  => {
             let req : *const ctypes::timespec = args[0] as *const ctypes::timespec;
             let rem: *mut ctypes::timespec = args[1] as *mut ctypes::timespec;
             syscall_imp::time::ae_nanosleep(req, rem)
         }
-        
+         Sysno::clock_nanosleep_time64 => {
+            // TODO: handle clock_id and flags
+            let _clock_id = args[0];
+            let _flags = args[1];
+            let req : *const ctypes::timespec = args[2] as *const ctypes::timespec;
+            let rem: *mut ctypes::timespec = args[3] as *mut ctypes::timespec;
+            syscall_imp::time::ae_nanosleep(req, rem)
+
+        }
         // 其他系统调用
         Sysno::brk => {
             syscall_imp::task::ae_brk(args[0] as _)
@@ -262,6 +273,6 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> SyscallResult {
         }
     };
 
-    ret
+    Ok(ret)
 }
 

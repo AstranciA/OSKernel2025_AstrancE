@@ -179,6 +179,12 @@ impl UspaceContext {
     }
 }
 
+impl Clone for UspaceContext {
+    fn clone(&self) -> Self {
+        Self::from(&self.0)
+    }
+}
+
 #[repr(C)]
 #[derive(Debug, Default)]
 struct ContextSwitchFrame {

@@ -6,6 +6,7 @@ use axhal::{
     trap::{PAGE_FAULT, register_trap_handler},
 };
 use axmm::AddrSpace;
+use axtask::{current, TaskExtRef};
 use xmas_elf::ElfFile;
 
 use crate::{copy_from_kernel, elf::ELFInfo, loader};
@@ -71,6 +72,7 @@ pub fn map_elf_sections(
         if segement.data.is_empty() {
             continue;
         }
+        //uspace.populate_area(segement.start_va, segement.size);
 
         uspace.write(segement.start_va + segement.offset, segement.data)?;
         // TDOO: flush the I-cache
@@ -98,7 +100,7 @@ pub fn map_elf_sections(
     uspace.map_alloc(
         ustack_start,
         ustack_size,
-        MappingFlags::READ | MappingFlags::WRITE | MappingFlags::USER,
+        MappingFlags::READ | MappingFlags::COW | MappingFlags::USER,
         true,
     )?;
 
@@ -114,5 +116,8 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
         "Page fault at {:#x?}, flags: {:#x?}, is_user: {:?}",
         vaddr, access_flags, is_user
     );
-    todo!();
+    let curr = current();
+    let mut aspace = curr.task_ext().aspace.lock();
+
+    aspace.handle_page_fault(vaddr, access_flags)
 }

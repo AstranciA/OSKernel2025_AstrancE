@@ -16,7 +16,7 @@ net = ["arceos_posix_api/net"]
 pipe = ["arceos_posix_api/pipe"]
 multitask = ["arceos_posix_api/multitask"]
 [dependencies]
-syscalls = { version = "0.6.18", default-features = false }
+syscalls = { workspace = true }
 arceos_posix_api = { workspace = true }
 axerrno = "0.1"
 axtask = {workspace = true}

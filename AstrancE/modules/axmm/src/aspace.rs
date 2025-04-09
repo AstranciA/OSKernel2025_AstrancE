@@ -6,9 +6,11 @@ use axhal::paging::{MappingFlags, PageTable, PagingError};
 use memory_addr::{
     MemoryAddr, PAGE_SIZE_4K, PageIter4K, PhysAddr, VirtAddr, VirtAddrRange, is_aligned_4k,
 };
-use memory_set::{MemoryArea, MemorySet};
+use memory_set::{MappingBackend, MemoryArea, MemorySet};
+use page_table_multiarch::PageSize;
 
 use crate::backend::Backend;
+use crate::backend::frame::FrameTrackerRef;
 use crate::mapping_err_to_ax_err;
 
 /// The virtual memory address space.
@@ -59,6 +61,44 @@ impl AddrSpace {
         })
     }
 
+    pub fn new_empty_like(other: &AddrSpace) -> AxResult<Self> {
+        Ok(Self {
+            va_range: other.va_range,
+            areas: MemorySet::new(),
+            pt: PageTable::try_new().map_err(|_| AxError::NoMemory)?,
+        })
+    }
+
+    pub fn find_frame(&self, vaddr: VirtAddr) -> Option<FrameTrackerRef> {
+        self.areas.find_frame(vaddr)
+    }
+
+    /// Remap a vaddr to a new frame.pub fn remap_frame(&mut self, vaddr:
+    /// B::Addr, new_frame: B::FrameTrackerImpl) {
+    pub fn remap_frame(
+        &mut self,
+        vaddr: VirtAddr,
+        new_frame: <Backend as MappingBackend>::FrameTrackerRef,
+        new_flags: MappingFlags,
+    ) -> bool {
+        //self.areas.remap_frame(vaddr, new_frame);
+        self.pt
+            .remap(vaddr, new_frame.pa, new_flags)
+            .map(|(_, tlb)| tlb.flush())
+            .is_ok()
+            .then(|| {
+                let vaddr = vaddr.align_down_4k();
+
+                trace!(
+                    "Trying to remap frame tracker {:?} to {:?}.",
+                    vaddr, new_frame
+                );
+                self.areas.remap_frame(vaddr, new_frame);
+                true
+            })
+            .unwrap_or(false)
+    }
+
     /// Copies page table mappings from another address space.
     ///
     /// It copies the page table entries only rather than the memory regions,
@@ -69,9 +109,9 @@ impl AddrSpace {
     /// taint the original page table. For workaround, you can use
     /// [`AddrSpace::clear_mappings`].
     ///
-    /// Returns an error if the two address spaces overlap.
-    pub fn copy_mappings_from(&mut self, other: &AddrSpace) -> AxResult {
-        if self.va_range.overlaps(other.va_range) {
+    /// Returns an error if allow_overlap is false and the two address spaces overlap.
+    pub fn copy_mappings_from(&mut self, other: &AddrSpace, allow_overlap: bool) -> AxResult {
+        if !allow_overlap && self.va_range.overlaps(other.va_range) {
             return ax_err!(InvalidInput, "address space overlap");
         }
         self.pt.copy_from(&other.pt, other.base(), other.size());
@@ -130,7 +170,7 @@ impl AddrSpace {
         }
 
         let offset = start_vaddr.as_usize() - start_paddr.as_usize();
-        let area = MemoryArea::new(start_vaddr, size, flags, Backend::new_linear(offset));
+        let area = MemoryArea::new(start_vaddr, size, None, flags, Backend::new_linear(offset));
         self.areas
             .map(area, &mut self.pt, false)
             .map_err(mapping_err_to_ax_err)?;
@@ -154,7 +194,7 @@ impl AddrSpace {
     ) -> AxResult {
         self.validate_region(start, size)?;
 
-        let area = MemoryArea::new(start, size, flags, Backend::new_alloc(populate));
+        let area = MemoryArea::new(start, size, None, flags, Backend::new_alloc(populate));
         self.areas
             .map(area, &mut self.pt, false)
             .map_err(mapping_err_to_ax_err)?;
@@ -167,16 +207,22 @@ impl AddrSpace {
         self.validate_region(start, size)?;
         let end = start + size;
 
-        while let Some(area) = self.areas.find(start) {
-            let backend = area.backend();
+        while start < end {
+            let area = match self.areas.find(start) {
+                Some(area) => area,
+                None => break,
+            };
+            let backend = area.backend().clone();
+            let _end = area.end();
+            let flags = area.flags();
             if let Backend::Alloc { populate } = backend {
-                if !*populate {
+                if !populate {
                     for addr in PageIter4K::new(start, area.end().min(end)).unwrap() {
                         match self.pt.query(addr) {
                             Ok(_) => {}
                             // If the page is not mapped, try map it.
                             Err(PagingError::NotMapped) => {
-                                if !backend.handle_page_fault(addr, area.flags(), &mut self.pt) {
+                                if !backend.handle_page_fault(addr, flags, self) {
                                     return Err(AxError::NoMemory);
                                 }
                             }
@@ -185,12 +231,16 @@ impl AddrSpace {
                     }
                 }
             }
-            start = area.end();
+            start = _end;
             assert!(start.is_aligned_4k());
-            if start >= end {
-                break;
-            }
         }
+        /*
+         *while let Some(area) = self.areas.find(start) {
+         *    if start >= end {
+         *        break;
+         *    }
+         *}
+         */
 
         if start < end {
             // If the area is not fully mapped, we return ENOMEM.
@@ -372,7 +422,16 @@ impl AddrSpace {
         }
         if let Some(area) = self.areas.find(vaddr) {
             let orig_flags = area.flags();
+            #[cfg(feature = "COW")]
+            if orig_flags.contains(access_flags) || orig_flags.contains(MappingFlags::COW) {
+                let backed = area.backend().clone();
+                return backed.handle_page_fault(vaddr, orig_flags, self);
+            }
+            #[cfg(not(feature = "COW"))]
             if orig_flags.contains(access_flags) {
+                return area
+                    .backend()
+                    .handle_page_fault(vaddr, orig_flags, &mut self.pt);
                 return area
                     .backend()
                     .handle_page_fault(vaddr, orig_flags, &mut self.pt);
@@ -387,13 +446,15 @@ impl AddrSpace {
 
         for area in self.areas.iter() {
             let backend = area.backend();
-            // Remap the memory area in the new address space.
-            let new_area =
-                MemoryArea::new(area.start(), area.size(), area.flags(), backend.clone());
+            // Remap the memory areajin the new address space.
+            let flags = area.flags();
+
+            let new_area = MemoryArea::new(area.start(), area.size(), None, flags, backend.clone());
             new_aspace
                 .areas
                 .map(new_area, &mut new_aspace.pt, false)
                 .map_err(mapping_err_to_ax_err)?;
+
             // Copy data from old memory area to new memory area.
             for vaddr in
                 PageIter4K::new(area.start(), area.end()).expect("Failed to create page iterator")
@@ -408,7 +469,7 @@ impl AddrSpace {
                     Ok((paddr, _, _)) => paddr,
                     // If the page is not mapped, try map it.
                     Err(PagingError::NotMapped) => {
-                        if !backend.handle_page_fault(vaddr, area.flags(), &mut new_aspace.pt) {
+                        if !backend.handle_page_fault(vaddr, area.flags(), &mut new_aspace) {
                             return Err(AxError::NoMemory);
                         }
                         match new_aspace.pt.query(vaddr) {
@@ -427,6 +488,53 @@ impl AddrSpace {
                 };
             }
         }
+        Ok(new_aspace)
+    }
+
+    /// Clone a [`AddrSpace`] by re-mapping all [`MemoryArea`]s in a new page table and change flags without coping data in user space.
+    #[cfg(feature = "COW")]
+    pub fn clone_on_write(&mut self) -> AxResult<Self> {
+        use alloc::vec::Vec;
+
+        let mut new_aspace = Self::new_empty(self.base(), self.size())?;
+
+        for area in self.areas.iter() {
+            // Remap the memory areajin the new address space.
+            let backend = area.backend();
+            let mut flags = area.flags();
+            if flags.contains(MappingFlags::WRITE) {
+                flags = (flags - MappingFlags::WRITE) | MappingFlags::COW;
+            }
+
+            new_aspace.areas.insert(area.clone());
+            for vaddr in
+                PageIter4K::new(area.start(), area.end()).expect("Failed to create page iterator")
+            {
+                let addr = match self.pt.query(vaddr) {
+                    Ok((paddr, _, _)) => paddr,
+                    // If the page is not mapped, skip it.
+                    Err(PagingError::NotMapped) => continue,
+                    Err(_) => return Err(AxError::BadAddress),
+                };
+
+                new_aspace.pt.map(vaddr, addr, PageSize::Size4K, flags);
+            }
+        }
+
+        let cow_areas: Vec<(VirtAddr, usize, MappingFlags)> = self
+            .areas
+            .iter()
+            .filter(|area| area.flags().contains(MappingFlags::COW))
+            .map(|area| (area.start(), area.size(), area.flags()))
+            .collect();
+        for (start, size, flags) in cow_areas {
+            self.protect(
+                start,
+                size,
+                (flags - MappingFlags::WRITE) | MappingFlags::COW,
+            );
+        }
+
         Ok(new_aspace)
     }
 }

@@ -24,7 +24,7 @@ use axhal::{
 use axmm::{AddrSpace, kernel_aspace};
 use axns::{AxNamespace, AxNamespaceIf};
 use axsync::Mutex;
-use axtask::{AxTaskRef, TaskExtRef, TaskInner, WeakAxTaskRef, current};
+use axtask::{AxTaskRef, TaskExtMut, TaskExtRef, TaskInner, WeakAxTaskRef, current};
 
 pub fn new_user_aspace_empty() -> AxResult<AddrSpace> {
     /*
@@ -146,6 +146,8 @@ impl Drop for TaskExt {
         if !cfg!(target_arch = "aarch64") && !cfg!(target_arch = "loongarch64") {
             // See [`crate::new_user_aspace`]
 
+            debug!("Drop TaskExt: {}", self.proc_id);
+
             let kernel = kernel_aspace().lock();
 
             self.aspace
@@ -187,7 +189,7 @@ pub fn spawn_user_task_inner(
             // TODO: no current
             let curr = axtask::current();
             let kstack_top = curr.kernel_stack_top().unwrap();
-            info!(
+            trace!(
                 "Enter user space: entry={:#x}, ustack={:#x}, kstack={:#x}",
                 curr.task_ext().uctx.get_ip(),
                 curr.task_ext().uctx.get_sp(),
@@ -212,9 +214,14 @@ pub fn spawn_user_task(
     aspace: Arc<Mutex<AddrSpace>>,
     uctx: UspaceContext,
 ) -> AxTaskRef {
-    let task_inner = spawn_user_task_inner(app_name, aspace, uctx);
-    axtask::spawn_task(task_inner)
+    spawn_user_task_inner(app_name, aspace, uctx).into_arc()
+    /*
+     *let task_inner = spawn_user_task_inner(app_name, aspace, uctx);
+     *axtask::spawn_task(task_inner)
+     */
 }
+
+/// Unable to work for cloned task since task will overwrite trap_frame from uctx
 pub fn write_trapframe_to_kstack(kstack_top: usize, trap_frame: &TrapFrame) {
     let trap_frame_size = core::mem::size_of::<TrapFrame>();
     let trap_frame_ptr = (kstack_top - trap_frame_size) as *mut TrapFrame;
@@ -229,13 +236,13 @@ pub fn read_trapframe_from_kstack(kstack_top: usize) -> TrapFrame {
     unsafe { *trap_frame_ptr }
 }
 
-pub fn wait_pid(pid: i32, exit_code_ptr: *mut i32) -> Result<u64, WaitStatus> {
-    let curr_task = current();
+/// From starry-next
+pub fn wait_pid(task: AxTaskRef, pid: i32, exit_code_ptr: *mut i32) -> Result<u64, WaitStatus> {
     let mut exit_task_id: usize = 0;
     let mut answer_id: u64 = 0;
     let mut answer_status = WaitStatus::NotExist;
 
-    for (index, child) in curr_task.task_ext().children.lock().iter().enumerate() {
+    for (index, child) in task.task_ext().children.lock().iter().enumerate() {
         if pid <= 0 {
             if pid == 0 {
                 axlog::warn!("Don't support for process group.");
@@ -245,7 +252,7 @@ pub fn wait_pid(pid: i32, exit_code_ptr: *mut i32) -> Result<u64, WaitStatus> {
             if child.state() == axtask::TaskState::Exited {
                 let exit_code = child.exit_code();
                 answer_status = WaitStatus::Exited;
-                info!(
+                debug!(
                     "wait pid _{}_ with code _{}_",
                     child.id().as_u64(),
                     exit_code
@@ -286,7 +293,7 @@ pub fn wait_pid(pid: i32, exit_code_ptr: *mut i32) -> Result<u64, WaitStatus> {
     }
 
     if answer_status == WaitStatus::Exited {
-        curr_task.task_ext().children.lock().remove(exit_task_id);
+        task.task_ext().children.lock().remove(exit_task_id);
         return Ok(answer_id);
     }
     Err(answer_status)
@@ -296,13 +303,13 @@ pub fn wait_pid(pid: i32, exit_code_ptr: *mut i32) -> Result<u64, WaitStatus> {
 /// **Return**
 /// - `Ok(new_task_ref)` if fork successfully
 pub fn fork(current_task: AxTaskRef, from_umode: bool) -> AxResult<AxTaskRef> {
-    clone_task(current_task, CloneFlags::CLONE_VM, None, from_umode)
+    clone_task(current_task, None, CloneFlags::FORK, from_umode)
 }
 
 pub fn clone_task(
     current_task: AxTaskRef,
-    clone_flags: CloneFlags,
     stack: Option<usize>,
+    clone_flags: CloneFlags,
     from_umode: bool,
     /*
      *_ptid: usize,
@@ -316,40 +323,48 @@ pub fn clone_task(
     let current_task_ext = current_task.task_ext();
     // new task with same ip and sp of current task
     let mut trap_frame = read_trapframe_from_kstack(current_task.get_kernel_stack_top().unwrap());
+
+    let mut current_aspace = current_task_ext.aspace.lock();
+    let mut new_aspace;
+    #[cfg(feature = "COW")]
+    {
+        new_aspace = current_aspace.clone_on_write()?;
+    }
+    #[cfg(not(feature = "COW"))]
+    {
+        new_aspace = current_aspace.clone_or_err()?;
+    }
+
+    copy_from_kernel(&mut new_aspace);
+
+    //let new_uctx = current_task_ext.uctx.0;
+
     if from_umode {
         trap_frame.set_ret_code(0);
-        // TODO: loongarch64
         trap_frame.inc_sepc();
     }
 
+    // TODO: clone stack since it's always changed.
+    // stack is copied meanwhilst addr space is copied
+    //trap_frame.set_user_sp(stack);
     if let Some(stack) = stack {
         trap_frame.set_user_sp(stack);
     }
 
-    let mut current_aspace = current_task_ext.aspace.lock();
-    let mut new_aspace;
-    if clone_flags.contains(CloneFlags::CLONE_VM) {
-        new_aspace = current_aspace.clone_or_err()?;
-    } else {
-        new_aspace = new_user_aspace_empty().expect("Failed ot create user address space");
-    }
-    copy_from_kernel(&mut new_aspace);
-
-    // stack is copied meanwhilst addr space is copied
-    //trap_frame.set_user_sp(stack);
-
-    // TODO: not too safe??
-    let new_uctx = UspaceContext::from(&current_task_ext.uctx.0);
-    //let new_uctx = current_task_ext.uctx.0;
+    //write_trapframe_to_kstack(new_task_ref.kernel_stack_top().unwrap().into(), &trap_frame);
+    //write_trapframe_to_kstack(new_task_ref.kernel_stack_top().unwrap().into(), &TrapFrame::default());
+    //new_uctx.0 = trap_frame;
+    let new_uctx = UspaceContext::from(&trap_frame);
+    //panic!();
 
     let new_task_ref = spawn_user_task(
         current_task.name(),
         Arc::new(Mutex::new(new_aspace)),
         new_uctx,
     );
-    //let new_task_ref = axtask::spawn_task(new_task);
-    write_trapframe_to_kstack(new_task_ref.kernel_stack_top().unwrap().into(), &trap_frame);
 
+
+    // TODO: children task management
     current_task_ext.children.lock().push(new_task_ref.clone());
 
     Ok(new_task_ref)
@@ -413,4 +428,15 @@ pub fn time_stat_output() -> (usize, usize, usize, usize) {
         stime_ns / NANOS_PER_SEC as usize,
         stime_ns / NANOS_PER_MICROS as usize,
     )
+}
+
+pub fn test(task: AxTaskRef) {
+    let task_ext = task.task_ext();
+    let mut buf = [0u8; 16];
+    task_ext
+        .aspace
+        .lock()
+        .read(0x1161c.into(), &mut buf)
+        .unwrap();
+    info!("{:x?}", buf);
 }
