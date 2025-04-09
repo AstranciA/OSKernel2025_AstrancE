@@ -111,14 +111,7 @@ impl ELFSegment {
             ret |= MappingFlags::READ;
         }
         if ph_flags.is_write() {
-            #[cfg(feature = "COW")]
-            {
-                ret = (ret - MappingFlags::COW) & MappingFlags::WRITE;
-            }
-            #[cfg(not(feature = "COW"))]
-            {
-                ret |= MappingFlags::WRITE;
-            }
+            ret |= MappingFlags::WRITE;
         }
         if ph_flags.is_execute() {
             ret |= MappingFlags::EXECUTE;
