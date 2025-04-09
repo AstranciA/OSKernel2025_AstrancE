@@ -1,3 +1,6 @@
 [submodule "crates/axmm_crates"]
 	path = crates/axmm_crates
 	url = git@github.com:AstranciA/axmm_crates.git
+[submodule "crates/page_table_multiarch"]
+	path = crates/page_table_multiarch
+	url = git@github.com:AstranciA/page_table_multiarch.git
