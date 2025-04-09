@@ -236,6 +236,7 @@ pub fn read_trapframe_from_kstack(kstack_top: usize) -> TrapFrame {
     unsafe { *trap_frame_ptr }
 }
 
+/// From starry-next
 pub fn wait_pid(task: AxTaskRef, pid: i32, exit_code_ptr: *mut i32) -> Result<u64, WaitStatus> {
     let mut exit_task_id: usize = 0;
     let mut answer_id: u64 = 0;
