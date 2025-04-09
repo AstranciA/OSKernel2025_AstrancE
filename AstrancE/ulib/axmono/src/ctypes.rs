@@ -6,7 +6,11 @@ bitflags! {
     /// 用于 sys_clone 的选项
     #[derive(Debug, Clone, Copy)]
     pub struct CloneFlags: u32 {
-        /// .
+        const CSIGNAL = 0xff;
+        /**
+         * cloning flags intersect with CSIGNAL so can be used with unshare and clone3
+         * syscalls only:
+         */
         const CLONE_NEWTIME = 1 << 7;
         /// 共享地址空间
         const CLONE_VM = 1 << 8;
@@ -45,7 +49,7 @@ bitflags! {
         /// New pid namespace.
         const CLONE_NEWPID = 1 << 29;
 
-        const FORK = 0;
+        const FORK = 0x11;
     }
 
     pub struct WaitFlags: u32 {
