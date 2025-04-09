@@ -4,7 +4,7 @@ use core::ffi::c_int;
 use core::ffi::c_void;
 
 #[cfg(feature = "net")]
-pub fn ae_socket(domain: c_int, socktype: c_int, protocol: c_int) -> SyscallResult
+pub fn sys_socket(domain: c_int, socktype: c_int, protocol: c_int) -> SyscallResult
 {
     let ret = api::sys_socket(domain, socktype, protocol) as isize;
     if ret < 0 {
@@ -14,7 +14,7 @@ pub fn ae_socket(domain: c_int, socktype: c_int, protocol: c_int) -> SyscallResu
     }
 }
 #[cfg(feature = "net")]
-pub fn ae_bind(
+pub fn sys_bind(
     socket_fd: c_int,
     addr: *const ctypes::sockaddr,
     addrlen: ctypes::socklen_t,
@@ -28,7 +28,7 @@ pub fn ae_bind(
 }
 #[cfg(feature = "net")]
 // Socket connection
-pub fn ae_connect(
+pub fn sys_connect(
     socket_fd: c_int,
     addr: *const ctypes::sockaddr,
     addrlen: ctypes::socklen_t,
@@ -42,7 +42,7 @@ pub fn ae_connect(
 }
 #[cfg(feature = "net")]
 // Data sending with address
-pub fn ae_sendto(
+pub fn sys_sendto(
     socket_fd: c_int,
     buf: *const c_void,
     len: usize,
@@ -59,7 +59,7 @@ pub fn ae_sendto(
 }
 #[cfg(feature = "net")]
 // Data sending (connected socket)
-pub fn ae_send(
+pub fn sys_send(
     socket_fd: c_int,
     buf: *const c_void,
     len: usize,
@@ -74,7 +74,7 @@ pub fn ae_send(
 }
 #[cfg(feature = "net")]
 // Data receiving with address
-pub unsafe fn ae_recvfrom(
+pub unsafe fn sys_recvfrom(
     socket_fd: c_int,
     buf: *mut c_void,
     len: usize,
@@ -91,7 +91,7 @@ pub unsafe fn ae_recvfrom(
 }
 #[cfg(feature = "net")]
 // Data receiving (connected socket)
-pub fn ae_recv(
+pub fn sys_recv(
     socket_fd: c_int,
     buf: *mut c_void,
     len: usize,
@@ -106,7 +106,7 @@ pub fn ae_recv(
 }
 #[cfg(feature = "net")]
 // Socket listening
-pub fn ae_listen(socket_fd: c_int, backlog: c_int) -> SyscallResult {
+pub fn sys_listen(socket_fd: c_int, backlog: c_int) -> SyscallResult {
     let ret = api::sys_listen(socket_fd, backlog) as isize;
     if ret < 0 {
         SyscallResult::Error((-ret).try_into().unwrap())
@@ -116,7 +116,7 @@ pub fn ae_listen(socket_fd: c_int, backlog: c_int) -> SyscallResult {
 }
 #[cfg(feature = "net")]
 // Connection acceptance
-pub unsafe fn ae_accept(
+pub unsafe fn sys_accept(
     socket_fd: c_int,
     addr: *mut ctypes::sockaddr,
     addrlen: *mut ctypes::socklen_t,
@@ -130,7 +130,7 @@ pub unsafe fn ae_accept(
 }
 #[cfg(feature = "net")]
 // Socket shutdown
-pub fn ae_shutdown(socket_fd: c_int, _how: c_int) -> SyscallResult {
+pub fn sys_shutdown(socket_fd: c_int, _how: c_int) -> SyscallResult {
     let ret = api::sys_shutdown(socket_fd, 0) as isize;
     if ret < 0 {
         SyscallResult::Error((-ret).try_into().unwrap())
@@ -140,7 +140,7 @@ pub fn ae_shutdown(socket_fd: c_int, _how: c_int) -> SyscallResult {
 }
 #[cfg(feature = "net")]
 // Socket address query
-pub unsafe fn ae_getsockname(
+pub unsafe fn sys_getsockname(
     socket_fd: c_int,
     addr: *mut ctypes::sockaddr,
     addrlen: *mut ctypes::socklen_t,
@@ -154,7 +154,7 @@ pub unsafe fn ae_getsockname(
 }
 #[cfg(feature = "net")]
 // Peer address query
-pub unsafe fn ae_getpeername(
+pub unsafe fn sys_getpeername(
     socket_fd: c_int,
     addr: *mut ctypes::sockaddr,
     addrlen: *mut ctypes::socklen_t,

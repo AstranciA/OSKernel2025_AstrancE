@@ -2,7 +2,7 @@ use axhal::arch::TrapFrame;
 use axhal::trap::{SYSCALL, register_trap_handler};
 use axtask::current;
 use syscalls::Sysno;
-
+use axsyscall::sys_handler_def;
 use crate::{
     ctypes::{CloneFlags, WaitStatus},
     task,
@@ -68,3 +68,4 @@ fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> Option<isize> {
     };
     ret
 }
+

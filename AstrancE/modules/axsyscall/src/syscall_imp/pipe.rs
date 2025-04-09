@@ -5,7 +5,7 @@ use core::ffi::c_int;
 
 #[cfg(feature = "pipe")]
 
-pub fn ae_pipe(fds: &mut [c_int]) -> SyscallResult {
+pub fn sys_pipe(fds: &mut [c_int]) -> SyscallResult {
     let ret = api::sys_pipe(fds) as isize;
     if ret < 0 {
         SyscallResult::Error((-ret).try_into().unwrap())
