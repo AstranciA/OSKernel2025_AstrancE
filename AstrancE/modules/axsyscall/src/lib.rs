@@ -137,7 +137,7 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<SyscallResult,
             return Err(SyscallErr::Unimplemented);
         }
         Sysno::execve => {
-            todo!()
+            return Err(SyscallErr::Unimplemented);
         },
         Sysno::wait4 => {
             return Err(SyscallErr::Unimplemented);

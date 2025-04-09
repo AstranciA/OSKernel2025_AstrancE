@@ -1,3 +1,5 @@
+use core::ffi::{CStr, c_char};
+
 use axhal::arch::TrapFrame;
 use axhal::trap::{SYSCALL, register_trap_handler};
 use axtask::current;
@@ -25,14 +27,15 @@ fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> Option<isize> {
             let curr = current();
             let clone_flags = CloneFlags::from_bits(args[0] as u32);
             if clone_flags.is_none() {
-                error!("Invalid clone flags: {}", args[0]);
+                error!("Invalid clone flags: {:x}", args[0]);
                 axtask::exit(-1); // FIXME: return error code
             }
             let clone_flags = clone_flags.unwrap();
+            let sp = args[1];
 
             let child_task = task::clone_task(
                 curr.as_task_ref().clone(),
-                if (args[0] != 0) { Some(args[0]) } else { None },
+                if (sp != 0) { Some(sp) } else { None },
                 clone_flags,
                 true,
             )
@@ -63,6 +66,16 @@ fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> Option<isize> {
                 };
             }
             result
+        }
+        Sysno::execve => {
+            let program_name = unsafe { CStr::from_ptr((args[0] as *const u8).into()) };
+            // FIXME: drop curr ref?
+            match task::exec_current(program_name.to_str().expect("cannot convert").into()) {
+                Ok(()) => {
+                    unreachable!("Successful execve should not reach here");
+                }
+                Err(_) => Some(-1),
+            }
         }
         _ => None,
     };

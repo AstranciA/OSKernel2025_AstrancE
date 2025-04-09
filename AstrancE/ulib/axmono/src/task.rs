@@ -15,6 +15,9 @@ use memory_addr::{VirtAddr, VirtAddrRange};
 use crate::{
     copy_from_kernel,
     ctypes::{CloneFlags, TimeStat, WaitStatus},
+    elf::ELFInfo,
+    loader::load_app_from_disk,
+    mm::{load_elf_to_mem, map_elf_sections},
 };
 
 use axhal::{
@@ -363,18 +366,25 @@ pub fn clone_task(
         new_uctx,
     );
 
-
     // TODO: children task management
     current_task_ext.children.lock().push(new_task_ref.clone());
 
     Ok(new_task_ref)
 }
-pub fn exec(program_name: &str) -> AxResult<()> {
-    let current_task = current();
 
-    let program_name = program_name.to_string();
+/// execve
+/// mainly from starry
+/// **Return**
+/// - `Ok(handler)` if exec successfully, call handler to enter task.
+/// - `Err(AxError)` if exec failed
+pub fn exec_current(program_name: &str) -> AxResult<()> {
+    debug!("exec: {}", program_name);
+
+    let current_task = current();
+    let program_path = program_name.to_string();
 
     let mut aspace = current_task.task_ext().aspace.lock();
+
     if Arc::strong_count(&current_task.task_ext().aspace) != 1 {
         warn!("Address space is shared by multiple tasks, exec is not supported.");
         return Err(AxError::Unsupported);
@@ -383,26 +393,29 @@ pub fn exec(program_name: &str) -> AxResult<()> {
     aspace.unmap_user_areas()?;
     axhal::arch::flush_tlb(None);
 
-    todo!();
-    /*
-     *    let (entry_point, user_stack_base) = crate::mm::map_elf_sections(&program_name, &mut aspace)
-     *        .map_err(|_| {
-     *            error!("Failed to load app {}", program_name);
-     *            AxError::NotFound
-     *        })?;
-     *    current_task.set_name(&program_name);
-     *
-     *    let task_ext = unsafe { &mut *(current_task.task_ext_ptr() as *mut TaskExt) };
-     *    task_ext.uctx = UspaceContext::new(entry_point.as_usize(), user_stack_base, 0);
-     *
-     *    unsafe {
-     *        task_ext.uctx.enter_uspace(
-     *            current_task
-     *                .kernel_stack_top()
-     *                .expect("No kernel stack top"),
-     *        );
-     *    }
-     */
+    let elf_file = load_app_from_disk(&program_path).map_err(|_| {
+        error!("Failed to load app {}", program_path);
+        AxError::NotFound
+    })?;
+    let elf_info = ELFInfo::new(elf_file, aspace.base());
+
+
+    current_task.set_name(&program_path);
+
+    //TODO: clone envs
+    let (entry_point, user_stack_base) =
+        map_elf_sections(elf_info, &mut aspace, Some(&[program_path]), None)?;
+
+    let task_ext = unsafe { &mut *(current_task.task_ext_ptr() as *mut TaskExt) };
+    task_ext.uctx = UspaceContext::new(entry_point.as_usize(), user_stack_base, 0);
+
+    unsafe { current_task.task_ext().aspace.force_unlock() };
+
+    unsafe { task_ext.uctx.enter_uspace(
+        current_task
+            .kernel_stack_top()
+            .expect("No kernel stack top"),
+    ) }
 }
 
 pub fn time_stat_from_kernel_to_user() {
