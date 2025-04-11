@@ -1,5 +1,7 @@
 use alloc::string::{String, ToString};
+use core::sync::atomic::{AtomicUsize, Ordering};
 use axerrno::AxResult;
+use memory_addr::MemoryAddr;
 use axhal::{
     mem::VirtAddr,
     paging::MappingFlags,
@@ -64,12 +66,14 @@ pub fn map_elf_sections(
     //let mut elf_info = ELFInfo::new(loader::load_app_from_disk(app_path), uspace.base());
     //let mut elf_info = elf_info.borrow_mut();
     for segement in elf_info.segments.iter() {
+        let segement_end = segement.start_va + segement.size;
         debug!(
             "Mapping ELF segment: [{:#x?}, {:#x?}) flags: {:#x?}",
             segement.start_va,
-            segement.start_va + segement.size,
+            segement_end,
             segement.flags
         );
+
         uspace.map_alloc(segement.start_va, segement.size, segement.flags, true)?;
 
         if segement.data.is_empty() {
@@ -80,6 +84,10 @@ pub fn map_elf_sections(
         uspace.write(segement.start_va + segement.offset, segement.data)?;
         // TDOO: flush the I-cache
     }
+
+    // heap
+    #[cfg(feature = "heap")]
+    uspace.init_heap(axconfig::plat::USER_HEAP_BASE.into(),axconfig::plat::USER_HEAP_SIZE);
 
     // The user stack is divided into two parts:
     // `ustack_start` -> `ustack_pointer`: It is the stack space that users actually read and write.
@@ -103,7 +111,7 @@ pub fn map_elf_sections(
     uspace.map_alloc(
         ustack_start,
         ustack_size,
-        MappingFlags::READ | MappingFlags::COW | MappingFlags::USER,
+        MappingFlags::READ | MappingFlags::WRITE | MappingFlags::USER,
         true,
     )?;
 
@@ -124,3 +132,5 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
 
     aspace.handle_page_fault(vaddr, access_flags)
 }
+
+

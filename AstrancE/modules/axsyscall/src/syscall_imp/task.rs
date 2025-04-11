@@ -3,7 +3,6 @@ use core::ffi::c_char;
 use core::ffi::c_int;
 use core::ffi::c_void;
 use crate::SyscallResult;
-use crate::syscall_imp::mm;
 
 pub fn sys_getpid() -> SyscallResult {
     let ret = api::sys_getpid() as isize;
@@ -19,11 +18,3 @@ pub fn sys_yield() -> SyscallResult{
     SyscallResult::Success(api::sys_sched_yield() as isize)
 }
 
-pub fn sys_brk(addr:usize) -> SyscallResult{
-    let ret = mm::brk::sys_brk(addr);
-    if ret < 0 {
-        SyscallResult::Error((-ret).try_into().unwrap())
-    }else {
-        SyscallResult::Success(ret)
-    }
-}

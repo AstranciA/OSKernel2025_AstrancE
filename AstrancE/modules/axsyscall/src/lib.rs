@@ -171,7 +171,7 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<SyscallResult,
         }
         // 其他系统调用
         Sysno::brk => {
-            syscall_imp::task::sys_brk(args[0] as _)
+            return Err(SyscallErr::Unimplemented);
         }
         Sysno::uname => {
             todo!()
@@ -269,45 +269,9 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<SyscallResult,
 
 
         _ => {
-            SyscallResult::Error(LinuxError::ENOSYS)
+            return Err(SyscallErr::Unimplemented);
         }
     };
 
     Ok(ret)
-}
-/// 定义系统调用处理器的宏
-///
-/// # 用法示例
-/// ```ignore
-/// sys_handler_def! {
-/// 
-///     read {
-///         /* 处理逻辑 */
-///     },
-///     write {
-///         /* 处理逻辑 */
-///     }
-/// }
-/// ```
-#[macro_export]
-macro_rules! sys_handler_def {
-    ($($sys:ident $body:block),*) => {
-        fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> Option<isize> {
-            let args = [
-                tf.arg0(),
-                tf.arg1(),
-                tf.arg2(),
-                tf.arg3(),
-                tf.arg4(),
-                tf.arg5(),
-            ];
-            let sys_id = Sysno::from(syscall_num as u32);
-            match sys_id {
-                $(
-                    Sysno::$sys => $body
-                ),*,
-                _ => None
-            }
-        }
-    };
 }

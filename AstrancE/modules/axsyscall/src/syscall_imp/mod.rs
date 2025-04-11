@@ -9,4 +9,3 @@ pub mod net;
 pub mod errno;
 pub mod fd;
 pub mod pipe;
-pub mod mm;
