@@ -8,6 +8,8 @@ extern crate alloc;
 
 mod aspace;
 mod backend;
+#[cfg(feature = "heap")]
+pub mod heap;
 
 pub use self::aspace::AddrSpace;
 pub use self::backend::Backend;

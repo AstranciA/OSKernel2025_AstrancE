@@ -17,7 +17,7 @@ mm = ["axmm"]
 COW = ["axmm/COW", "page_table_entry/COW"]
 irq = ["axfeat/irq", "axtask?/sched_rr"]
 syscalls = ["dep:syscalls"]
-
+heap = ["axmm/heap"]
 [dependencies]
 page_table_entry = {workspace =  true}
 page_table_multiarch = {workspace = true}
