@@ -68,7 +68,7 @@ fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> Option<isize> {
             result
         }
         Sysno::execve => {
-            let program_name = unsafe { CStr::from_ptr((args[0] as *const u8).into()) };
+            let program_name = unsafe { CStr::from_ptr((args[0] as *const u8).cast()) };
             // FIXME: drop curr ref?
             match task::exec_current(program_name.to_str().expect("cannot convert").into()) {
                 Ok(()) => {

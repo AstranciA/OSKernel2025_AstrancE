@@ -2,21 +2,22 @@
 resolver = "2"
 
 members = [
-    "modules/*",
-    #"crates/*",
+  "modules/*",
+  #"crates/*",
 
-    "api/axfeat",
-    "api/arceos_api",
-    "api/arceos_posix_api",
+  "api/axfeat",
+  "api/arceos_api",
+  "api/arceos_posix_api",
 
-    "ulib/axstd",
-    "ulib/axlibc",
+  "ulib/axstd",
+  "ulib/axlibc",
 
-    "examples/helloworld",
-    "examples/httpclient",
-    "examples/httpserver",
-    "examples/httpserver",
-    "examples/shell", "ulib/axmono", 
+  "examples/helloworld",
+  "examples/httpclient",
+  "examples/httpserver",
+  "examples/httpserver",
+  "examples/shell",
+  "ulib/axmono",
 ]
 
 [workspace.package]
@@ -52,10 +53,13 @@ axruntime = { path = "modules/axruntime" }
 axsync = { path = "modules/axsync" }
 axtask = { path = "modules/axtask" }
 axdma = { path = "modules/axdma" }
-axsyscall = { path = "modules/axsyscall"}
+axsyscall = { path = "modules/axsyscall" }
 acbat = { path = "modules/acbat" }
 
-syscalls = { version = "0.6.18", default-features = false }
+syscalls = { git = "https://github.com/jasonwhite/syscalls.git", default-features = false, features = [
+  "loongarch64",
+  "riscv64",
+] }
 memory_set = { path = "./crates/axmm_crates/memory_set" }
 memory_addr = { path = "./crates/axmm_crates/memory_addr" }
 page_table_multiarch = { path = "./crates/page_table_multiarch/page_table_multiarch" }

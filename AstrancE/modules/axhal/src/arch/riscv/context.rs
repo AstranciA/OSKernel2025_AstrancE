@@ -198,6 +198,7 @@ impl UspaceContext {
     }
 }
 
+#[cfg(feature = "uspace")]
 impl Clone for UspaceContext {
     fn clone(&self) -> Self {
         Self::from(&self.0)
