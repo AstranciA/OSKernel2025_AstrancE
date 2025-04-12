@@ -11,13 +11,16 @@ use page_table_multiarch::PageSize;
 
 use crate::backend::Backend;
 use crate::backend::frame::FrameTrackerRef;
+use crate::heap::HeapSpace;
 use crate::mapping_err_to_ax_err;
 
 /// The virtual memory address space.
 pub struct AddrSpace {
     va_range: VirtAddrRange,
-    areas: MemorySet<Backend>,
-    pt: PageTable,
+    pub(crate) areas: MemorySet<Backend>,
+    pub(crate) pt: PageTable,
+    #[cfg(feature = "heap")]
+    pub(crate) heap: Option<HeapSpace>,
 }
 
 impl AddrSpace {
@@ -58,6 +61,8 @@ impl AddrSpace {
             va_range: VirtAddrRange::from_start_size(base, size),
             areas: MemorySet::new(),
             pt: PageTable::try_new().map_err(|_| AxError::NoMemory)?,
+            #[cfg(feature = "heap")]
+            heap: None,
         })
     }
 
@@ -66,6 +71,8 @@ impl AddrSpace {
             va_range: other.va_range,
             areas: MemorySet::new(),
             pt: PageTable::try_new().map_err(|_| AxError::NoMemory)?,
+            #[cfg(feature = "heap")]
+            heap: None,
         })
     }
 

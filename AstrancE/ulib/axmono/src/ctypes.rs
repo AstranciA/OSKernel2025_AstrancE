@@ -107,10 +107,7 @@ numeric_enum_macro::numeric_enum! {
 
 impl From<usize> for TimerType {
     fn from(num: usize) -> Self {
-        match Self::try_from(num as i32) {
-            Ok(val) => val,
-            Err(_) => Self::NONE,
-        }
+        Self::try_from(num as i32).unwrap_or_else(|_| Self::NONE)
     }
 }
 pub struct TimeStat {

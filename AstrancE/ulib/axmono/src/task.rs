@@ -10,7 +10,8 @@ use core::{
     cell::UnsafeCell,
     sync::atomic::{AtomicU64, Ordering},
 };
-use memory_addr::{VirtAddr, VirtAddrRange};
+use core::sync::atomic::AtomicUsize;
+use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange};
 
 use crate::{
     copy_from_kernel,
@@ -22,12 +23,14 @@ use crate::{
 
 use axhal::{
     arch::{TrapFrame, UspaceContext},
-    time::{NANOS_PER_MICROS, NANOS_PER_SEC, monotonic_time_nanos},
+    time::{monotonic_time_nanos, NANOS_PER_MICROS, NANOS_PER_SEC},
 };
-use axmm::{AddrSpace, kernel_aspace};
+use axmm::{kernel_aspace, AddrSpace};
+use axmm::heap::HeapSpace;
 use axns::{AxNamespace, AxNamespaceIf};
 use axsync::Mutex;
-use axtask::{AxTaskRef, TaskExtMut, TaskExtRef, TaskInner, WeakAxTaskRef, current};
+use axtask::{current, AxTaskRef, TaskExtMut, TaskExtRef, TaskInner, WeakAxTaskRef};
+
 
 pub fn new_user_aspace_empty() -> AxResult<AddrSpace> {
     /*
@@ -141,6 +144,22 @@ impl TaskExt {
     pub(crate) fn time_stat_output(&self) -> (usize, usize) {
         let time = self.time.get();
         unsafe { (*time).output() }
+    }
+
+    pub(crate) fn set_heap_top(&self, top: VirtAddr) -> VirtAddr {
+        self.aspace.lock().set_heap_top(top)
+    }
+            
+    pub(crate) fn set_heap_size(&self, size:usize) -> VirtAddr {
+        self.aspace.lock().set_heap_size(size)
+    }
+
+    pub(crate) fn heap_size(&self) -> usize {
+        self.aspace.lock().heap().size()
+    }
+    
+    pub(crate) fn heap_top(&self) -> VirtAddr{
+        self.aspace.lock().heap().top()
     }
 }
 
@@ -399,7 +418,6 @@ pub fn exec_current(program_name: &str) -> AxResult<()> {
     })?;
     let elf_info = ELFInfo::new(elf_file, aspace.base());
 
-
     current_task.set_name(&program_path);
 
     //TODO: clone envs
@@ -411,11 +429,13 @@ pub fn exec_current(program_name: &str) -> AxResult<()> {
 
     unsafe { current_task.task_ext().aspace.force_unlock() };
 
-    unsafe { task_ext.uctx.enter_uspace(
-        current_task
-            .kernel_stack_top()
-            .expect("No kernel stack top"),
-    ) }
+    unsafe {
+        task_ext.uctx.enter_uspace(
+            current_task
+                .kernel_stack_top()
+                .expect("No kernel stack top"),
+        )
+    }
 }
 
 pub fn time_stat_from_kernel_to_user() {

@@ -65,5 +65,7 @@ pub(crate) fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
     }
 
     debug!("syscall_handler result: {:?}", result);
-    result.expect("None of syscall handlers returned a value")
+    // 38: ENOSYS
+    // TODO: loongarch ENOSYS??
+    result.unwrap_or(38)
 }
