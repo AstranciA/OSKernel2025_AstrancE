@@ -20,6 +20,7 @@ syscalls = { workspace = true }
 arceos_posix_api = { workspace = true }
 axerrno = "0.1"
 axtask = {workspace = true}
+axmm = {workspace = true}
 axconfig = {workspace = true}
 axmono = {workspace = true}
 axlog = {workspace = true}

@@ -1,12 +1,18 @@
-use core::ffi::{c_char, CStr};
+use core::ffi::{CStr, c_char, c_void};
 
 use crate::{
     ctypes::{CloneFlags, WaitStatus},
+    mm::mmap::MmapIOImpl,
     task,
 };
+use alloc::sync::Arc;
+use arceos_posix_api::{get_file_like, sys_read};
+use axfs::fops::Directory;
 use axhal::arch::TrapFrame;
-use axhal::trap::{register_trap_handler, SYSCALL};
-use axtask::{current, CurrentTask, TaskExtMut, TaskExtRef};
+use axhal::trap::{SYSCALL, register_trap_handler};
+use axmm::{MmapFlags, MmapPerm};
+use axtask::{CurrentTask, TaskExtMut, TaskExtRef, current};
+use memory_addr::MemoryAddr;
 use syscalls::Sysno;
 
 #[register_trap_handler(SYSCALL)]
@@ -81,8 +87,9 @@ fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> Option<isize> {
             let res = (|| -> axerrno::LinuxResult<_> {
                 let current_task = current();
                 let old_top = current_task.task_ext().heap_top();
-                if (args[0] != 0)
-                { current_task.task_ext().set_heap_top(args[0].into()); }
+                if (args[0] != 0) {
+                    current_task.task_ext().set_heap_top(args[0].into());
+                }
                 Ok(old_top)
             })();
             match res {
@@ -95,6 +102,47 @@ fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> Option<isize> {
                     info!("sys_brk => {:?}", res);
                     Some(-1)
                 }
+            }
+        }
+        Sysno::mmap => {
+            let curr = current();
+            let mut aspace = curr.task_ext().aspace.lock();
+            let perm = match MmapPerm::from_bits(args[2]) {
+                Some(v) => v,
+                None => {
+                    // TODO
+                    return Some(-1);
+                }
+            };
+            let flags = MmapFlags::from_bits(args[3])?;
+            let fd = args[4];
+            //let file = get_file_like(args[4].try_into().unwrap()).expect("invalid file descriptor");
+            let offset = args[5];
+            if let Ok(va) = aspace.mmap(
+                args[0].into(),
+                args[1],
+                perm,
+                flags,
+                Arc::new(MmapIOImpl {
+                    fd: fd.try_into().unwrap(),
+                    file_offset: offset.try_into().unwrap(),
+                }),
+                false,
+            ) {
+                return Some(va.as_usize() as isize);
+            }
+            None
+        }
+        Sysno::munmap => {
+            let curr = current();
+            let mut aspace = curr.task_ext().aspace.lock();
+            let start = args[0].into();
+            let size = args[1].align_up_4k();
+            if aspace.munmap(start, size).is_ok() {
+                Some(0)
+            } else {
+                // TODO
+                Some(-1)
             }
         }
         _ => None,

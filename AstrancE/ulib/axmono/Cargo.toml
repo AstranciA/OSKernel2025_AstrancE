@@ -11,21 +11,22 @@ keywords.workspace = true
 categories.workspace = true
 
 [features]
-default = ["process", "mm", "syscalls", "irq"]
+default = ["process", "mm", "syscalls", "irq", "mmap"]
 process = ["axns", "axtask", "axfeat/multitask"]
 mm = ["axmm"]
 COW = ["axmm/COW", "page_table_entry/COW"]
 irq = ["axfeat/irq", "axtask?/sched_rr"]
 syscalls = ["dep:syscalls"]
 heap = ["axmm/heap"]
+mmap = ["axmm/mmap"]
 [dependencies]
-page_table_entry = {workspace =  true}
-page_table_multiarch = {workspace = true}
+page_table_entry = { workspace = true }
+page_table_multiarch = { workspace = true }
 axfeat = { workspace = true }
 axconfig = { workspace = true }
 axhal = { workspace = true }
 axlog = { workspace = true }
-arceos_posix_api = { workspace = true }
+arceos_posix_api = { workspace = true, features = ["uspace"] }
 axfs = { workspace = true }
 axmm = { workspace = true, optional = true }
 axtask = { workspace = true, optional = true }

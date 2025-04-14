@@ -1,4 +1,5 @@
 use core::fmt;
+use core::ops::Add;
 
 use axerrno::{AxError, AxResult, ax_err};
 use axhal::mem::phys_to_virt;
@@ -8,6 +9,9 @@ use memory_addr::{
 };
 use memory_set::{MappingBackend, MemoryArea, MemorySet};
 use page_table_multiarch::PageSize;
+
+#[cfg(feature = "mmap")]
+pub mod mmap;
 
 use crate::backend::Backend;
 use crate::backend::frame::FrameTrackerRef;
@@ -132,7 +136,7 @@ impl AddrSpace {
         self.pt.clear_copy_range(range.start, range.size());
     }
 
-    fn validate_region(&self, start: VirtAddr, size: usize) -> AxResult {
+    pub(crate) fn validate_region(&self, start: VirtAddr, size: usize) -> AxResult {
         if !self.contains_range(start, size) {
             return ax_err!(InvalidInput, "address out of range");
         }
@@ -222,7 +226,7 @@ impl AddrSpace {
             let backend = area.backend().clone();
             let _end = area.end();
             let flags = area.flags();
-            if let Backend::Alloc { populate } = backend {
+            if let Backend::Alloc { populate, .. } = backend {
                 if !populate {
                     for addr in PageIter4K::new(start, area.end().min(end)).unwrap() {
                         match self.pt.query(addr) {
@@ -283,6 +287,25 @@ impl AddrSpace {
             );
         }
         self.areas.clear(&mut self.pt).unwrap();
+        Ok(())
+    }
+
+    /// To remove a single mapping within the address space.
+    pub fn unmap_area(&mut self, vaddr: VirtAddr) -> AxResult {
+        if let Some(area) = self.areas.find_mut(vaddr) {
+            assert!(area.start().is_aligned_4k());
+            assert!(area.size() % PAGE_SIZE_4K == 0);
+            assert!(area.flags().contains(MappingFlags::USER));
+            assert!(
+                self.va_range
+                    .contains_range(VirtAddrRange::from_start_size(area.start(), area.size())),
+                "MemorySet contains out-of-va-range area"
+            );
+            area.unmap_area(&mut self.pt);
+        } else {
+            return ax_err!(InvalidInput, "Invalid area addr");
+        }
+        self.areas.delete(vaddr);
         Ok(())
     }
 
@@ -429,6 +452,7 @@ impl AddrSpace {
         }
         if let Some(area) = self.areas.find(vaddr) {
             let orig_flags = area.flags();
+            info!("123: , {orig_flags:?}");
             #[cfg(feature = "COW")]
             if orig_flags.contains(access_flags) || orig_flags.contains(MappingFlags::COW) {
                 let backed = area.backend().clone();
@@ -436,9 +460,6 @@ impl AddrSpace {
             }
             #[cfg(not(feature = "COW"))]
             if orig_flags.contains(access_flags) {
-                return area
-                    .backend()
-                    .handle_page_fault(vaddr, orig_flags, &mut self.pt);
                 return area
                     .backend()
                     .handle_page_fault(vaddr, orig_flags, &mut self.pt);

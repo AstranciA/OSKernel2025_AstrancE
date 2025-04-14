@@ -1,3 +1,4 @@
+pub mod mmap;
 use alloc::string::{String, ToString};
 use core::sync::atomic::{AtomicUsize, Ordering};
 use axerrno::AxResult;

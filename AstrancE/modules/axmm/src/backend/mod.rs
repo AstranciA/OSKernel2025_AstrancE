@@ -3,14 +3,14 @@
 use ::alloc::sync::Arc;
 use axhal::paging::{MappingFlags, PageTable};
 use frame::{FrameTrackerImpl, FrameTrackerMap};
-use memory_addr::{FrameTracker, Page,  VirtAddr};
+use memory_addr::{FrameTracker, Page, VirtAddr};
 use memory_set::{MappingBackend, MemorySet};
 
-use crate::AddrSpace;
+use crate::{AddrSpace, aspace::mmap::MmapIO};
 
-mod alloc;
-mod linear;
+pub(super) mod alloc;
 pub mod frame;
+mod linear;
 
 /// A unified enum type for different memory mapping backends.
 ///
@@ -38,6 +38,7 @@ pub enum Backend {
     /// access. Otherwise, the physical frames are allocated on demand (by
     /// handling page faults).
     Alloc {
+        va_type: VmAreaType,
         /// Whether to populate the physical frames when creating the mapping.
         populate: bool,
     },
@@ -51,9 +52,11 @@ impl MappingBackend for Backend {
     type FrameTrackerRef = Arc<FrameTrackerImpl>;
 
     fn unmap(&self, start: VirtAddr, size: usize, pt: &mut PageTable) -> bool {
-        match *self {
-            Self::Linear { pa_va_offset } => Self::unmap_linear(start, size, pt, pa_va_offset),
-            Self::Alloc { populate } => Self::unmap_alloc(start, size, pt, populate),
+        match self {
+            Self::Linear { pa_va_offset } => Self::unmap_linear(start, size, pt, *pa_va_offset),
+            Self::Alloc { populate, va_type } => {
+                Self::unmap_alloc(start, size, pt, va_type.clone(), *populate)
+            }
         }
     }
 
@@ -70,10 +73,20 @@ impl MappingBackend for Backend {
             .is_ok()
     }
 
-    fn map(&self, start: VirtAddr, size: usize, flags: MappingFlags, pt: &mut PageTable) -> Result<FrameTrackerMap, ()> {
-        let frame_refs = match *self {
-            Self::Linear { pa_va_offset } => Self::map_linear(start, size, flags, pt, pa_va_offset),
-            Self::Alloc { populate } => Self::map_alloc(start, size, flags, pt, populate),
+    fn map(
+        &self,
+        start: VirtAddr,
+        size: usize,
+        flags: MappingFlags,
+        pt: &mut PageTable,
+    ) -> Result<FrameTrackerMap, ()> {
+        let frame_refs = match self {
+            Self::Linear { pa_va_offset } => {
+                Self::map_linear(start, size, flags, pt, *pa_va_offset)
+            }
+            Self::Alloc { populate, va_type } => {
+                Self::map_alloc(start, size, flags, pt, va_type.clone(), *populate)
+            }
         };
         frame_refs
     }
@@ -89,11 +102,20 @@ impl Backend {
         //page_table: &mut PageTable,
         //page_table: &mut PageTable,
     ) -> bool {
-        match *self {
+        match self {
             Self::Linear { .. } => false, // Linear mappings should not trigger page faults.
-            Self::Alloc { populate } => {
-                Self::handle_page_fault_alloc(vaddr, orig_flags, aspace, populate)
+            Self::Alloc { populate, va_type } => {
+                Self::handle_page_fault_alloc(vaddr, va_type.clone(), orig_flags, aspace, *populate)
             }
         }
     }
+}
+
+#[derive(Clone)]
+pub enum VmAreaType {
+    Normal,
+    Elf,
+    Heap,
+    Stack,
+    Mmap(Arc<dyn MmapIO>),
 }
