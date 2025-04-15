@@ -1,14 +1,17 @@
-use core::ffi::{CStr, c_char, c_void};
+use core::{
+    error,
+    ffi::{CStr, c_char, c_void},
+};
 
 use crate::{
     ctypes::{CloneFlags, WaitStatus},
     mm::mmap::MmapIOImpl,
-    task,
+    task::{self, time_stat_from_user_to_kernel, time_stat_ns, time_stat_output},
 };
 use alloc::sync::Arc;
-use arceos_posix_api::{get_file_like, sys_read};
-use axfs::fops::Directory;
-use axhal::arch::TrapFrame;
+use arceos_posix_api::{self as api, get_file_like, sys_read};
+use axfs::{CURRENT_DIR, api::set_current_dir, fops::Directory};
+use axhal::{arch::TrapFrame, time::nanos_to_ticks};
 use axhal::trap::{SYSCALL, register_trap_handler};
 use axmm::{MmapFlags, MmapPerm};
 use axtask::{CurrentTask, TaskExtMut, TaskExtRef, current};
@@ -17,6 +20,7 @@ use syscalls::Sysno;
 
 #[register_trap_handler(SYSCALL)]
 fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> Option<isize> {
+    time_stat_from_user_to_kernel();
     let args = [
         tf.arg0(),
         tf.arg1(),
@@ -145,6 +149,28 @@ fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> Option<isize> {
                 Some(-1)
             }
         }
+        Sysno::getppid => {
+            let curr = current();
+            Some(curr.task_ext().get_parent() as isize)
+        }
+        // FIXME: cutime cstimes
+        Sysno::times => {
+            let (utime_ns, stime_ns) = time_stat_ns();
+            let utime = nanos_to_ticks(utime_ns.try_into().unwrap());
+            let stime = nanos_to_ticks(stime_ns.try_into().unwrap());
+            let tms = api::ctypes::tms {
+                tms_utime: utime.try_into().unwrap(),
+                tms_stime: stime.try_into().unwrap(),
+                tms_cutime: utime.try_into().unwrap(),
+                tms_cstime: stime.try_into().unwrap(),
+            };
+            unsafe {
+                *(args[0] as *mut api::ctypes::tms) = tms;
+            }
+            Some(0)
+            //unsafe { core::slice::from_raw_parts_mut(args[0] as *mut api::ctypes::tms, 1).copy_from_slice(tms); }
+        }
+
         _ => None,
     };
     ret

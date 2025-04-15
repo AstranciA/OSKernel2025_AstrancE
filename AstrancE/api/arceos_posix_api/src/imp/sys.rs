@@ -1,6 +1,8 @@
-use core::ffi::{c_int, c_long};
+use core::ffi::{CStr, c_char, c_int, c_long};
 
-use crate::ctypes;
+use axruntime::SYSINFO;
+
+use crate::{ctypes, utils::str_to_cstr};
 
 const PAGE_SIZE_4K: usize = 4096;
 
@@ -38,5 +40,31 @@ pub fn sys_sysconf(name: c_int) -> c_long {
             ctypes::_SC_OPEN_MAX => Ok(super::fd_ops::AX_FILE_LIMIT),
             _ => Ok(0),
         }
+    })
+}
+
+#[repr(C)]
+pub struct UtsName {
+    pub sysname: [c_char; 65],
+    pub nodename: [c_char; 65],
+    pub release: [c_char; 65],
+    pub version: [c_char; 65],
+    pub machine: [c_char; 65],
+    pub domainname: [c_char; 65],
+}
+
+pub fn sys_uname(buf: *mut UtsName) -> c_long {
+    let dst = unsafe {core::slice::from_raw_parts(buf as *const c_char, 17)};
+    unsafe {
+        str_to_cstr(SYSINFO.sysname, (*buf).sysname.as_mut_ptr());
+        str_to_cstr(SYSINFO.sysname, (*buf).domainname.as_mut_ptr());
+        error!("sys_uname <= {:?}",SYSINFO.sysname.as_bytes());
+        str_to_cstr(SYSINFO.nodename, (*buf).nodename.as_mut_ptr());
+        str_to_cstr(SYSINFO.release, (*buf).release.as_mut_ptr());
+        str_to_cstr(SYSINFO.version, (*buf).version.as_mut_ptr());
+        str_to_cstr(SYSINFO.machine, (*buf).machine.as_mut_ptr());
+    }
+    syscall_body!(sys_uname, {
+        Ok(0)
     })
 }

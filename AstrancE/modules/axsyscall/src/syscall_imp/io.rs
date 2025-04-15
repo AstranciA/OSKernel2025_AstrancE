@@ -21,7 +21,6 @@ pub fn sys_write(fd: usize,buf:&[u8]) -> SyscallResult {
     if fd == 1 || fd == 2{
         ret = api::sys_write(fd as i32, buf.as_ptr() as *mut c_void, buf.len());
     }else{
-        warn!("{fd}");
         ret = api::sys_write(fd as i32, buf.as_ptr() as *mut c_void, buf.len());
     }
     if ret < 0 {

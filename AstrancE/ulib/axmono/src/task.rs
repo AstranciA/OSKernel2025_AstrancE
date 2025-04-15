@@ -6,11 +6,12 @@ use alloc::{
 use arceos_posix_api::FD_TABLE;
 use axerrno::{AxError, AxResult};
 use axfs::{CURRENT_DIR, CURRENT_DIR_PATH};
+use axhal::trap::{POST_TRAP, PRE_TRAP, register_trap_handler};
+use core::sync::atomic::AtomicUsize;
 use core::{
     cell::UnsafeCell,
     sync::atomic::{AtomicU64, Ordering},
 };
-use core::sync::atomic::AtomicUsize;
 use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange};
 
 use crate::{
@@ -23,14 +24,13 @@ use crate::{
 
 use axhal::{
     arch::{TrapFrame, UspaceContext},
-    time::{monotonic_time_nanos, NANOS_PER_MICROS, NANOS_PER_SEC},
+    time::{NANOS_PER_MICROS, NANOS_PER_SEC, monotonic_time_nanos},
 };
-use axmm::{kernel_aspace, AddrSpace};
 use axmm::heap::HeapSpace;
+use axmm::{AddrSpace, kernel_aspace};
 use axns::{AxNamespace, AxNamespaceIf};
 use axsync::Mutex;
-use axtask::{current, AxTaskRef, TaskExtMut, TaskExtRef, TaskInner, WeakAxTaskRef};
-
+use axtask::{AxTaskRef, TaskExtMut, TaskExtRef, TaskInner, WeakAxTaskRef, current};
 
 pub fn new_user_aspace_empty() -> AxResult<AddrSpace> {
     /*
@@ -149,16 +149,16 @@ impl TaskExt {
     pub(crate) fn set_heap_top(&self, top: VirtAddr) -> VirtAddr {
         self.aspace.lock().set_heap_top(top)
     }
-            
-    pub(crate) fn set_heap_size(&self, size:usize) -> VirtAddr {
+
+    pub(crate) fn set_heap_size(&self, size: usize) -> VirtAddr {
         self.aspace.lock().set_heap_size(size)
     }
 
     pub(crate) fn heap_size(&self) -> usize {
         self.aspace.lock().heap().size()
     }
-    
-    pub(crate) fn heap_top(&self) -> VirtAddr{
+
+    pub(crate) fn heap_top(&self) -> VirtAddr {
         self.aspace.lock().heap().top()
     }
 }
@@ -440,6 +440,9 @@ pub fn exec_current(program_name: &str) -> AxResult<()> {
 
 pub fn time_stat_from_kernel_to_user() {
     let curr_task = current();
+    if (unsafe { curr_task.task_ext_ptr().is_null() }) {
+        return;
+    }
     curr_task
         .task_ext()
         .time_stat_from_kernel_to_user(monotonic_time_nanos() as usize);
@@ -447,6 +450,9 @@ pub fn time_stat_from_kernel_to_user() {
 
 pub fn time_stat_from_user_to_kernel() {
     let curr_task = current();
+    if (unsafe { curr_task.task_ext_ptr().is_null() }) {
+        return;
+    }
     curr_task
         .task_ext()
         .time_stat_from_user_to_kernel(monotonic_time_nanos() as usize);
@@ -463,6 +469,11 @@ pub fn time_stat_output() -> (usize, usize, usize, usize) {
     )
 }
 
+pub fn time_stat_ns() -> (usize, usize) {
+    let curr_task = current();
+    curr_task.task_ext().time_stat_output()
+}
+
 pub fn test(task: AxTaskRef) {
     let task_ext = task.task_ext();
     let mut buf = [0u8; 16];
@@ -471,5 +482,16 @@ pub fn test(task: AxTaskRef) {
         .lock()
         .read(0x1161c.into(), &mut buf)
         .unwrap();
-    info!("{:x?}", buf);
+}
+
+#[register_trap_handler(PRE_TRAP)]
+fn pre_trap_handler() -> bool {
+    time_stat_from_user_to_kernel();
+    true
+}
+
+#[register_trap_handler(POST_TRAP)]
+fn post_trap_handler() -> bool {
+    time_stat_from_kernel_to_user();
+    true
 }

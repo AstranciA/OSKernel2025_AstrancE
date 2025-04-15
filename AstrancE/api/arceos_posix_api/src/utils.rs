@@ -16,6 +16,16 @@ pub fn char_ptr_to_str<'a>(str: *const c_char) -> LinuxResult<&'a str> {
     }
 }
 
+/// Convert a Rust string to a C string
+pub unsafe fn str_to_cstr(s: &str, buf: *mut c_char) {
+    let len = s.len();
+    let dst = unsafe { core::slice::from_raw_parts_mut(buf, len + 1) };
+    
+    dst[..len].copy_from_slice(s.as_bytes());
+    dst[len] = b'\0';
+    error!("{:p},{:?}", buf,dst);
+}
+
 pub fn check_null_ptr<T>(ptr: *const T) -> LinuxResult {
     if ptr.is_null() {
         Err(LinuxError::EFAULT)

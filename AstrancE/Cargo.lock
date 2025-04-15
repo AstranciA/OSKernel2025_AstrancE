@@ -642,6 +642,7 @@ dependencies = [
  "arceos_posix_api",
  "axconfig",
  "axerrno",
+ "axfs",
  "axlog",
  "axmm",
  "axmono",

@@ -5,6 +5,8 @@ use riscv::register::{scause, stval};
 
 use super::TrapFrame;
 
+use crate::trap::{pre_trap, post_trap};
+
 core::arch::global_asm!(
     include_asm_macros!(),
     include_str!("trap.S"),
@@ -36,6 +38,7 @@ fn handle_page_fault(tf: &TrapFrame, mut access_flags: MappingFlags, is_user: bo
 #[unsafe(no_mangle)]
 fn riscv_trap_handler(tf: &mut TrapFrame, from_user: bool) {
     let scause = scause::read();
+    pre_trap();
     if let Ok(cause) = scause.cause().try_into::<I, E>() {
         match cause {
             #[cfg(feature = "uspace")]
@@ -68,4 +71,5 @@ fn riscv_trap_handler(tf: &mut TrapFrame, from_user: bool) {
             tf
         );
     }
+    post_trap();
 }

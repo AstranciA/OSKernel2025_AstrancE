@@ -5,15 +5,14 @@
 use alloc::{string::String, sync::Arc, vec::Vec};
 use axerrno::{AxError, AxResult, ax_err};
 use axfs_vfs::{VfsNodeAttr, VfsNodeOps, VfsNodeRef, VfsNodeType, VfsOps, VfsResult};
+use axio::Read;
 use axns::{ResArc, def_resource};
 use axsync::Mutex;
 use lazyinit::LazyInit;
 use spin::RwLock;
 
 use crate::{
-    api::FileType,
-    fs::{self},
-    mounts,
+    api::{self, FileType}, dev::Disk, fs::{self}, mounts
 };
 
 def_resource! {
@@ -45,7 +44,7 @@ struct RootDirectory {
     mounts: RwLock<Vec<MountPoint>>,
 }
 
-static ROOT_DIR: LazyInit<Arc<RootDirectory>> = LazyInit::new();
+pub static ROOT_DIR: LazyInit<Arc<RootDirectory>> = LazyInit::new();
 
 impl MountPoint {
     pub fn new(path: &'static str, fs: Arc<dyn VfsOps>) -> Self {
@@ -170,7 +169,7 @@ pub(crate) fn init_rootfs(disk: crate::dev::Disk) {
         if #[cfg(feature = "myfs")] { // override the default filesystem
             let main_fs = fs::myfs::new_myfs(disk);
         } else if #[cfg(feature = "lwext4_rs")] {
-            static EXT4_FS: LazyInit<Arc<fs::lwext4_rust::Ext4FileSystem>> = LazyInit::new();
+            static EXT4_FS: LazyInit<Arc<fs::lwext4_rust::Ext4FileSystem<Disk>>> = LazyInit::new();
             EXT4_FS.init_once(Arc::new(fs::lwext4_rust::Ext4FileSystem::new(disk)));
             let main_fs = EXT4_FS.clone();
         } else if #[cfg(feature = "fatfs")] {
@@ -335,4 +334,13 @@ pub(crate) fn rename(old: &str, new: &str) -> AxResult {
         remove_file(None, new)?;
     }
     parent_node_of(None, old).rename(old, new)
+}
+
+pub fn mount(source: &'static str, target: &'static str, flags: usize) -> AxResult{
+    let img = crate::api::File::open(source)?;
+    warn!("mounting {} to {}", source, target);
+    let fs = fs::lwext4_rust::Ext4FileSystem::new(img);
+
+    ROOT_DIR.mount(&target, Arc::new(fs));
+    Ok(())
 }

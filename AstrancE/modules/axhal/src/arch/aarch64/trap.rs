@@ -6,6 +6,8 @@ use tock_registers::interfaces::Readable;
 
 use super::TrapFrame;
 
+use crate::trap::{pre_trap, post_trap};
+
 global_asm!(include_str!("trap.S"), cache_current_task_ptr = sym crate::cpu::cache_current_task_ptr);
 
 #[repr(u8)]
@@ -38,10 +40,13 @@ fn invalid_exception(tf: &TrapFrame, kind: TrapKind, source: TrapSource) {
 
 #[unsafe(no_mangle)]
 fn handle_irq_exception(_tf: &TrapFrame) {
+    pre_trap();
     handle_trap!(IRQ, 0);
+    post_trap();
 }
 
 fn handle_instruction_abort(tf: &TrapFrame, iss: u64, is_user: bool) {
+    pre_trap();
     let mut access_flags = MappingFlags::EXECUTE;
     if is_user {
         access_flags |= MappingFlags::USER;
@@ -62,9 +67,11 @@ fn handle_instruction_abort(tf: &TrapFrame, iss: u64, is_user: bool) {
             tf,
         );
     }
+    post_trap();
 }
 
 fn handle_data_abort(tf: &TrapFrame, iss: u64, is_user: bool) {
+    pre_trap();
     let wnr = (iss & (1 << 6)) != 0; // WnR: Write not Read
     let cm = (iss & (1 << 8)) != 0; // CM: Cache maintenance
     let mut access_flags = if wnr & !cm {
@@ -91,10 +98,12 @@ fn handle_data_abort(tf: &TrapFrame, iss: u64, is_user: bool) {
             tf,
         );
     }
+    post_trap();
 }
 
 #[unsafe(no_mangle)]
 fn handle_sync_exception(tf: &mut TrapFrame) {
+    pre_trap();
     let esr = ESR_EL1.extract();
     let iss = esr.read(ESR_EL1::ISS);
     match esr.read_as_enum(ESR_EL1::EC) {
@@ -120,4 +129,5 @@ fn handle_sync_exception(tf: &mut TrapFrame) {
             );
         }
     }
+    post_trap();
 }

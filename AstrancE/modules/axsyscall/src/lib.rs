@@ -5,12 +5,19 @@
 
 mod test;
 #[macro_use]
+use core::fmt::Debug;
 extern crate axlog;
+use axerrno::AxError;
+use syscall_imp::{errno::LinuxError, fs::sys_chdir, sys::sys_uname};
 use syscalls::Sysno;
 mod syscall_imp;
-use arceos_posix_api::ctypes;
+use arceos_posix_api::{FD_TABLE, char_ptr_to_str, ctypes};
+use axfs::{
+    CURRENT_DIR,
+    api::{create_dir, current_dir, set_current_dir},
+    fops::Directory,
+};
 use core::ffi::*;
-use syscall_imp::errno::LinuxError;
 
 ///SyscallResult 可直接into为有符号整数，其中错误值以负数返回，linuxError有
 /// 方法as_str返回对应错误的具体文字描述
@@ -19,12 +26,47 @@ pub enum SyscallResult {
     Error(LinuxError),
 }
 
+
+#[macro_export]
+macro_rules! syscall_result {
+    ($expr:expr) => {{
+        let result: Result<isize, _> = $expr.try_into();
+        match result {
+            Ok(v) if v >= 0 => $crate::SyscallResult::Success(v),
+            Ok(v) => {
+                let code = v.checked_abs().unwrap_or($crate::LinuxError::EINVAL as isize);
+                $crate::SyscallResult::Error(
+                    code.try_into().unwrap_or($crate::LinuxError::EINVAL)
+                )
+            },
+            Err(_) => $crate::SyscallResult::Error($crate::LinuxError::ENOSYS)
+        }
+    }};
+}
+
 impl From<SyscallResult> for isize {
     fn from(result: SyscallResult) -> isize {
         match result {
             SyscallResult::Success(val) => val as isize,
             SyscallResult::Error(e) => -(e as isize),
         }
+    }
+}
+
+impl From<AxError> for SyscallResult {
+    fn from(value: AxError) -> Self {
+        match value {
+            // TODO:
+            AxError::InvalidInput => Self::Error(LinuxError::EINVAL),
+            AxError::Io => Self::Error(LinuxError::EIO),
+            _ => Self::Error(LinuxError::EPERM),
+        }
+    }
+}
+
+impl From<LinuxError> for SyscallResult {
+    fn from(value: LinuxError) -> Self {
+        SyscallResult::Error(value)
     }
 }
 
@@ -113,10 +155,9 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<SyscallResult,
         }
         #[cfg(feature = "pipe")]
         Sysno::pipe2 => {
-            // let fds = args[0];
-            // syscall_imp::pipe::sys_pipe(fds as _);
-            //此处fds无法自发完成usize向&mut [c_int]的转换，需要自定义切片类型并完成转换！！！！
-            todo!()
+            let fds = args[0];
+            let fds = unsafe { core::slice::from_raw_parts_mut(fds as *mut c_int, 2) };
+            syscall_imp::pipe::sys_pipe(fds)
         }
         Sysno::mmap => {
             return Err(SyscallErr::Unimplemented);
@@ -165,19 +206,22 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<SyscallResult,
             let rem: *mut ctypes::timespec = args[3] as *mut ctypes::timespec;
             syscall_imp::time::sys_nanosleep(req, rem)
         }
+        Sysno::times => {
+            return Err(SyscallErr::Unimplemented);
+        }
         // 其他系统调用
         Sysno::brk => {
             return Err(SyscallErr::Unimplemented);
         }
-        Sysno::uname => {
-            todo!()
-        }
+        Sysno::uname => sys_uname(args[0] as _),
 
-        Sysno::chdir => {
-            todo!()
-        }
+        #[cfg(all(feature = "fs", feature = "fd"))]
+        Sysno::chdir => sys_chdir(args[0] as _),
+        // TODO: handle dir_fd and prem
+        #[cfg(all(feature = "fs", feature = "fd"))]
         Sysno::mkdirat => {
-            todo!()
+            let [dir_fd, path, perm, ..] = args;
+            syscall_imp::fs::sys_mkdirat(dir_fd, path as _, perm)
         }
         Sysno::getdents64 => {
             todo!()
