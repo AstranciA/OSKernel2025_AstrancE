@@ -32,6 +32,13 @@ axmm = { workspace = true, optional = true }
 axtask = { workspace = true, optional = true }
 axsync = { workspace = true }
 axns = { workspace = true, optional = true }
+axsyscall = { workspace = true, features = [
+  "fd",
+  "fs",
+  "pipe",
+  "multitask",
+] }
+
 axerrno = "0.1"
 memory_addr = "0.3.2"
 bitflags = "2.9.0"

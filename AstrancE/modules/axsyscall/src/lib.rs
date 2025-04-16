@@ -1,14 +1,15 @@
 //! syscall impl for AstrancE
 // #![no_std]
 #![cfg_attr(not(test), no_std)]
+#![feature(stmt_expr_attributes)]
 // #![cfg(test)]
 
 mod test;
 #[macro_use]
 use core::fmt::Debug;
 extern crate axlog;
-use axerrno::AxError;
-use syscall_imp::{errno::LinuxError, fs::sys_chdir, sys::sys_uname};
+use axerrno::{AxError, LinuxError, LinuxResult};
+use syscall_imp::{fs::sys_chdir, sys::sys_uname};
 use syscalls::Sysno;
 mod syscall_imp;
 use arceos_posix_api::{FD_TABLE, char_ptr_to_str, ctypes};
@@ -18,187 +19,148 @@ use axfs::{
     fops::Directory,
 };
 use core::ffi::*;
-
-///SyscallResult 可直接into为有符号整数，其中错误值以负数返回，linuxError有
-/// 方法as_str返回对应错误的具体文字描述
-pub enum SyscallResult {
-    Success(isize),
-    Error(LinuxError),
-}
-
+pub mod result;
+pub use result::{SyscallResult, ToLinuxResult};
 
 #[macro_export]
-macro_rules! syscall_result {
-    ($expr:expr) => {{
-        let result: Result<isize, _> = $expr.try_into();
-        match result {
-            Ok(v) if v >= 0 => $crate::SyscallResult::Success(v),
-            Ok(v) => {
-                let code = v.checked_abs().unwrap_or($crate::LinuxError::EINVAL as isize);
-                $crate::SyscallResult::Error(
-                    code.try_into().unwrap_or($crate::LinuxError::EINVAL)
-                )
-            },
-            Err(_) => $crate::SyscallResult::Error($crate::LinuxError::ENOSYS)
+macro_rules! syscall_handler_def {
+    ($($(#[$attr:meta])* $sys:ident => $args:tt $body:expr $(,)?)*) => {
+        #[axhal::trap::register_trap_handler(axhal::trap::SYSCALL)]
+        pub fn handle_syscall(tf: &axhal::arch::TrapFrame, syscall_num: usize) -> Option<isize> {
+            use syscalls::Sysno;
+            use $crate::result::{SyscallResult, LinuxResultToIsize};
+            let args = [tf.arg0(), tf.arg1(), tf.arg2(), tf.arg3(), tf.arg4(), tf.arg5()];
+            let sys_id = Sysno::from(syscall_num as u32);
+
+            let result:Option<SyscallResult> = match sys_id {
+                $(
+                    $(#[$attr])*
+                    Sysno::$sys => {
+                        axlog::debug!("handle syscall: {}({:?})", stringify!($sys), args);
+                        // TODO: remove #![feature(stmt_expr_attributes)]
+                        Some((
+                            #[inline(always)]
+                            || -> SyscallResult {
+                                let $args = args;
+                                $body
+                        })())
+                    }
+                ),*,
+                _ => {
+                        axlog::debug!("handle syscall: {}({:?})", stringify!(none), args);
+                        None
+                }
+            };
+            result.map(|r| r.as_isize())
         }
-    }};
+    };
 }
 
-impl From<SyscallResult> for isize {
-    fn from(result: SyscallResult) -> isize {
-        match result {
-            SyscallResult::Success(val) => val as isize,
-            SyscallResult::Error(e) => -(e as isize),
-        }
-    }
-}
+/*
+ *macro_rules! get_args {
+ *    ($($arg:ident),* $(,)?) => {
+ *        let [$($arg),* ..] = args;
+ *    };
+ *}
+ */
 
-impl From<AxError> for SyscallResult {
-    fn from(value: AxError) -> Self {
-        match value {
-            // TODO:
-            AxError::InvalidInput => Self::Error(LinuxError::EINVAL),
-            AxError::Io => Self::Error(LinuxError::EIO),
-            _ => Self::Error(LinuxError::EPERM),
-        }
-    }
-}
-
-impl From<LinuxError> for SyscallResult {
-    fn from(value: LinuxError) -> Self {
-        SyscallResult::Error(value)
-    }
-}
-
-pub enum SyscallErr {
-    Unimplemented,
-}
-
-pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<SyscallResult, SyscallErr> {
-    let sys_id = Sysno::from(sys_id as u32); //检查id与测例是否适配
-
-    let ret = match sys_id {
-        Sysno::write => {
-            let [fd, buf_ptr, size, ..] = args;
+syscall_handler_def!(
+        write => [fd,buf_ptr,size,..] {
             let buf = unsafe { core::slice::from_raw_parts(buf_ptr as _, size) };
             syscall_imp::io::sys_write(fd, buf)
         }
 
-        Sysno::read => {
-            let [fd, buf_ptr, size, ..] = args;
+        read => [fd, buf_ptr, size, ..] {
             let buf = unsafe { core::slice::from_raw_parts_mut(buf_ptr as *mut u8, size) };
             syscall_imp::io::sys_read(fd, buf)
         }
 
-        Sysno::writev => {
-            let [fd, iov, iocnt, ..] = args;
+        writev => [fd, iov, iocnt, ..] {
             syscall_imp::io::sys_writev(fd as _, iov as _, iocnt as _)
         }
         // 文件操作相关系统调用
         #[cfg(all(feature = "fs", feature = "fd"))]
-        Sysno::openat => {
-            let [dirfd, fname, flags, mode, ..] = args;
+        openat => [dirfd, fname, flags, mode, ..] {
             syscall_imp::fs::sys_openat(dirfd as _, fname as _, flags as _, mode as _)
         }
 
         #[cfg(all(feature = "fs", feature = "fd"))]
-        Sysno::close => {
-            let fd = args[0];
+        close => [fd, ..] {
             syscall_imp::fd::sys_close(fd as _)
         }
 
         #[cfg(all(feature = "fs", feature = "fd"))]
-        Sysno::statfs => {
+        statfs => args {
             todo!()
         }
 
         #[cfg(all(feature = "fs", feature = "fd"))]
-        Sysno::fstat => {
-            let [fd, buf, ..] = args;
+        fstat => [fd, buf, ..] {
             unsafe { syscall_imp::fs::sys_fstat(fd as _, buf as _) }
         }
 
         #[cfg(all(feature = "fs", feature = "fd"))]
-        Sysno::lseek => {
-            let [fd, offset, whence, ..] = args;
+        lseek => [fd, offset, whence, ..] {
             syscall_imp::fs::sys_lseek(fd as _, offset as _, whence as _)
         }
 
         #[cfg(all(feature = "fs", feature = "fd"))]
-        Sysno::getcwd => {
-            let [buf, size, ..] = args;
+        getcwd => [buf, size, ..] {
             syscall_imp::fs::sys_getcwd(buf as _, size as _)
         }
 
         #[cfg(all(feature = "fs", feature = "fd"))]
-        Sysno::renameat => {
-            let [old, new, ..] = args;
+        renameat => [old, new, ..] {
             syscall_imp::fs::sys_rename(old as _, new as _)
         }
 
         #[cfg(all(feature = "fs", feature = "fd"))]
-        Sysno::dup => {
-            let old_fd = args[0];
+        dup => [old_fd, ..] {
             syscall_imp::fd::sys_dup(old_fd as _)
         }
 
         #[cfg(all(feature = "fs", feature = "fd"))]
-        Sysno::dup3 => {
-            let [old_fd, new_fd, ..] = args;
+        dup3 => [old_fd, new_fd, ..] {
             syscall_imp::fd::sys_dup3(old_fd as _, new_fd as _)
         }
 
         #[cfg(all(feature = "fs", feature = "fd"))]
-        Sysno::fcntl => {
-            let [fd, cmd, arg, ..] = args;
+        fcntl => [fd, cmd, arg, ..] {
             syscall_imp::fd::sys_fcntl(fd as _, cmd as _, arg as _)
         }
         #[cfg(feature = "pipe")]
-        Sysno::pipe2 => {
-            let fds = args[0];
+        pipe2 => [fds, ..] {
             let fds = unsafe { core::slice::from_raw_parts_mut(fds as *mut c_int, 2) };
             syscall_imp::pipe::sys_pipe(fds)
         }
-        Sysno::mmap => {
-            return Err(SyscallErr::Unimplemented);
-        }
-
-        Sysno::munmap => {
-            return Err(SyscallErr::Unimplemented);
-        }
 
         // 进程控制相关系统调用
-        Sysno::exit => {
-            let code = args[0];
+        exit => [code,..] {
             syscall_imp::task::sys_exit(code as _)
         }
-        Sysno::getpid => syscall_imp::task::sys_getpid(),
-        Sysno::clone => {
-            return Err(SyscallErr::Unimplemented);
-        }
-        Sysno::execve => {
-            return Err(SyscallErr::Unimplemented);
-        }
-        Sysno::wait4 => {
-            return Err(SyscallErr::Unimplemented);
-        }
-        Sysno::sched_yield => syscall_imp::task::sys_yield(),
+        getpid => args syscall_imp::task::sys_getpid()
+        sched_yield => args syscall_imp::task::sys_yield()
         // 时间相关系统调用
-        Sysno::clock_gettime | Sysno::clock_gettime64 => {
+        clock_gettime => args {
             let cls = args[0];
             let ts: *mut ctypes::timespec = args[1] as *mut ctypes::timespec;
             syscall_imp::time::sys_clock_gettime(cls as ctypes::clockid_t, ts)
         }
-        Sysno::gettimeofday => {
+        clock_gettime64 => args {
+            let cls = args[0];
+            let ts: *mut ctypes::timespec = args[1] as *mut ctypes::timespec;
+            syscall_imp::time::sys_clock_gettime(cls as ctypes::clockid_t, ts)
+        }
+        gettimeofday => args {
             let ts: *mut ctypes::timeval = args[0] as *mut ctypes::timeval;
             syscall_imp::time::sys_get_time_of_day(ts)
         }
-        Sysno::nanosleep => {
+        nanosleep => args {
             let req: *const ctypes::timespec = args[0] as *const ctypes::timespec;
             let rem: *mut ctypes::timespec = args[1] as *mut ctypes::timespec;
             syscall_imp::time::sys_nanosleep(req, rem)
         }
-        Sysno::clock_nanosleep_time64 => {
+        clock_nanosleep_time64 => args {
             // TODO: handle clock_id and flags
             let _clock_id = args[0];
             let _flags = args[1];
@@ -206,48 +168,37 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<SyscallResult,
             let rem: *mut ctypes::timespec = args[3] as *mut ctypes::timespec;
             syscall_imp::time::sys_nanosleep(req, rem)
         }
-        Sysno::times => {
-            return Err(SyscallErr::Unimplemented);
-        }
         // 其他系统调用
-        Sysno::brk => {
-            return Err(SyscallErr::Unimplemented);
-        }
-        Sysno::uname => sys_uname(args[0] as _),
+        uname => args sys_uname(args[0] as _),
 
         #[cfg(all(feature = "fs", feature = "fd"))]
-        Sysno::chdir => sys_chdir(args[0] as _),
+        chdir => args sys_chdir(args[0] as _),
         // TODO: handle dir_fd and prem
         #[cfg(all(feature = "fs", feature = "fd"))]
-        Sysno::mkdirat => {
-            let [dir_fd, path, perm, ..] = args;
+        mkdirat => [dir_fd, path, perm, ..] {
             syscall_imp::fs::sys_mkdirat(dir_fd, path as _, perm)
         }
-        Sysno::getdents64 => {
+        getdents64 => args {
             todo!()
         }
 
         //网络相关
         #[cfg(feature = "net")]
-        Sysno::socket => {
-            let [domain, socktype, protocol, ..] = args;
+        socket => [domain, socktype, protocol, ..] {
             syscall_imp::net::sys_socket(domain as _, socktype as _, protocol as _)
         }
         #[cfg(feature = "net")]
-        Sysno::bind => {
-            let [fd, addr, addrlen, ..] = args;
+        bind => [fd, addr, addrlen, ..] {
             syscall_imp::net::sys_bind(fd as _, addr as _, addrlen as _)
         }
         #[cfg(feature = "net")]
         // fd, addr, addrlen
-        Sysno::connect => {
-            let [fd, addr, addrlen, ..] = args;
+        connect => [fd, addr, addrlen, ..] {
             syscall_imp::net::sys_connect(fd as _, addr as _, addrlen as _)
         }
         #[cfg(feature = "net")]
         // fd, buf, len, flags, addr, addrlen
-        Sysno::sendto => {
-            let [fd, buf, len, flags, addr, addrlen, ..] = args;
+        sendto => [fd, buf, len, flags, addr, addrlen, ..] {
             syscall_imp::net::sys_sendto(
                 fd as _,
                 buf as _,
@@ -260,15 +211,13 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<SyscallResult,
 
         #[cfg(feature = "net")]
         // fd, buf, len, flags
-        Sysno::sendmsg => {
-            let [fd, buf, len, flags, ..] = args;
+        sendmsg => [fd, buf, len, flags, ..] {
             syscall_imp::net::sys_send(fd as _, buf as _, len as _, flags as _)
         }
 
         #[cfg(feature = "net")]
         // fd, buf, len, flags, addr, addrlen
-        Sysno::recvfrom => {
-            let [fd, buf, len, flags, addr, addrlen, ..] = args;
+        recvfrom => [fd, buf, len, flags, addr, addrlen, ..] {
             unsafe {
                 syscall_imp::net::sys_recvfrom(
                     fd as _,
@@ -283,50 +232,38 @@ pub fn syscall_handler(sys_id: usize, args: [usize; 6]) -> Result<SyscallResult,
 
         #[cfg(feature = "net")]
         // fd, buf, len, flags
-        Sysno::recvmsg => {
-            let [fd, buf, len, flags, ..] = args;
+        recvmsg => [fd, buf, len, flags, ..] {
             syscall_imp::net::sys_recv(fd as _, buf as _, len as _, flags as _)
         }
 
         #[cfg(feature = "net")]
         // fd, backlog
-        Sysno::listen => {
-            let [fd, backlog, ..] = args;
+        listen => [fd, backlog, ..] {
             syscall_imp::net::sys_listen(fd as _, backlog as _)
         }
 
         #[cfg(feature = "net")]
         // fd, addr, addrlen
-        Sysno::accept => {
-            let [fd, addr, addrlen, ..] = args;
+        accept => [fd, addr, addrlen, ..] {
             unsafe { syscall_imp::net::sys_accept(fd as _, addr as _, addrlen as _) }
         }
 
         #[cfg(feature = "net")]
         // fd, how
-        Sysno::shutdown => {
-            let [fd, how, ..] = args;
+        shutdown => [fd, how, ..] {
             syscall_imp::net::sys_shutdown(fd as _, how as _)
         }
 
         #[cfg(feature = "net")]
         // fd, addr, addrlen
-        Sysno::getsockname => {
-            let [fd, addr, addrlen, ..] = args;
+        getsockname => [fd, addr, addrlen, ..] {
             unsafe { syscall_imp::net::sys_getsockname(fd as _, addr as _, addrlen as _) }
         }
 
         #[cfg(feature = "net")]
         // fd, addr, addrlen
-        Sysno::getpeername => {
-            let [fd, addr, addrlen, ..] = args;
+        getpeername => [fd, addr, addrlen, ..] {
             unsafe { syscall_imp::net::sys_getpeername(fd as _, addr as _, addrlen as _) }
         }
 
-        _ => {
-            return Err(SyscallErr::Unimplemented);
-        }
-    };
-
-    Ok(ret)
-}
+);

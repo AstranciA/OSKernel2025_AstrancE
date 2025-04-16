@@ -6,10 +6,8 @@ use core::ffi::c_int;
 #[cfg(feature = "pipe")]
 
 pub fn sys_pipe(fds: &mut [c_int]) -> SyscallResult {
-    let ret = api::sys_pipe(fds) as isize;
-    if ret < 0 {
-        SyscallResult::Error((-ret).try_into().unwrap())
-    }else {
-        SyscallResult::Success(ret)
-    }
+    use crate::ToLinuxResult;
+
+    api::sys_pipe(fds).to_linux_result()
 }
+
