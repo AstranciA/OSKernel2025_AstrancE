@@ -1,10 +1,10 @@
 use alloc::sync::Arc;
 use axhal::paging::{MappingFlags, PageTable};
-use memory_addr::{FrameTracker, PageIter4K, PhysAddr, VirtAddr, VirtAddrRange};
+use memory_addr::{FrameTracker, PageIter4K, PhysAddr, VirtAddr};
 
 use super::{
     Backend,
-    frame::{FrameTrackerImpl, FrameTrackerMap, FrameTrackerRef},
+    frame::{FrameTrackerImpl, FrameTrackerMap},
 };
 
 impl Backend {

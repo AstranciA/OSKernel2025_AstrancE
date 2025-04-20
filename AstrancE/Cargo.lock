@@ -475,8 +475,8 @@ dependencies = [
  "loongArch64",
  "memory_addr 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
  "ns16550a",
- "page_table_entry 0.5.3",
- "page_table_multiarch 0.5.3",
+ "page_table_entry 0.5.4",
+ "page_table_multiarch 0.5.4",
  "percpu",
  "raw-cpuid 11.5.0",
  "riscv",
@@ -530,6 +530,7 @@ dependencies = [
  "axconfig",
  "axerrno",
  "axhal",
+ "bitflags 2.9.0",
  "kspin",
  "lazyinit",
  "log",
@@ -552,6 +553,7 @@ dependencies = [
  "axmm",
  "axns",
  "axsync",
+ "axsyscall",
  "axtask",
  "bitflags 2.9.0",
  "crate_interface",
@@ -641,9 +643,12 @@ dependencies = [
  "arceos_posix_api",
  "axconfig",
  "axerrno",
+ "axfs",
+ "axhal",
  "axlog",
- "axmono",
+ "axmm",
  "axtask",
+ "linkme",
  "syscalls",
 ]
 
@@ -1802,8 +1807,7 @@ dependencies = [
 [[package]]
 name = "syscalls"
 version = "0.6.18"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "43d0e35dc7d73976a53c7e6d7d177ef804a0c0ee774ec77bcc520c2216fd7cbe"
+source = "git+https://github.com/jasonwhite/syscalls.git#92624de3dee33427fde46da083809d7e86a721ec"
 
 [[package]]
 name = "thiserror"

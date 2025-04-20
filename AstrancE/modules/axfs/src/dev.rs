@@ -117,3 +117,6 @@ impl Disk {
         Ok(buf.len())
     }
 }
+
+unsafe impl Send for Disk {}
+unsafe impl Sync for Disk {}

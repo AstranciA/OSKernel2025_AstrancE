@@ -44,6 +44,7 @@ typedef struct {{
             "sock.*",
             "fd_set",
             "timeval",
+            "tms",
             "pthread_t",
             "pthread_attr_t",
             "pthread_mutex_t",

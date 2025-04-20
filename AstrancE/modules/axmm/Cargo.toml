@@ -13,6 +13,7 @@ documentation = "https://arceos-org.github.io/arceos/axmm/index.html"
 RAII = ["memory_set/RAII", "memory_addr/RAII"]
 COW = ["RAII"]
 heap = []
+mmap = ["memory_set/mmap"]
 
 [dependencies]
 axhal = { workspace = true, features = ["paging"] }
@@ -26,3 +27,4 @@ memory_addr = { workspace = true }
 memory_set = { workspace = true }
 kspin = "0.1"
 page_table_multiarch = "0.5"
+bitflags = { workspace = true }

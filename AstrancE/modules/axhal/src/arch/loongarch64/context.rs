@@ -82,6 +82,24 @@ impl TrapFrame {
     pub const fn arg5(&self) -> usize {
         self.regs.a5 as _
     }
+
+    pub const fn get_user_sp(&self) -> usize {
+        self.regs.sp as _
+    }
+
+    /// set return code
+    pub fn set_ret_code(&mut self, ret_value: usize) {
+        self.regs.a0 = ret_value;
+    }
+
+    /// set user sp
+    pub fn set_user_sp(&mut self, user_sp: usize) {
+        self.regs.sp = user_sp;
+    }
+
+    pub fn inc_sepc(&mut self) {
+        self.era += 4;
+    }
 }
 
 /// Context to enter user space.

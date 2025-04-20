@@ -1,15 +1,13 @@
-use core::ops::Add;
-
 use alloc::sync::Arc;
 use axalloc::global_allocator;
 use axhal::mem::{phys_to_virt, virt_to_phys};
 use axhal::paging::{MappingFlags, PageSize, PageTable};
 use memory_addr::{FrameTracker, MemoryAddr, PAGE_SIZE_4K, PageIter4K, PhysAddr, VirtAddr};
 
-use crate::{AddrSpace, KERNEL_ASPACE};
+use crate::AddrSpace;
 
-use super::Backend;
 use super::frame::{FrameTrackerImpl, FrameTrackerMap, FrameTrackerRef};
+use super::{Backend, VmAreaType};
 
 /// TODO: paddr???? what happends if page table is not kernel's?
 /// WARN: it's not the real physical addr unless it is undering the kernel's virtual memory space
@@ -24,7 +22,7 @@ use super::frame::{FrameTrackerImpl, FrameTrackerMap, FrameTrackerRef};
  *    Some(paddr)
  *}
  */
-fn alloc_frame(zeroed: bool) -> Option<FrameTrackerRef> {
+pub(crate) fn alloc_frame(zeroed: bool) -> Option<FrameTrackerRef> {
     let vaddr = VirtAddr::from(global_allocator().alloc_pages(1, PAGE_SIZE_4K).ok()?);
     if zeroed {
         unsafe { core::ptr::write_bytes(vaddr.as_mut_ptr(), 0, PAGE_SIZE_4K) };
@@ -50,7 +48,15 @@ pub fn dealloc_frame(frame: PhysAddr) {
 impl Backend {
     /// Creates a new allocation mapping backend.
     pub const fn new_alloc(populate: bool) -> Self {
-        Self::Alloc { populate }
+        Self::Alloc {
+            populate,
+            va_type: VmAreaType::Normal,
+        }
+    }
+
+    /// Creates a new allocation mapping backend.
+    pub const fn new(populate: bool, va_type: VmAreaType) -> Self {
+        Self::Alloc { populate, va_type }
     }
 
     pub(crate) fn map_alloc(
@@ -58,6 +64,7 @@ impl Backend {
         size: usize,
         flags: MappingFlags,
         pt: &mut PageTable,
+        va_type: VmAreaType,
         populate: bool,
     ) -> Result<FrameTrackerMap, ()> {
         debug!(
@@ -92,10 +99,11 @@ impl Backend {
         start: VirtAddr,
         size: usize,
         pt: &mut PageTable,
+        _va_type: VmAreaType, //TODO
         _populate: bool,
     ) -> bool {
         trace!("unmap_alloc: [{:#x}, {:#x})", start, start + size);
-        for addr in PageIter4K::new(start, start + size).unwrap() {
+        for addr in PageIter4K::new(start, (start + size).align_up_4k()).unwrap() {
             if let Ok((frame, page_size, tlb)) = pt.unmap(addr) {
                 // Deallocate the physical frame if there is a mapping in the
                 // page table.
@@ -112,6 +120,7 @@ impl Backend {
 
     pub(crate) fn handle_page_fault_alloc(
         vaddr: VirtAddr,
+        va_type: VmAreaType,
         orig_flags: MappingFlags,
         //pt: &mut PageTable,
         aspace: &mut AddrSpace,
@@ -134,13 +143,15 @@ impl Backend {
 
                 // if origin frame is only be hold in `aspace`, we can reuse it.
                 if count == 1 {
-                    return aspace.page_table().remap(
-                        vaddr,
-                        origin_pa,
-                        (orig_flags - MappingFlags::COW) | MappingFlags::WRITE,
-                    )
-                    .map(|(_, tlb)| tlb.flush())
-                    .is_ok()
+                    return aspace
+                        .page_table()
+                        .remap(
+                            vaddr,
+                            origin_pa,
+                            (orig_flags - MappingFlags::COW) | MappingFlags::WRITE,
+                        )
+                        .map(|(_, tlb)| tlb.flush())
+                        .is_ok();
                 }
 
                 // else clone it.
@@ -193,16 +204,37 @@ impl Backend {
                 }
             }
         }
-        if let Some(frame) = alloc_frame(true) {
-            // Allocate a physical frame lazily and map it to the fault address.
-            // `vaddr` does not need to be aligned. It will be automatically
-            // aligned during `pt.map` regardless of the page size.
-            // TODO: handle FrameTracker
-            aspace.page_table().map(vaddr, frame.pa, PageSize::Size4K, orig_flags)
-                .map(|tlb| tlb.flush())
-                .is_ok()
-        } else {
-            false
+        match va_type {
+            VmAreaType::Normal => {
+                if let Some(frame) = alloc_frame(true) {
+                    // Allocate a physical frame lazily and map it to the fault address.
+                    // `vaddr` does not need to be aligned. It will be automatically
+                    // aligned during `pt.map` regardless of the page size.
+                    aspace
+                        .page_table()
+                        .map(vaddr, frame.pa, PageSize::Size4K, orig_flags)
+                        .map(|tlb| tlb.flush())
+                        .and_then(|_| {
+                            aspace.areas.insert_frame(vaddr, frame.clone());
+                            Ok(())
+                        })
+                        .is_ok()
+                } else {
+                    false
+                }
+            }
+            VmAreaType::Mmap(mmio) => {
+                let flags = orig_flags;
+                if ! flags.contains(MappingFlags::DEVICE) {
+                    return false
+                };
+                aspace
+                    .map_mmap(mmio, vaddr, PageSize::Size4K, flags)
+                    .is_ok()
+            }
+            VmAreaType::Elf => todo!(),
+            VmAreaType::Heap => todo!(),
+            VmAreaType::Stack => todo!(),
         }
     }
 }

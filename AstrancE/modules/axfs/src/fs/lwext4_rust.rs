@@ -13,36 +13,58 @@ use crate::dev::Disk;
 pub const BLOCK_SIZE: usize = 512;
 
 #[allow(dead_code)]
-pub struct Ext4FileSystem {
-    inner: Ext4BlockWrapper<Disk>,
+pub struct Ext4FileSystem<T: KernelDevOp<DevType = T>> {
+    inner: Ext4BlockWrapper<T>,
     root: VfsNodeRef,
 }
 
-unsafe impl Sync for Ext4FileSystem {}
-unsafe impl Send for Ext4FileSystem {}
+unsafe impl<T: KernelDevOp<DevType = T>> Sync for Ext4FileSystem<T> {}
+unsafe impl<T: KernelDevOp<DevType = T>> Send for Ext4FileSystem<T> {}
+/*
+ *unsafe impl Sync for Ext4FileSystem<Disk> {}
+ *unsafe impl Send for Ext4FileSystem<Disk> {}
+ */
 
-impl Ext4FileSystem {
+impl<T: KernelDevOp<DevType = T>> Ext4FileSystem<T> {
     #[cfg(feature = "use-ramdisk")]
     pub fn new(mut disk: Disk) -> Self {
         unimplemented!()
     }
 
-    #[cfg(not(feature = "use-ramdisk"))]
-    pub fn new(disk: Disk) -> Self {
-        info!(
-            "Got Disk size:{}, position:{}",
-            disk.size(),
-            disk.position()
-        );
+    /*
+     *#[cfg(not(feature = "use-ramdisk"))]
+     *pub fn new(disk: Disk) -> Self {
+     *    info!(
+     *        "Got Disk size:{}, position:{}",
+     *        disk.size(),
+     *        disk.position()
+     *    );
+     *    let inner =
+     *        Ext4BlockWrapper::<Disk>::new(disk).expect("failed to initialize EXT4 filesystem");
+     *    let root = Arc::new(FileWrapper::new("/", InodeTypes::EXT4_DE_DIR));
+     *    Self { inner, root }
+     *}
+     */
+    //#[cfg(not(feature = "use-ramdisk"))]
+    pub fn new(block_dev: T) -> Self {
+        /*
+         *info!(
+         *    "Got Disk size:{}, position:{}",
+         *    disk.size(),
+         *    disk.position()
+         *);
+         */
         let inner =
-            Ext4BlockWrapper::<Disk>::new(disk).expect("failed to initialize EXT4 filesystem");
+            Ext4BlockWrapper::<T>::new(block_dev).expect("failed to initialize EXT4 filesystem");
+        info!("new block device");
         let root = Arc::new(FileWrapper::new("/", InodeTypes::EXT4_DE_DIR));
+        info!("new block device");
         Self { inner, root }
     }
 }
 
 /// The [`VfsOps`] trait provides operations on a filesystem.
-impl VfsOps for Ext4FileSystem {
+impl<T: KernelDevOp<DevType = T>> VfsOps for Ext4FileSystem<T> {
     // mount()
 
     fn root_dir(&self) -> VfsNodeRef {

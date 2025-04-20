@@ -1,5 +1,4 @@
 use core::fmt;
-
 use axerrno::{AxError, AxResult, ax_err};
 use axhal::mem::phys_to_virt;
 use axhal::paging::{MappingFlags, PageTable, PagingError};
@@ -8,6 +7,9 @@ use memory_addr::{
 };
 use memory_set::{MappingBackend, MemoryArea, MemorySet};
 use page_table_multiarch::PageSize;
+
+#[cfg(feature = "mmap")]
+pub mod mmap;
 
 use crate::backend::Backend;
 use crate::backend::frame::FrameTrackerRef;
@@ -132,7 +134,7 @@ impl AddrSpace {
         self.pt.clear_copy_range(range.start, range.size());
     }
 
-    fn validate_region(&self, start: VirtAddr, size: usize) -> AxResult {
+    pub(crate) fn validate_region(&self, start: VirtAddr, size: usize) -> AxResult {
         if !self.contains_range(start, size) {
             return ax_err!(InvalidInput, "address out of range");
         }
@@ -222,7 +224,7 @@ impl AddrSpace {
             let backend = area.backend().clone();
             let _end = area.end();
             let flags = area.flags();
-            if let Backend::Alloc { populate } = backend {
+            if let Backend::Alloc { populate, .. } = backend {
                 if !populate {
                     for addr in PageIter4K::new(start, area.end().min(end)).unwrap() {
                         match self.pt.query(addr) {
@@ -283,6 +285,25 @@ impl AddrSpace {
             );
         }
         self.areas.clear(&mut self.pt).unwrap();
+        Ok(())
+    }
+
+    /// To remove a single mapping within the address space.
+    pub fn unmap_area(&mut self, vaddr: VirtAddr) -> AxResult {
+        if let Some(area) = self.areas.find_mut(vaddr) {
+            assert!(area.start().is_aligned_4k());
+            assert!(area.size() % PAGE_SIZE_4K == 0);
+            assert!(area.flags().contains(MappingFlags::USER));
+            assert!(
+                self.va_range
+                    .contains_range(VirtAddrRange::from_start_size(area.start(), area.size())),
+                "MemorySet contains out-of-va-range area"
+            );
+            area.unmap_area(&mut self.pt).map_err(mapping_err_to_ax_err)?;
+        } else {
+            return ax_err!(InvalidInput, "Invalid area addr");
+        }
+        self.areas.delete(vaddr);
         Ok(())
     }
 
@@ -395,6 +416,7 @@ impl AddrSpace {
         mut range: VirtAddrRange,
         access_flags: MappingFlags,
     ) -> bool {
+        // TODO: COW
         for area in self.areas.iter() {
             if area.end() <= range.start {
                 continue;
@@ -436,9 +458,6 @@ impl AddrSpace {
             }
             #[cfg(not(feature = "COW"))]
             if orig_flags.contains(access_flags) {
-                return area
-                    .backend()
-                    .handle_page_fault(vaddr, orig_flags, &mut self.pt);
                 return area
                     .backend()
                     .handle_page_fault(vaddr, orig_flags, &mut self.pt);
@@ -507,13 +526,12 @@ impl AddrSpace {
 
         for area in self.areas.iter() {
             // Remap the memory areajin the new address space.
-            let backend = area.backend();
             let mut flags = area.flags();
             if flags.contains(MappingFlags::WRITE) {
                 flags = (flags - MappingFlags::WRITE) | MappingFlags::COW;
             }
 
-            new_aspace.areas.insert(area.clone());
+            new_aspace.areas.insert(area.clone()).map_err(mapping_err_to_ax_err)?;
             for vaddr in
                 PageIter4K::new(area.start(), area.end()).expect("Failed to create page iterator")
             {
@@ -539,7 +557,7 @@ impl AddrSpace {
                 start,
                 size,
                 (flags - MappingFlags::WRITE) | MappingFlags::COW,
-            );
+            )?;
         }
 
         Ok(new_aspace)
