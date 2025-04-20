@@ -1,15 +1,13 @@
-use core::ops::Add;
-
 use alloc::sync::Arc;
 use axalloc::global_allocator;
 use axhal::mem::{phys_to_virt, virt_to_phys};
 use axhal::paging::{MappingFlags, PageSize, PageTable};
 use memory_addr::{FrameTracker, MemoryAddr, PAGE_SIZE_4K, PageIter4K, PhysAddr, VirtAddr};
 
-use crate::{AddrSpace, KERNEL_ASPACE};
+use crate::AddrSpace;
 
 use super::frame::{FrameTrackerImpl, FrameTrackerMap, FrameTrackerRef};
-use super::{Backend, MmapIO, VmAreaType};
+use super::{Backend, VmAreaType};
 
 /// TODO: paddr???? what happends if page table is not kernel's?
 /// WARN: it's not the real physical addr unless it is undering the kernel's virtual memory space
@@ -227,6 +225,9 @@ impl Backend {
             }
             VmAreaType::Mmap(mmio) => {
                 let flags = orig_flags;
+                if ! flags.contains(MappingFlags::DEVICE) {
+                    return false
+                };
                 aspace
                     .map_mmap(mmio, vaddr, PageSize::Size4K, flags)
                     .is_ok()

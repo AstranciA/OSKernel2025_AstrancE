@@ -3,7 +3,7 @@ use core::fmt::Debug;
 use memory_addr::{FrameTracker, PAGE_SIZE_4K, PhysAddr, VirtAddr};
 use memory_set::MappingBackend;
 
-use crate::{Backend, backend::alloc::dealloc_frame};
+use crate::backend::alloc::dealloc_frame;
 
 /* TODO:
  *enum FrameTracker {

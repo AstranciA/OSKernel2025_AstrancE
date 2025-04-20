@@ -3,8 +3,8 @@
 use ::alloc::sync::Arc;
 use axhal::paging::{MappingFlags, PageTable};
 use frame::{FrameTrackerImpl, FrameTrackerMap};
-use memory_addr::{FrameTracker, Page, VirtAddr};
-use memory_set::{MappingBackend, MemorySet};
+use memory_addr::VirtAddr;
+use memory_set::MappingBackend;
 
 use crate::{AddrSpace, aspace::mmap::MmapIO};
 

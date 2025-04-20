@@ -69,6 +69,7 @@ pub struct TaskExt {
     pub time: UnsafeCell<TimeStat>,
 }
 
+#[allow(unused)]
 impl TaskExt {
     pub fn new(proc_id: usize, uctx: UspaceContext, aspace: Arc<Mutex<AddrSpace>>) -> Self {
         Self {

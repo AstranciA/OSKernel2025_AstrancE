@@ -1,5 +1,5 @@
 pub mod mmap;
-use alloc::string::{String, ToString};
+use alloc::string::String;
 use axerrno::AxResult;
 use axhal::{
     mem::VirtAddr,
@@ -8,11 +8,10 @@ use axhal::{
 };
 use axmm::AddrSpace;
 use axtask::{TaskExtRef, current};
-use core::sync::atomic::{AtomicUsize, Ordering};
 use memory_addr::MemoryAddr;
 use xmas_elf::ElfFile;
 
-use crate::{copy_from_kernel, elf::ELFInfo, loader};
+use crate::{copy_from_kernel, elf::ELFInfo};
 
 pub fn new_user_aspace_empty() -> AxResult<AddrSpace> {
     /*

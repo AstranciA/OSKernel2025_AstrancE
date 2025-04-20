@@ -10,6 +10,7 @@ pub struct HeapSpace {
     heap_top: AtomicUsize,
 }
 
+#[allow(unused)]
 impl HeapSpace {
     fn new(heap_bottom: VirtAddr, max_size: usize) -> Self {
         Self {
@@ -84,7 +85,7 @@ impl AddrSpace {
 
     pub fn set_heap_top(&mut self, top: VirtAddr) -> VirtAddr {
         debug!("setting heap top from {:?} to {:?}", self.heap().top(), top);
-        if (top != self.heap().top()) {
+        if top != self.heap().top() {
             self.areas
                 .adjust_area(
                     self.heap().base(),
