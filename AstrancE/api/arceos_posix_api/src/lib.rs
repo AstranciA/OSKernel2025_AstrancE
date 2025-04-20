@@ -45,7 +45,7 @@ pub use imp::fd_ops::{
 };
 #[cfg(feature = "fs")]
 pub use imp::fs::{
-    Directory, File, sys_fstat, sys_getcwd, sys_lseek, sys_lstat, sys_open, sys_openat, sys_mkdirat, sys_rename,
+    Directory, File, sys_fstat, sys_fstatat, sys_getcwd, sys_lseek, sys_lstat, sys_open, sys_openat, sys_mkdirat, sys_rename,
     sys_stat,
 };
 #[cfg(feature = "select")]

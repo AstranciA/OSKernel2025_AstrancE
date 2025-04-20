@@ -1,5 +1,3 @@
-//! syscall impl for AstrancE
-// #![no_std]
 #![cfg_attr(not(test), no_std)]
 #![feature(stmt_expr_attributes)]
 // #![cfg(test)]
@@ -56,6 +54,11 @@ macro_rules! syscall_handler_def {
     };
 }
 
+macro_rules! apply {
+    ($fn:expr, $($arg:ident),* $(,)?) => {
+        $fn($($arg as _),*)
+    };
+}
 /*
  *macro_rules! get_args {
  *    ($($arg:ident),* $(,)?) => {
@@ -76,17 +79,17 @@ syscall_handler_def!(
         }
 
         writev => [fd, iov, iocnt, ..] {
-            syscall_imp::io::sys_writev(fd as _, iov as _, iocnt as _)
+            apply!(syscall_imp::io::sys_writev, fd, iov, iocnt)
         }
         // 文件操作相关系统调用
         #[cfg(all(feature = "fs", feature = "fd"))]
         openat => [dirfd, fname, flags, mode, ..] {
-            syscall_imp::fs::sys_openat(dirfd as _, fname as _, flags as _, mode as _)
+            apply!(syscall_imp::fs::sys_openat, dirfd, fname, flags, mode)
         }
 
         #[cfg(all(feature = "fs", feature = "fd"))]
         close => [fd, ..] {
-            syscall_imp::fd::sys_close(fd as _)
+            apply!(syscall_imp::fd::sys_close, fd)
         }
 
         #[cfg(all(feature = "fs", feature = "fd"))]
@@ -96,37 +99,48 @@ syscall_handler_def!(
 
         #[cfg(all(feature = "fs", feature = "fd"))]
         fstat => [fd, buf, ..] {
-            unsafe { syscall_imp::fs::sys_fstat(fd as _, buf as _) }
+            unsafe { apply!(syscall_imp::fs::sys_fstat, fd, buf) }
         }
 
         #[cfg(all(feature = "fs", feature = "fd"))]
+        fstat => [fd, buf, ..] {
+            unsafe { apply!(syscall_imp::fs::sys_fstat, fd, buf) }
+        }
+        #[cfg(target_arch = "riscv64")]
+        #[cfg(all(feature = "fs", feature = "fd"))]
+        fstatat => [dir_fd, pathname, buf, flags, ..] {
+            unsafe { apply!(syscall_imp::fs::sys_fstatat, dir_fd, pathname, buf, flags) }
+        }
+
+
+        #[cfg(all(feature = "fs", feature = "fd"))]
         lseek => [fd, offset, whence, ..] {
-            syscall_imp::fs::sys_lseek(fd as _, offset as _, whence as _)
+            apply!(syscall_imp::fs::sys_lseek, fd, offset, whence)
         }
 
         #[cfg(all(feature = "fs", feature = "fd"))]
         getcwd => [buf, size, ..] {
-            syscall_imp::fs::sys_getcwd(buf as _, size as _)
+            apply!(syscall_imp::fs::sys_getcwd, buf, size)
         }
 
         #[cfg(all(feature = "fs", feature = "fd"))]
         renameat => [old, new, ..] {
-            syscall_imp::fs::sys_rename(old as _, new as _)
+            apply!(syscall_imp::fs::sys_rename, old, new)
         }
 
         #[cfg(all(feature = "fs", feature = "fd"))]
         dup => [old_fd, ..] {
-            syscall_imp::fd::sys_dup(old_fd as _)
+            apply!(syscall_imp::fd::sys_dup, old_fd)
         }
 
         #[cfg(all(feature = "fs", feature = "fd"))]
         dup3 => [old_fd, new_fd, ..] {
-            syscall_imp::fd::sys_dup3(old_fd as _, new_fd as _)
+            apply!(syscall_imp::fd::sys_dup3, old_fd, new_fd)
         }
 
         #[cfg(all(feature = "fs", feature = "fd"))]
         fcntl => [fd, cmd, arg, ..] {
-            syscall_imp::fd::sys_fcntl(fd as _, cmd as _, arg as _)
+            apply!(syscall_imp::fd::sys_fcntl, fd, cmd, arg)
         }
         #[cfg(feature = "pipe")]
         pipe2 => [fds, ..] {
@@ -136,7 +150,7 @@ syscall_handler_def!(
 
         // 进程控制相关系统调用
         exit => [code,..] {
-            syscall_imp::task::sys_exit(code as _)
+            apply!(syscall_imp::task::sys_exit, code)
         }
         getpid => args syscall_imp::task::sys_getpid()
         sched_yield => args syscall_imp::task::sys_yield()
@@ -169,14 +183,14 @@ syscall_handler_def!(
             syscall_imp::time::sys_nanosleep(req, rem)
         }
         // 其他系统调用
-        uname => args sys_uname(args[0] as _),
+        uname => [buf, ..] apply!(sys_uname, buf),
 
         #[cfg(all(feature = "fs", feature = "fd"))]
-        chdir => args sys_chdir(args[0] as _),
+        chdir => [path, ..] apply!(sys_chdir, path),
         // TODO: handle dir_fd and prem
         #[cfg(all(feature = "fs", feature = "fd"))]
         mkdirat => [dir_fd, path, perm, ..] {
-            syscall_imp::fs::sys_mkdirat(dir_fd, path as _, perm)
+            apply!(syscall_imp::fs::sys_mkdirat, dir_fd, path, perm)
         }
         getdents64 => args {
             todo!()
@@ -185,85 +199,69 @@ syscall_handler_def!(
         //网络相关
         #[cfg(feature = "net")]
         socket => [domain, socktype, protocol, ..] {
-            syscall_imp::net::sys_socket(domain as _, socktype as _, protocol as _)
+            apply!(syscall_imp::net::sys_socket, domain, socktype, protocol)
         }
         #[cfg(feature = "net")]
         bind => [fd, addr, addrlen, ..] {
-            syscall_imp::net::sys_bind(fd as _, addr as _, addrlen as _)
+            apply!(syscall_imp::net::sys_bind, fd, addr, addrlen)
         }
         #[cfg(feature = "net")]
         // fd, addr, addrlen
         connect => [fd, addr, addrlen, ..] {
-            syscall_imp::net::sys_connect(fd as _, addr as _, addrlen as _)
+            apply!(syscall_imp::net::sys_connect, fd, addr, addrlen)
         }
         #[cfg(feature = "net")]
         // fd, buf, len, flags, addr, addrlen
         sendto => [fd, buf, len, flags, addr, addrlen, ..] {
-            syscall_imp::net::sys_sendto(
-                fd as _,
-                buf as _,
-                len as _,
-                flags as _,
-                addr as _,
-                addrlen as _,
-            )
+            apply!(syscall_imp::net::sys_sendto, fd, buf, len, flags, addr, addrlen)
         }
 
         #[cfg(feature = "net")]
         // fd, buf, len, flags
         sendmsg => [fd, buf, len, flags, ..] {
-            syscall_imp::net::sys_send(fd as _, buf as _, len as _, flags as _)
+            apply!(syscall_imp::net::sys_send, fd, buf, len, flags)
         }
 
         #[cfg(feature = "net")]
         // fd, buf, len, flags, addr, addrlen
         recvfrom => [fd, buf, len, flags, addr, addrlen, ..] {
-            unsafe {
-                syscall_imp::net::sys_recvfrom(
-                    fd as _,
-                    buf as _,
-                    len as _,
-                    flags as _,
-                    addr as _,
-                    addrlen as _,
-                )
-            }
+            unsafe { apply!(syscall_imp::net::sys_recvfrom, fd, buf, len, flags, addr, addrlen) }
         }
 
         #[cfg(feature = "net")]
         // fd, buf, len, flags
         recvmsg => [fd, buf, len, flags, ..] {
-            syscall_imp::net::sys_recv(fd as _, buf as _, len as _, flags as _)
+            apply!(syscall_imp::net::sys_recv, fd, buf, len, flags)
         }
 
         #[cfg(feature = "net")]
         // fd, backlog
         listen => [fd, backlog, ..] {
-            syscall_imp::net::sys_listen(fd as _, backlog as _)
+            apply!(syscall_imp::net::sys_listen, fd, backlog)
         }
 
         #[cfg(feature = "net")]
         // fd, addr, addrlen
         accept => [fd, addr, addrlen, ..] {
-            unsafe { syscall_imp::net::sys_accept(fd as _, addr as _, addrlen as _) }
+            unsafe { apply!(syscall_imp::net::sys_accept, fd, addr, addrlen) }
         }
 
         #[cfg(feature = "net")]
         // fd, how
         shutdown => [fd, how, ..] {
-            syscall_imp::net::sys_shutdown(fd as _, how as _)
+            apply!(syscall_imp::net::sys_shutdown, fd, how)
         }
 
         #[cfg(feature = "net")]
         // fd, addr, addrlen
         getsockname => [fd, addr, addrlen, ..] {
-            unsafe { syscall_imp::net::sys_getsockname(fd as _, addr as _, addrlen as _) }
+            unsafe { apply!(syscall_imp::net::sys_getsockname, fd, addr, addrlen) }
         }
 
         #[cfg(feature = "net")]
         // fd, addr, addrlen
         getpeername => [fd, addr, addrlen, ..] {
-            unsafe { syscall_imp::net::sys_getpeername(fd as _, addr as _, addrlen as _) }
+            unsafe { apply!(syscall_imp::net::sys_getpeername, fd, addr, addrlen) }
         }
 
 );

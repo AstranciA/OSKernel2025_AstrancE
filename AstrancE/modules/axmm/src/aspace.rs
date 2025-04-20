@@ -418,6 +418,7 @@ impl AddrSpace {
         mut range: VirtAddrRange,
         access_flags: MappingFlags,
     ) -> bool {
+        // TODO: COW
         for area in self.areas.iter() {
             if area.end() <= range.start {
                 continue;
@@ -452,7 +453,6 @@ impl AddrSpace {
         }
         if let Some(area) = self.areas.find(vaddr) {
             let orig_flags = area.flags();
-            info!("123: , {orig_flags:?}");
             #[cfg(feature = "COW")]
             if orig_flags.contains(access_flags) || orig_flags.contains(MappingFlags::COW) {
                 let backed = area.backend().clone();

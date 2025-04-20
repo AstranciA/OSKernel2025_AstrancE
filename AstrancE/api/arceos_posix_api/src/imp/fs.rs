@@ -188,15 +188,11 @@ pub fn sys_mkdirat(dirfd: c_int, dirname: *const c_char, mode: ctypes::mode_t) -
         Err(_) => return -1,
     };
 
-    debug!(
-        "sys_mkdirat <= {} {:?} {:#o}",
-        dirfd, dirname, mode
-    );
+    debug!("sys_mkdirat <= {} {:?} {:#o}", dirfd, dirname, mode);
 
     if dirname.starts_with('/') || dirfd == AT_FDCWD as _ {
-        //return sys_open(filename.as_ptr() as _, flags, mode);
         return create_dir(dirname).and(Ok(0)).unwrap_or_else(|e| {
-            debug!("sys_openat => {}", e);
+            debug!("sys_mkdirat => {}", e);
             -1
         });
     }
@@ -207,9 +203,29 @@ pub fn sys_mkdirat(dirfd: c_int, dirname: *const c_char, mode: ctypes::mode_t) -
             Ok(0)
         })
         .unwrap_or_else(|e| {
-            debug!("sys_openat => {}", e);
+            debug!("sys_mkdirat => {}", e);
             -1
         })
+}
+
+/// Create a directory by `dirname` relatively to `dirfd`.
+/// TODO: handle `mode`
+pub unsafe fn sys_fstatat(
+    dirfd: c_int,
+    dirname: *const c_char,
+    statbuf: *mut ctypes::stat,
+    flags: c_int,
+) -> LinuxResult<c_int> {
+    let dirname = char_ptr_to_str(dirname)?;
+
+    debug!("sys_fstatat <= {} {:?} {:#o}", dirfd, dirname, flags);
+
+    let dir = Directory::from_fd(dirfd)?;
+    // FIXME: correct path; flags
+    let file: File = File::new(dir.inner.lock().open_file_at(dirname, &flags_to_options(flags, 0))?, dirname.into());
+    let stat = file.stat()?;
+    unsafe { *statbuf = stat };
+    Ok(0)
 }
 
 /// Use the function to open file or directory, then add into file descriptor table.
