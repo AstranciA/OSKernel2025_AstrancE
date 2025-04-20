@@ -7,10 +7,10 @@ mod test;
 use core::fmt::Debug;
 extern crate axlog;
 use axerrno::{AxError, LinuxError, LinuxResult};
-use syscall_imp::{fs::sys_chdir, sys::sys_uname};
+use syscall_imp::{fs::{sys_chdir, sys_getdents}, sys::sys_uname};
 use syscalls::Sysno;
 mod syscall_imp;
-use arceos_posix_api::{FD_TABLE, char_ptr_to_str, ctypes};
+use arceos_posix_api::{char_ptr_to_str, ctypes, FD_TABLE};
 use axfs::{
     CURRENT_DIR,
     api::{create_dir, current_dir, set_current_dir},
@@ -97,15 +97,18 @@ syscall_handler_def!(
             todo!()
         }
 
-        #[cfg(all(feature = "fs", feature = "fd"))]
-        fstat => [fd, buf, ..] {
-            unsafe { apply!(syscall_imp::fs::sys_fstat, fd, buf) }
-        }
+        /*
+         *#[cfg(all(feature = "fs", feature = "fd"))]
+         *fstat => [fd, buf, ..] {
+         *    unsafe { apply!(syscall_imp::fs::sys_fstat, fd, buf) }
+         *}
+         */
 
         #[cfg(all(feature = "fs", feature = "fd"))]
         fstat => [fd, buf, ..] {
             unsafe { apply!(syscall_imp::fs::sys_fstat, fd, buf) }
         }
+
         #[cfg(target_arch = "riscv64")]
         #[cfg(all(feature = "fs", feature = "fd"))]
         fstatat => [dir_fd, pathname, buf, flags, ..] {
@@ -192,8 +195,10 @@ syscall_handler_def!(
         mkdirat => [dir_fd, path, perm, ..] {
             apply!(syscall_imp::fs::sys_mkdirat, dir_fd, path, perm)
         }
-        getdents64 => args {
-            todo!()
+        getdents64 => [fd, buf, count, ..] {
+            //apply!(sys_getdents, fd, buf, count)
+            let count:c_int = count.try_into().unwrap();
+            sys_getdents(fd as _, buf as _, count)
         }
 
         //网络相关

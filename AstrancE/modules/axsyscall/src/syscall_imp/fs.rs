@@ -73,3 +73,8 @@ pub fn sys_chdir(path: *const c_char) -> SyscallResult {
         Err(e) => SyscallResult::Err(e.into()),
     }
 }
+
+#[inline]
+pub fn sys_getdents(fd: c_int, dirp: *mut ctypes::dirent, count: c_int) -> SyscallResult {
+    unsafe { api::sys_getdents(fd, dirp, count) }
+}
