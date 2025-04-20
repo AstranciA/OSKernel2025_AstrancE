@@ -48,4 +48,3 @@ pub fn copy_from_kernel(aspace: &mut axmm::AddrSpace) -> AxResult {
 
     Ok(())
 }
-

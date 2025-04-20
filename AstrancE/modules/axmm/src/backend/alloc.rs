@@ -227,7 +227,9 @@ impl Backend {
             }
             VmAreaType::Mmap(mmio) => {
                 let flags = orig_flags;
-                aspace.map_mmap(mmio, vaddr, PageSize::Size4K, flags).is_ok()
+                aspace
+                    .map_mmap(mmio, vaddr, PageSize::Size4K, flags)
+                    .is_ok()
             }
             VmAreaType::Elf => todo!(),
             VmAreaType::Heap => todo!(),

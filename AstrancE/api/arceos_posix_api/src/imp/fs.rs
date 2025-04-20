@@ -222,7 +222,12 @@ pub unsafe fn sys_fstatat(
 
     let dir = Directory::from_fd(dirfd)?;
     // FIXME: correct path; flags
-    let file: File = File::new(dir.inner.lock().open_file_at(dirname, &flags_to_options(flags, 0))?, dirname.into());
+    let file: File = File::new(
+        dir.inner
+            .lock()
+            .open_file_at(dirname, &flags_to_options(flags, 0))?,
+        dirname.into(),
+    );
     let stat = file.stat()?;
     unsafe { *statbuf = stat };
     Ok(0)

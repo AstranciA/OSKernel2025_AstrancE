@@ -1,9 +1,9 @@
 use core::fmt::Debug;
 
-use memory_addr::{FrameTracker, PhysAddr, VirtAddr, PAGE_SIZE_4K};
+use memory_addr::{FrameTracker, PAGE_SIZE_4K, PhysAddr, VirtAddr};
 use memory_set::MappingBackend;
 
-use crate::{backend::alloc::dealloc_frame, Backend};
+use crate::{Backend, backend::alloc::dealloc_frame};
 
 /* TODO:
  *enum FrameTracker {
@@ -14,19 +14,17 @@ use crate::{backend::alloc::dealloc_frame, Backend};
  */
 #[derive(Clone)]
 pub struct FrameTrackerImpl {
-    pub pa: PhysAddr
+    pub pa: PhysAddr,
 }
 
 /// Implement of FrameTracker.
- /// The methods should not be used in user momery space or pa will be invalid
+/// The methods should not be used in user momery space or pa will be invalid
 impl FrameTracker for FrameTrackerImpl {
     const PAGE_SIZE: usize = PAGE_SIZE_4K;
 
     fn new(pa: PhysAddr) -> Self {
         //debug!("FrameTrackerImpl::new({:#x})", pa);
-        Self {
-            pa
-        }
+        Self { pa }
     }
 
     /// Don't use this method. Frame should be allocated by Backend::map
@@ -34,7 +32,6 @@ impl FrameTracker for FrameTrackerImpl {
         //Backend::Alloc { populate: true }.map(start, size, flags, page_table)
         panic!("frame should be allocated by Backend::map")
     }
-
 
     fn start(&self) -> PhysAddr {
         self.pa
@@ -47,7 +44,7 @@ impl FrameTracker for FrameTrackerImpl {
     }
 }
 
- impl Debug for FrameTrackerImpl  {
+impl Debug for FrameTrackerImpl {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         write!(f, "Frame {{ {:#x} }}", self.pa)
     }

@@ -4,11 +4,9 @@ use core::ffi::c_char;
 use core::ffi::c_int;
 
 #[cfg(feature = "pipe")]
-
 #[inline]
 pub fn sys_pipe(fds: &mut [c_int]) -> SyscallResult {
     use crate::ToLinuxResult;
 
     api::sys_pipe(fds).to_linux_result()
 }
-

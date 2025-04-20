@@ -1,6 +1,6 @@
 use core::{
     error,
-    ffi::{c_char, c_void, CStr},
+    ffi::{CStr, c_char, c_void},
 };
 
 use crate::{
@@ -11,12 +11,12 @@ use crate::{
 use alloc::sync::Arc;
 use arceos_posix_api::{self as api, get_file_like, sys_read};
 use axerrno::{AxError, LinuxError};
-use axfs::{api::set_current_dir, fops::Directory, CURRENT_DIR};
-use axhal::trap::{register_trap_handler, SYSCALL};
+use axfs::{CURRENT_DIR, api::set_current_dir, fops::Directory};
+use axhal::trap::{SYSCALL, register_trap_handler};
 use axhal::{arch::TrapFrame, time::nanos_to_ticks};
 use axmm::{MmapFlags, MmapPerm};
-use axsyscall::{syscall_handler_def, ToLinuxResult};
-use axtask::{current, CurrentTask, TaskExtMut, TaskExtRef};
+use axsyscall::{ToLinuxResult, syscall_handler_def};
+use axtask::{CurrentTask, TaskExtMut, TaskExtRef, current};
 use memory_addr::MemoryAddr;
 use syscalls::Sysno;
 

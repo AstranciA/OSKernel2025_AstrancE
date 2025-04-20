@@ -1,4 +1,4 @@
-use crate::{SyscallResult, ToLinuxResult };
+use crate::{SyscallResult, ToLinuxResult};
 use arceos_posix_api::{self as api, ctypes};
 
 #[inline]

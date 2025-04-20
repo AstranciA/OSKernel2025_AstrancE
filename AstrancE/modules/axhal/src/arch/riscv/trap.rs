@@ -5,7 +5,7 @@ use riscv::register::{scause, stval};
 
 use super::TrapFrame;
 
-use crate::trap::{pre_trap, post_trap};
+use crate::trap::{post_trap, pre_trap};
 
 core::arch::global_asm!(
     include_asm_macros!(),

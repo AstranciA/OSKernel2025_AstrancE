@@ -7,7 +7,7 @@ use core::ffi::c_void;
 
 #[inline]
 pub fn sys_read(fd: usize, buf: &mut [u8]) -> SyscallResult {
-     api::sys_read(fd as i32, buf.as_mut_ptr() as *mut c_void, buf.len()) .to_linux_result()
+    api::sys_read(fd as i32, buf.as_mut_ptr() as *mut c_void, buf.len()).to_linux_result()
 }
 
 #[inline]

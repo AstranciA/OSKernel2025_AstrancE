@@ -12,7 +12,10 @@ use lazyinit::LazyInit;
 use spin::RwLock;
 
 use crate::{
-    api::{self, FileType}, dev::Disk, fs::{self}, mounts
+    api::{self, FileType},
+    dev::Disk,
+    fs::{self},
+    mounts,
 };
 
 def_resource! {
@@ -336,7 +339,7 @@ pub(crate) fn rename(old: &str, new: &str) -> AxResult {
     parent_node_of(None, old).rename(old, new)
 }
 
-pub fn mount(source: &'static str, target: &'static str, flags: usize) -> AxResult{
+pub fn mount(source: &'static str, target: &'static str, flags: usize) -> AxResult {
     let img = crate::api::File::open(source)?;
     warn!("mounting {} to {}", source, target);
     let fs = fs::lwext4_rust::Ext4FileSystem::new(img);
