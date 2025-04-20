@@ -9,6 +9,7 @@ use crate::{
     task::{self, time_stat_from_user_to_kernel, time_stat_ns, time_stat_output},
 };
 use alloc::sync::Arc;
+use core::ffi::c_int;
 use arceos_posix_api::{self as api, get_file_like, sys_read};
 use axfs::{CURRENT_DIR, api::set_current_dir, fops::Directory};
 use axhal::{arch::TrapFrame, time::nanos_to_ticks};
@@ -128,7 +129,7 @@ fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> Option<isize> {
                 perm,
                 flags,
                 Arc::new(MmapIOImpl {
-                    fd: fd.try_into().unwrap(),
+                    fd: fd as c_int,
                     file_offset: offset.try_into().unwrap(),
                 }),
                 false,

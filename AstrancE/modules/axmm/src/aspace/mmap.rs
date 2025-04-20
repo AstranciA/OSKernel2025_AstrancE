@@ -126,11 +126,11 @@ impl AddrSpace {
         let mut map_flags: MappingFlags = perm.into();
         map_flags.union(MappingFlags::DEVICE);
 
-        #[cfg(feature = "COW")]
-        // TODO: Why check flags here?
-        if flags.contains(MmapFlags::MAP_PRIVATE) {
-            map_flags = (map_flags - MappingFlags::WRITE) | MappingFlags::COW;
-        }
+        // #[cfg(feature = "COW")]
+        // // TODO: Why check flags here?
+        // if flags.contains(MmapFlags::MAP_PRIVATE) {
+        //     map_flags = (map_flags - MappingFlags::WRITE) | MappingFlags::COW;
+        // }
 
         let area = MemoryArea::new_mmap(
             start,
@@ -158,8 +158,8 @@ impl AddrSpace {
     ) -> AxResult {
         debug_assert!(vaddr.is_aligned_4k());
         let mut flags = orig_flags | MappingFlags::READ | MappingFlags::USER;
-        #[cfg(feature = "COW")]
-        MappingFlags::mark_cow(&mut flags);
+        // #[cfg(feature = "COW")]
+        // MappingFlags::mark_cow(&mut flags);
 
         if let Some(frame) = alloc_frame(true) {
             if self

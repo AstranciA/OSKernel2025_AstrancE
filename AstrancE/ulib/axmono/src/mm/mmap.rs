@@ -16,6 +16,9 @@ pub struct MmapIOImpl {
 impl MmapIO for MmapIOImpl {
     fn read(&self, start: usize, buf: &mut [u8]) {
         let fd = self.fd;
+        if fd <= 0{
+            return;
+        }
         let start: ctypes::off_t = start.try_into().unwrap();
         let prev = sys_lseek(fd, 0, 1);
         let curr = sys_lseek(fd, start + self.file_offset, 0);
