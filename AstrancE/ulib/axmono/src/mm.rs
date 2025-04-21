@@ -1,8 +1,6 @@
 pub mod mmap;
-use alloc::string::{String, ToString};
-use core::sync::atomic::{AtomicUsize, Ordering};
+use alloc::string::String;
 use axerrno::AxResult;
-use memory_addr::MemoryAddr;
 use axhal::{
     mem::VirtAddr,
     paging::MappingFlags,
@@ -10,9 +8,10 @@ use axhal::{
 };
 use axmm::AddrSpace;
 use axtask::{TaskExtRef, current};
+use memory_addr::MemoryAddr;
 use xmas_elf::ElfFile;
 
-use crate::{copy_from_kernel, elf::ELFInfo, loader};
+use crate::{copy_from_kernel, elf::ELFInfo};
 
 pub fn new_user_aspace_empty() -> AxResult<AddrSpace> {
     /*
@@ -70,9 +69,7 @@ pub fn map_elf_sections(
         let segement_end = segement.start_va + segement.size;
         debug!(
             "Mapping ELF segment: [{:#x?}, {:#x?}) flags: {:#x?}",
-            segement.start_va,
-            segement_end,
-            segement.flags
+            segement.start_va, segement_end, segement.flags
         );
 
         uspace.map_alloc(segement.start_va, segement.size, segement.flags, true)?;
@@ -88,7 +85,10 @@ pub fn map_elf_sections(
 
     // heap
     #[cfg(feature = "heap")]
-    uspace.init_heap(axconfig::plat::USER_HEAP_BASE.into(),axconfig::plat::USER_HEAP_SIZE);
+    uspace.init_heap(
+        axconfig::plat::USER_HEAP_BASE.into(),
+        axconfig::plat::USER_HEAP_SIZE,
+    );
 
     // The user stack is divided into two parts:
     // `ustack_start` -> `ustack_pointer`: It is the stack space that users actually read and write.
@@ -133,5 +133,3 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
 
     aspace.handle_page_fault(vaddr, access_flags)
 }
-
-

@@ -37,6 +37,7 @@ typedef struct {{
 
         let allow_types = [
             "stat",
+            "dirent",
             "size_t",
             "ssize_t",
             "off_t",

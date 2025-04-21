@@ -90,7 +90,7 @@ impl TrapFrame {
     pub fn set_user_sp(&mut self, user_sp: usize) {
         self.regs.sp = user_sp;
     }
-    
+
     /// increase sepc
     pub fn inc_sepc(&mut self) {
         self.sepc += 4usize;

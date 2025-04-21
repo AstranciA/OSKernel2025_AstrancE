@@ -82,6 +82,7 @@ SECTIONS
         _ebss = .;
     }
 
+
     _ekernel = .;
 
 	/DISCARD/ : {

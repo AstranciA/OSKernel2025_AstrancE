@@ -5,7 +5,7 @@ use loongArch64::register::{
 };
 use page_table_entry::MappingFlags;
 
-use crate::trap::{pre_trap, post_trap};
+use crate::trap::{post_trap, pre_trap};
 
 core::arch::global_asm!(
     include_asm_macros!(),

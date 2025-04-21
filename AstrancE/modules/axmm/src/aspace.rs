@@ -1,6 +1,4 @@
 use core::fmt;
-use core::ops::Add;
-
 use axerrno::{AxError, AxResult, ax_err};
 use axhal::mem::phys_to_virt;
 use axhal::paging::{MappingFlags, PageTable, PagingError};
@@ -306,7 +304,7 @@ impl AddrSpace {
                     .contains_range(VirtAddrRange::from_start_size(area.start(), area.size())),
                 "MemorySet contains out-of-va-range area"
             );
-            area.unmap_area(&mut self.pt);
+            area.unmap_area(&mut self.pt).map_err(mapping_err_to_ax_err)?;
         } else {
             return ax_err!(InvalidInput, "Invalid area addr");
         }
@@ -423,6 +421,7 @@ impl AddrSpace {
         mut range: VirtAddrRange,
         access_flags: MappingFlags,
     ) -> bool {
+        // TODO: COW
         for area in self.areas.iter() {
             if area.end() <= range.start {
                 continue;
@@ -457,7 +456,6 @@ impl AddrSpace {
         }
         if let Some(area) = self.areas.find(vaddr) {
             let orig_flags = area.flags();
-            info!("123: , {orig_flags:?}");
             #[cfg(feature = "COW")]
             if orig_flags.contains(access_flags) || orig_flags.contains(MappingFlags::COW) {
                 let backed = area.backend().clone();
@@ -533,13 +531,12 @@ impl AddrSpace {
 
         for area in self.areas.iter() {
             // Remap the memory areajin the new address space.
-            let backend = area.backend();
             let mut flags = area.flags();
             if flags.contains(MappingFlags::WRITE) {
                 flags = (flags - MappingFlags::WRITE) | MappingFlags::COW;
             }
 
-            new_aspace.areas.insert(area.clone());
+            new_aspace.areas.insert(area.clone()).map_err(mapping_err_to_ax_err)?;
             for vaddr in
                 PageIter4K::new(area.start(), area.end()).expect("Failed to create page iterator")
             {
@@ -565,7 +562,7 @@ impl AddrSpace {
                 start,
                 size,
                 (flags - MappingFlags::WRITE) | MappingFlags::COW,
-            );
+            )?;
         }
 
         Ok(new_aspace)

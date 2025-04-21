@@ -1,8 +1,8 @@
 use alloc::vec::Vec;
 use axfs_vfs::VfsNodeOps;
 use axio::{Result, SeekFrom, default_read_to_end, prelude::*};
-use lwext4_rust::KernelDevOp;
 use core::fmt;
+use lwext4_rust::KernelDevOp;
 
 use crate::fops;
 
@@ -224,7 +224,8 @@ impl KernelDevOp for File {
 
     fn flush(dev: &mut Self::DevType) -> core::result::Result<usize, i32>
     where
-        Self: Sized {
+        Self: Sized,
+    {
         // TODO: correct return value
         match dev.flush() {
             Ok(_) => Ok(0),
@@ -232,4 +233,3 @@ impl KernelDevOp for File {
         }
     }
 }
-

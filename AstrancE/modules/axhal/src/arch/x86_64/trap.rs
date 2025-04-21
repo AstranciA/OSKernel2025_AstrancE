@@ -4,7 +4,7 @@ use x86_64::structures::idt::PageFaultErrorCode;
 
 use super::context::TrapFrame;
 
-use crate::trap::{pre_trap, post_trap};
+use crate::trap::{post_trap, pre_trap};
 
 core::arch::global_asm!(include_str!("trap.S"));
 

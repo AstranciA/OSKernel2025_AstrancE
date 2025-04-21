@@ -1,7 +1,9 @@
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
-use axfs::api::create_dir;
-use core::ffi::{c_char, c_int};
+use axfs::api::{DirEntry, create_dir, read_dir};
+use axfs_vfs::{VfsDirEntry, VfsNodeType};
+use core::ffi::{c_char, c_int, c_void};
+use static_assertions::assert_eq_size;
 
 use axerrno::{LinuxError, LinuxResult};
 use axfs::fops::OpenOptions;
@@ -10,6 +12,8 @@ use axsync::Mutex;
 
 use super::fd_ops::{FileLike, get_file_like};
 use crate::AT_FDCWD;
+use crate::ctypes::__IncompleteArrayField;
+use crate::utils::str_to_cstr;
 use crate::{ctypes, utils::char_ptr_to_str};
 
 /// File wrapper for `axfs::fops::File`.
@@ -188,15 +192,11 @@ pub fn sys_mkdirat(dirfd: c_int, dirname: *const c_char, mode: ctypes::mode_t) -
         Err(_) => return -1,
     };
 
-    debug!(
-        "sys_mkdirat <= {} {:?} {:#o}",
-        dirfd, dirname, mode
-    );
+    debug!("sys_mkdirat <= {} {:?} {:#o}", dirfd, dirname, mode);
 
     if dirname.starts_with('/') || dirfd == AT_FDCWD as _ {
-        //return sys_open(filename.as_ptr() as _, flags, mode);
         return create_dir(dirname).and(Ok(0)).unwrap_or_else(|e| {
-            debug!("sys_openat => {}", e);
+            debug!("sys_mkdirat => {}", e);
             -1
         });
     }
@@ -207,9 +207,34 @@ pub fn sys_mkdirat(dirfd: c_int, dirname: *const c_char, mode: ctypes::mode_t) -
             Ok(0)
         })
         .unwrap_or_else(|e| {
-            debug!("sys_openat => {}", e);
+            debug!("sys_mkdirat => {}", e);
             -1
         })
+}
+
+/// Create a directory by `dirname` relatively to `dirfd`.
+/// TODO: handle `mode`
+pub unsafe fn sys_fstatat(
+    dirfd: c_int,
+    dirname: *const c_char,
+    statbuf: *mut ctypes::stat,
+    flags: c_int,
+) -> LinuxResult<c_int> {
+    let dirname = char_ptr_to_str(dirname)?;
+
+    debug!("sys_fstatat <= {} {:?} {:#o}", dirfd, dirname, flags);
+
+    let dir = Directory::from_fd(dirfd)?;
+    // FIXME: correct path; flags
+    let file: File = File::new(
+        dir.inner
+            .lock()
+            .open_file_at(dirname, &flags_to_options(flags, 0))?,
+        dirname.into(),
+    );
+    let stat = file.stat()?;
+    unsafe { *statbuf = stat };
+    Ok(0)
 }
 
 /// Use the function to open file or directory, then add into file descriptor table.
@@ -383,8 +408,28 @@ impl FileLike for Directory {
         Err(LinuxError::EBADF)
     }
 
+    /*
+     *fn stat(&self) -> LinuxResult<ctypes::stat> {
+     *    Err(LinuxError::EBADF)
+     *}
+     */
+
     fn stat(&self) -> LinuxResult<ctypes::stat> {
-        Err(LinuxError::EBADF)
+        let metadata = self.inner.lock().get_attr()?;
+        let ty = metadata.file_type() as u8;
+        let perm = metadata.perm().bits() as u32;
+        let st_mode = ((ty as u32) << 12) | perm;
+        Ok(ctypes::stat {
+            st_ino: 1,
+            st_nlink: 1,
+            st_mode,
+            st_uid: 1000,
+            st_gid: 1000,
+            st_size: metadata.size() as _,
+            st_blocks: metadata.blocks() as _,
+            st_blksize: 512,
+            ..Default::default()
+        })
     }
 
     fn into_any(self: Arc<Self>) -> Arc<dyn core::any::Any + Send + Sync> {
@@ -401,4 +446,50 @@ impl FileLike for Directory {
     fn set_nonblocking(&self, _nonblocking: bool) -> LinuxResult {
         Ok(())
     }
+}
+
+pub unsafe fn sys_getdents(
+    dir_fd: i32,
+    buf: *mut ctypes::dirent,
+    count: c_int,
+) -> LinuxResult<isize> {
+    let dir: Arc<Directory> = Directory::from_fd(dir_fd)?;
+    let mut curr_dent = buf;
+    let count = count.try_into().map_err(|_| LinuxError::EINVAL)?;
+    let mut inner = dir.inner.lock();
+    let end = (buf as *const u8).wrapping_add(count);
+    let dirent_size = core::mem::size_of::<ctypes::dirent>();
+    // TODO: support file name longer than 64 bytes
+    // 64 : sizeof [char; 64];
+    let mut nread = 0;
+    while (curr_dent as *const u8).wrapping_add(dirent_size + 64) < end {
+        nread += 1;
+        let mut dirent_buf = [VfsDirEntry::default()];
+        if inner.read_dir(&mut dirent_buf).is_err() {
+            return Ok(0);
+        };
+
+        let name = dirent_buf[0].name_as_bytes();
+        let name = unsafe { String::from_utf8_lossy(name) };
+        assert!(name.len() < 64);
+        let d_reclen = core::mem::size_of::<ctypes::dirent>() + name.len() + 1;
+        unsafe {
+            *curr_dent = ctypes::dirent {
+                d_ino: 1,
+                d_off: 0,
+                d_reclen: d_reclen as u16,
+                d_type: dirent_buf[0].entry_type() as u8,
+                d_name: __IncompleteArrayField::<u8>::new(),
+            };
+            let mut name_ptr =
+                (curr_dent as *mut u8).wrapping_add(19); // offset of d_name in dirent
+            let str_len = str_to_cstr(&name, name_ptr);
+            // FIXME: align struct?? 
+            curr_dent = name_ptr.wrapping_add(str_len) as *mut _;
+        };
+        // cut off d_name at `\0`
+    }
+    error!("{nread}");
+
+    return Ok(nread);
 }

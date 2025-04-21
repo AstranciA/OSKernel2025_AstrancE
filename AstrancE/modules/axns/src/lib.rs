@@ -22,7 +22,7 @@
 extern crate alloc;
 
 use alloc::sync::Arc;
-use core::{alloc::Layout, fmt, ops::Deref, panic::PanicInfo};
+use core::{alloc::Layout, fmt, ops::Deref};
 
 use lazyinit::LazyInit;
 

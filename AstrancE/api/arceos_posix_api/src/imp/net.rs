@@ -579,4 +579,3 @@ pub unsafe fn sys_getpeername(
         Ok(0)
     })
 }
-

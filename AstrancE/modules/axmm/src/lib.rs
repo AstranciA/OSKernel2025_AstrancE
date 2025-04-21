@@ -13,7 +13,7 @@ pub mod heap;
 
 pub use self::aspace::AddrSpace;
 pub use self::backend::Backend;
-pub use aspace::mmap::{MmapIO, MmapFlags, MmapPerm};
+pub use aspace::mmap::{MmapFlags, MmapIO, MmapPerm};
 
 use axerrno::{AxError, AxResult};
 use axhal::mem::phys_to_virt;

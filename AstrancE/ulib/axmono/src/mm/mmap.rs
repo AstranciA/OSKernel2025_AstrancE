@@ -2,10 +2,6 @@ use core::ffi::{c_int, c_void};
 
 use alloc::vec::{self, Vec};
 use arceos_posix_api::{ctypes, get_file_like, sys_lseek, sys_read};
-use axfs::{
-    api::read,
-    fops::{File, OpenOptions},
-};
 use axmm::MmapIO;
 
 pub struct MmapIOImpl {

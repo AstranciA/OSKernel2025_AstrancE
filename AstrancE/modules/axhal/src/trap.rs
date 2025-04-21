@@ -59,7 +59,8 @@ pub(crate) fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
         tf.arg5(),
     ];
 
-    debug!("handling syscall: {} with args: {:?}", syscall_num, args);
+    debug!("syscall {:?} with args: {:?}", syscall_num, args);
+
     for handler in SYSCALL {
         if let Some(r) = handler(tf, syscall_num) {
             if result_count > 1 {

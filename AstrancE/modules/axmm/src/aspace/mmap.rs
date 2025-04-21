@@ -124,7 +124,7 @@ impl AddrSpace {
         debug!("mmap at: [{:#x}, {:#x})", start, start + size);
 
         let mut map_flags: MappingFlags = perm.into();
-        map_flags.union(MappingFlags::DEVICE);
+         map_flags = map_flags.union(MappingFlags::DEVICE);
 
         // #[cfg(feature = "COW")]
         // // TODO: Why check flags here?

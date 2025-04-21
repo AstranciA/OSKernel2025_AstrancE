@@ -169,6 +169,7 @@ dependencies = [
  "axerrno",
  "axfeat",
  "axfs",
+ "axfs_vfs",
  "axhal",
  "axio",
  "axlog",
@@ -553,6 +554,7 @@ dependencies = [
  "axmm",
  "axns",
  "axsync",
+ "axsyscall",
  "axtask",
  "bitflags 2.9.0",
  "crate_interface",
@@ -643,10 +645,11 @@ dependencies = [
  "axconfig",
  "axerrno",
  "axfs",
+ "axhal",
  "axlog",
  "axmm",
- "axmono",
  "axtask",
+ "linkme",
  "syscalls",
 ]
 
