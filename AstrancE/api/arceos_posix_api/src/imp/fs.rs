@@ -479,10 +479,10 @@ pub unsafe fn sys_getdents(
                 d_off: 0,
                 d_reclen: d_reclen as u16,
                 d_type: dirent_buf[0].entry_type() as u8,
-                d_name: __IncompleteArrayField::<u8>::new(),
+                d_name: __IncompleteArrayField::<c_char>::new(),
             };
             let mut name_ptr =
-                (curr_dent as *mut u8).wrapping_add(19); // offset of d_name in dirent
+                (curr_dent as *mut c_char).wrapping_add(19); // offset of d_name in dirent
             let str_len = str_to_cstr(&name, name_ptr);
             // FIXME: align struct?? 
             curr_dent = name_ptr.wrapping_add(str_len) as *mut _;

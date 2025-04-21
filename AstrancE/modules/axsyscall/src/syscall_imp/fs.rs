@@ -58,7 +58,7 @@ pub fn sys_rename(old: *const c_char, new: *const c_char) -> SyscallResult {
 #[inline]
 pub fn sys_mkdirat(dir_fd: usize, dir_path: *const c_char, mode: usize) -> SyscallResult {
     arceos_posix_api::sys_mkdirat(
-        dir_fd.try_into().unwrap(),
+        dir_fd as c_int,
         dir_path,
         mode.try_into().unwrap(),
     )

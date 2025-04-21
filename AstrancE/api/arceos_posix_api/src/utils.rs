@@ -17,18 +17,18 @@ pub fn char_ptr_to_str<'a>(str: *const c_char) -> LinuxResult<&'a str> {
 }
 
 /// Convert a Rust string to a C string
-pub unsafe fn str_to_cstr(s: &str, buf: *mut c_char) {
+pub unsafe fn str_to_cstr(s: &str, buf: *mut c_char) -> usize{
     let len = s.len();
     let dst = unsafe { core::slice::from_raw_parts_mut(buf, len + 1) };
-    let ss = unsafe {
+    let src = unsafe {
         core::slice::from_raw_parts(
             s.as_ptr() as *const c_char,
-            s.len()
+            len
         )
     };
-    dst[..len].copy_from_slice(ss);
+    dst[..len].copy_from_slice(src);
     dst[len] = (b'\0') as c_char;
-    error!("{:p},{:?}", buf,dst);
+    len + 1
 }
 
 pub fn check_null_ptr<T>(ptr: *const T) -> LinuxResult {

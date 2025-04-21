@@ -127,11 +127,8 @@ impl Backend {
         populate: bool,
     ) -> bool {
         if populate {
-            error!("221233");
             #[cfg(not(feature = "COW"))]
             return false; // Populated mappings should not trigger page faults.
-            error!("211111111111111");
-
             // should be COW page faults
             // TODO: update frame ref in addr space
             #[cfg(feature = "COW")]

@@ -13,7 +13,7 @@ use core::{
     sync::atomic::{AtomicU64, Ordering},
 };
 use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange};
-
+use axfs::api::set_current_dir;
 use crate::{
     copy_from_kernel,
     ctypes::{CloneFlags, TimeStat, WaitStatus},
@@ -218,6 +218,8 @@ pub fn spawn_user_task_inner(
                 curr.task_ext().uctx.get_sp(),
                 kstack_top,
             );
+            // FIXME:
+            set_current_dir("/musl/basic");
             unsafe { curr.task_ext().uctx.enter_uspace(kstack_top) };
         },
         app_name.into(),
