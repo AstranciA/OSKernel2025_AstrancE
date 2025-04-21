@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use axfs_vfs::VfsNodeOps;
+use axfs_vfs::{VfsNodeOps, VfsNodeRef};
 use axio::{Result, SeekFrom, default_read_to_end, prelude::*};
 use core::fmt;
 use lwext4_rust::KernelDevOp;
@@ -71,6 +71,10 @@ impl OpenOptions {
     pub fn open(&self, path: &str) -> Result<File> {
         fops::File::open(path, &self.0).map(|inner| File { inner })
     }
+
+    pub fn open_at(&self,dir: &VfsNodeRef, path: &str) -> Result<File> {
+        fops::File::open_at(dir,path, &self.0).map(|inner| File { inner })
+    }
 }
 
 impl Metadata {
@@ -130,6 +134,10 @@ impl File {
     /// Attempts to open a file in read-only mode.
     pub fn open(path: &str) -> Result<Self> {
         OpenOptions::new().read(true).open(path)
+    }
+    
+    pub fn open_at(dir: &VfsNodeRef, path: &str) -> Result<Self> {
+        OpenOptions::new().read(true).open_at(dir, path)
     }
 
     /// Opens a file in write-only mode.

@@ -201,6 +201,10 @@ impl File {
     pub fn open(path: &str, opts: &OpenOptions) -> AxResult<Self> {
         Self::_open_at(None, path, opts)
     }
+    
+    pub fn open_at(dir: &VfsNodeRef,path: &str, opts: &OpenOptions) -> AxResult<Self>{
+        Self::_open_at(Some(dir), path, opts)
+    }
 
     /// Truncates the file to the specified size.
     pub fn truncate(&self, size: u64) -> AxResult {

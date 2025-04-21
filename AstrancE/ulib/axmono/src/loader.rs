@@ -1,6 +1,8 @@
 use axerrno::{AxError, AxResult};
 use axhal::mem::VirtAddr;
 use xmas_elf::ElfFile;
+use arceos_posix_api::Directory;
+use axfs::CURRENT_DIR;
 
 /// Get the total number of applications.
 pub fn get_num_app() -> usize {
@@ -37,7 +39,8 @@ pub fn load_app_elf(idx: usize) -> ElfFile<'static> {
 }
 
 pub fn load_app_from_disk(app_path: &str) -> AxResult<ElfFile<'static>> {
-    let file = axfs::api::read(app_path)?;
+    let dir = CURRENT_DIR.lock().clone();
+    let file = axfs::api::read_at(&dir,app_path)?;
     let slice = file.leak();
     ElfFile::new(slice).map_err(|err| AxError::InvalidData)
 }

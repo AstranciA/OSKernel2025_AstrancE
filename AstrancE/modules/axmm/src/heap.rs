@@ -66,13 +66,13 @@ impl AddrSpace {
     pub fn init_heap(&mut self, heap_bottom: VirtAddr, max_size: usize) {
         assert!(self.heap.is_none(), "heap is already initialized");
         let heap = HeapSpace::new(heap_bottom, max_size);
-        error!("{:?}", heap.size());
+        debug!("{:?}", heap.size());
 
         // TODO: don't
         self.map_alloc(
             heap.base(),
             PAGE_SIZE_4K,
-            MappingFlags::READ | MappingFlags::WRITE,
+            MappingFlags::READ | MappingFlags::WRITE | MappingFlags::USER,
             true,
         )
         .expect("heap mapping failed");

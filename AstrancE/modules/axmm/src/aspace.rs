@@ -285,6 +285,11 @@ impl AddrSpace {
             );
         }
         self.areas.clear(&mut self.pt).unwrap();
+
+        #[cfg(feature = "heap")]
+        {
+            self.heap = None;
+        }
         Ok(())
     }
 
