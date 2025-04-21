@@ -29,7 +29,7 @@ macro_rules! syscall_handler_def {
                 $(
                     $(#[$attr])*
                     Sysno::$sys => {
-                        axlog::debug!("handle syscall: {}({:?})", stringify!($sys), args);
+                        axlog::debug!("handle syscall: {}({:x?})", stringify!($sys), args);
                         // TODO: remove #![feature(stmt_expr_attributes)]
                         Some((
                             #[inline(always)]
@@ -40,7 +40,7 @@ macro_rules! syscall_handler_def {
                     }
                 ),*,
                 _ => {
-                        axlog::debug!("handle syscall: {}({:?})", stringify!(none), args);
+                        //axlog::debug!("handle syscall: {}({:?})", stringify!(none), args);
                         None
                 }
             };

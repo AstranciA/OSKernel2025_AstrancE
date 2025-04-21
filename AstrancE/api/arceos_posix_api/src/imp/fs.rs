@@ -1,6 +1,7 @@
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use axfs::api::{DirEntry, create_dir, read_dir, remove_file};
+use axfs::CURRENT_DIR;
 use axfs_vfs::{VfsDirEntry, VfsNodeType};
 use core::ffi::{c_char, c_int, c_void};
 use static_assertions::assert_eq_size;
@@ -216,21 +217,26 @@ pub fn sys_mkdirat(dirfd: c_int, dirname: *const c_char, mode: ctypes::mode_t) -
 /// TODO: handle `mode`
 pub unsafe fn sys_fstatat(
     dirfd: c_int,
-    dirname: *const c_char,
+    pathname: *const c_char,
     statbuf: *mut ctypes::stat,
     flags: c_int,
 ) -> LinuxResult<c_int> {
-    let dirname = char_ptr_to_str(dirname)?;
+    let pathname = char_ptr_to_str(pathname)?;
 
-    debug!("sys_fstatat <= {} {:?} {:#o}", dirfd, dirname, flags);
+    debug!("sys_fstatat <= {} {:?} {:#o}", dirfd, pathname, flags);
 
-    let dir = Directory::from_fd(dirfd)?;
+    if pathname.starts_with('/') || dirfd == AT_FDCWD as _ {
+        let dir = CURRENT_DIR.lock().clone();
+        //Directory::new(, path)
+    }
+
+    let dir: Arc<Directory> = Directory::from_fd(dirfd)?;
     // FIXME: correct path; flags
     let file: File = File::new(
         dir.inner
             .lock()
-            .open_file_at(dirname, &flags_to_options(flags, 0))?,
-        dirname.into(),
+            .open_file_at(pathname, &flags_to_options(flags, 0))?,
+        pathname.into(),
     );
     let stat = file.stat()?;
     unsafe { *statbuf = stat };
@@ -501,7 +507,7 @@ pub fn sys_unlink(path: *const c_char) -> LinuxResult<isize> {
 }
 pub fn sys_unlinkat(dir_fd: i32, path: *const c_char) -> LinuxResult<isize> {
     if dir_fd < 0 {
-        return sys_unlink(path)
+        return sys_unlink(path);
     }
     let dir: Arc<Directory> = Directory::from_fd(dir_fd)?;
     let path = char_ptr_to_str(path).map_err(|_| LinuxError::EFAULT)?;

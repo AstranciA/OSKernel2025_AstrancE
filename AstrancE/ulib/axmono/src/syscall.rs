@@ -111,7 +111,7 @@ syscall_handler_def!(
                 perm,
                 flags,
                 Arc::new(MmapIOImpl {
-                    fd: fd.try_into().unwrap(),
+                    fd: fd as isize as i32,
                     file_offset: offset.try_into().unwrap(),
                 }),
                 false,
