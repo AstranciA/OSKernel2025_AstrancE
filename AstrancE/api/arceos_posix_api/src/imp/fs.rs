@@ -1,6 +1,6 @@
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
-use axfs::api::{DirEntry, create_dir, read_dir};
+use axfs::api::{DirEntry, create_dir, read_dir, remove_file};
 use axfs_vfs::{VfsDirEntry, VfsNodeType};
 use core::ffi::{c_char, c_int, c_void};
 use static_assertions::assert_eq_size;
@@ -157,7 +157,7 @@ pub fn sys_openat(
 ) -> c_int {
     let filename = match char_ptr_to_str(filename) {
         Ok(s) => s,
-        Err(_) => return -1,
+        Err(_) => return LinuxError::EFAULT as c_int,
     };
 
     debug!(
@@ -481,15 +481,30 @@ pub unsafe fn sys_getdents(
                 d_type: dirent_buf[0].entry_type() as u8,
                 d_name: __IncompleteArrayField::<u8>::new(),
             };
-            let mut name_ptr =
-                (curr_dent as *mut u8).wrapping_add(19); // offset of d_name in dirent
+            let mut name_ptr = (curr_dent as *mut u8).wrapping_add(19); // offset of d_name in dirent
             let str_len = str_to_cstr(&name, name_ptr);
-            // FIXME: align struct?? 
+            // FIXME: align struct??
             curr_dent = name_ptr.wrapping_add(str_len) as *mut _;
         };
         // cut off d_name at `\0`
     }
-    error!("{nread}");
 
     return Ok(nread);
+}
+
+pub fn sys_unlink(path: *const c_char) -> LinuxResult<isize> {
+    let path = char_ptr_to_str(path).map_err(|_| LinuxError::EFAULT)?;
+    warn!("sys_unlink <= {:?}", path);
+    remove_file(path)?;
+    warn!("sys_unlink <= {:?}", path);
+    Ok(0)
+}
+pub fn sys_unlinkat(dir_fd: i32, path: *const c_char) -> LinuxResult<isize> {
+    if dir_fd < 0 {
+        return sys_unlink(path)
+    }
+    let dir: Arc<Directory> = Directory::from_fd(dir_fd)?;
+    let path = char_ptr_to_str(path).map_err(|_| LinuxError::EFAULT)?;
+    dir.inner.lock().remove_file(path)?;
+    Ok(0)
 }

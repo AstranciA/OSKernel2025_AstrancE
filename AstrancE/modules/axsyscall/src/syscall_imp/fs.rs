@@ -1,9 +1,7 @@
 use crate::{SyscallResult, ToLinuxResult};
-use arceos_posix_api::char_ptr_to_str;
-use arceos_posix_api::{self as api, ctypes};
-use axfs::api::{create_dir, set_current_dir};
-use core::ffi::c_char;
-use core::ffi::c_int;
+use arceos_posix_api::{self as api, char_ptr_to_str, ctypes};
+use axfs::api::set_current_dir;
+use core::ffi::{c_char, c_int};
 
 #[inline]
 pub fn sys_openat(
@@ -67,7 +65,7 @@ pub fn sys_mkdirat(dir_fd: usize, dir_path: *const c_char, mode: usize) -> Sysca
 
 #[inline]
 pub fn sys_chdir(path: *const c_char) -> SyscallResult {
-    let ret = unsafe { char_ptr_to_str(path) }.map(|chdir_path| set_current_dir(&chdir_path));
+    let ret = char_ptr_to_str(path).map(|chdir_path| set_current_dir(&chdir_path));
     match ret {
         Ok(_) => SyscallResult::Ok(0),
         Err(e) => SyscallResult::Err(e.into()),
@@ -77,4 +75,14 @@ pub fn sys_chdir(path: *const c_char) -> SyscallResult {
 #[inline]
 pub fn sys_getdents(fd: c_int, dirp: *mut ctypes::dirent, count: c_int) -> SyscallResult {
     unsafe { api::sys_getdents(fd, dirp, count) }
+}
+
+#[inline]
+pub fn sys_unlink(path: *const c_char) -> SyscallResult {
+    api::sys_unlink(path)
+}
+
+#[inline]
+pub fn sys_unlinkat(dir_fd: c_int, path: *const c_char) -> SyscallResult {
+    api::sys_unlinkat(dir_fd, path)
 }
