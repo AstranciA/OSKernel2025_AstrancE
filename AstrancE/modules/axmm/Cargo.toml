@@ -26,5 +26,5 @@ lazyinit = "0.2"
 memory_addr = { workspace = true }
 memory_set = { workspace = true }
 kspin = "0.1"
-page_table_multiarch = "0.5"
+page_table_multiarch = { workspace = true }
 bitflags = { workspace = true }
