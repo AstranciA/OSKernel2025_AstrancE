@@ -175,6 +175,7 @@ syscall_handler_def!(
             apply!(syscall_imp::task::sys_exit, code)
         }
         getpid => _ syscall_imp::task::sys_getpid()
+        gettid => _ syscall_imp::task::sys_gettid()
         sched_yield => _ syscall_imp::task::sys_yield()
         // 时间相关系统调用
         clock_gettime => args {

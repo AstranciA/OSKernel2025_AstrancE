@@ -219,7 +219,7 @@ pub fn spawn_user_task_inner(
                 kstack_top,
             );
             // FIXME:
-            set_current_dir("/musl/basic");
+            set_current_dir("/musl");
             unsafe { curr.task_ext().uctx.enter_uspace(kstack_top) };
         },
         app_name.into(),

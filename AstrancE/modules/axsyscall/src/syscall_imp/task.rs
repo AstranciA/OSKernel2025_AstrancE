@@ -11,6 +11,12 @@ pub fn sys_getpid() -> SyscallResult {
 }
 
 #[inline]
+pub fn sys_gettid() -> SyscallResult {
+    // FIXME:
+    sys_getpid()
+}
+
+#[inline]
 #[allow(unreachable_code)]
 pub fn sys_exit(code: c_int) -> SyscallResult {
     api::sys_exit(code);

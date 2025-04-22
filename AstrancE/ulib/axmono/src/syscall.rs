@@ -9,7 +9,6 @@ use crate::{
     task::{self, time_stat_from_user_to_kernel, time_stat_ns, time_stat_output},
 };
 use alloc::sync::Arc;
-use core::ffi::c_int;
 use arceos_posix_api::{self as api, get_file_like, sys_read};
 use axerrno::{AxError, LinuxError};
 use axfs::{CURRENT_DIR, api::set_current_dir, fops::Directory};
@@ -18,6 +17,7 @@ use axhal::{arch::TrapFrame, time::nanos_to_ticks};
 use axmm::{MmapFlags, MmapPerm};
 use axsyscall::{ToLinuxResult, syscall_handler_def};
 use axtask::{CurrentTask, TaskExtMut, TaskExtRef, current};
+use core::ffi::c_int;
 use memory_addr::MemoryAddr;
 use syscalls::Sysno;
 
@@ -27,7 +27,7 @@ syscall_handler_def!(
             let clone_flags = CloneFlags::from_bits(args[0] as u32);
             if clone_flags.is_none() {
                 error!("Invalid clone flags: {:x}", args[0]);
-                axtask::exit(-1); // FIXME: return error code
+                return Err(LinuxError::EINVAL);
             }
             let clone_flags = clone_flags.unwrap();
             let sp = args[1];
@@ -106,6 +106,7 @@ syscall_handler_def!(
             let fd = args[4];
             //let file = get_file_like(args[4].try_into().unwrap()).expect("invalid file descriptor");
             let offset = args[5];
+            error!("mmap flags: {flags:?}");
             if let Ok(va) = aspace.mmap(
                 args[0].into(),
                 args[1],
@@ -114,6 +115,7 @@ syscall_handler_def!(
                 Arc::new(MmapIOImpl {
                     fd: fd as c_int,
                     file_offset: offset.try_into().unwrap(),
+                    flags
                 }),
                 false,
             ) {

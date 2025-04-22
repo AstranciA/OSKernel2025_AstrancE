@@ -1,7 +1,7 @@
-use core::fmt;
 use axerrno::{AxError, AxResult, ax_err};
 use axhal::mem::phys_to_virt;
 use axhal::paging::{MappingFlags, PageTable, PagingError};
+use core::fmt;
 use memory_addr::{
     MemoryAddr, PAGE_SIZE_4K, PageIter4K, PhysAddr, VirtAddr, VirtAddrRange, is_aligned_4k,
 };
@@ -84,7 +84,7 @@ impl AddrSpace {
 
     /// Remap a vaddr to a new frame.pub fn remap_frame(&mut self, vaddr:
     /// B::Addr, new_frame: B::FrameTrackerImpl) {
-    pub fn remap_frame(
+    pub fn remap(
         &mut self,
         vaddr: VirtAddr,
         new_frame: <Backend as MappingBackend>::FrameTrackerRef,
@@ -304,7 +304,8 @@ impl AddrSpace {
                     .contains_range(VirtAddrRange::from_start_size(area.start(), area.size())),
                 "MemorySet contains out-of-va-range area"
             );
-            area.unmap_area(&mut self.pt).map_err(mapping_err_to_ax_err)?;
+            area.unmap_area(&mut self.pt)
+                .map_err(mapping_err_to_ax_err)?;
         } else {
             return ax_err!(InvalidInput, "Invalid area addr");
         }
@@ -456,6 +457,7 @@ impl AddrSpace {
         }
         if let Some(area) = self.areas.find(vaddr) {
             let orig_flags = area.flags();
+            debug!("Page fault original flags: {:?}", orig_flags);
             #[cfg(feature = "COW")]
             if orig_flags.contains(access_flags) || orig_flags.contains(MappingFlags::COW) {
                 let backed = area.backend().clone();
@@ -527,19 +529,32 @@ impl AddrSpace {
     pub fn clone_on_write(&mut self) -> AxResult<Self> {
         use alloc::vec::Vec;
 
+        use crate::backend::VmAreaType;
+
         let mut new_aspace = Self::new_empty(self.base(), self.size())?;
 
         for area in self.areas.iter() {
             // Remap the memory areajin the new address space.
             let mut flags = area.flags();
-            if flags.contains(MappingFlags::WRITE) {
-                flags = (flags - MappingFlags::WRITE) | MappingFlags::COW;
+            if let Backend::Alloc {
+                va_type,
+                populate: _,
+            } = area.backend()
+            {
+                if let VmAreaType::Normal = va_type {
+                    flags = MappingFlags::mark_cow(flags);
+                }
             }
+            let area = area.clone_(flags);
 
-            new_aspace.areas.insert(area.clone()).map_err(mapping_err_to_ax_err)?;
+            new_aspace
+                .areas
+                .insert(area.clone())
+                .map_err(mapping_err_to_ax_err)?;
             for vaddr in
                 PageIter4K::new(area.start(), area.end()).expect("Failed to create page iterator")
             {
+                // TODO: query from FrameTracker Table?
                 let addr = match self.pt.query(vaddr) {
                     Ok((paddr, _, _)) => paddr,
                     // If the page is not mapped, skip it.
@@ -551,18 +566,14 @@ impl AddrSpace {
             }
         }
 
-        let cow_areas: Vec<(VirtAddr, usize, MappingFlags)> = self
+        let cow_areas: Vec<(VirtAddr, usize, MappingFlags)> = new_aspace
             .areas
             .iter()
             .filter(|area| area.flags().contains(MappingFlags::COW))
             .map(|area| (area.start(), area.size(), area.flags()))
             .collect();
         for (start, size, flags) in cow_areas {
-            self.protect(
-                start,
-                size,
-                (flags - MappingFlags::WRITE) | MappingFlags::COW,
-            )?;
+            self.protect(start, size, flags)?;
         }
 
         Ok(new_aspace)
