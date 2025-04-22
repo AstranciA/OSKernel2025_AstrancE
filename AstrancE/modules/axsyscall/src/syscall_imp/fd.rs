@@ -1,6 +1,6 @@
 use crate::SyscallResult;
 use crate::ToLinuxResult;
-use arceos_posix_api::{self as api, ctypes};
+use arceos_posix_api::{self as api};
 use core::ffi::c_char;
 use core::ffi::c_int;
 

@@ -73,6 +73,7 @@ impl From<MmapPerm> for MappingFlags {
 pub trait MmapIO: Send + Sync {
     fn read(&self, offset: usize, buf: &mut [u8]);
     fn write(&self, offset: usize, data: &[u8]);
+    fn flags(&self) -> MmapFlags;
 }
 
 impl AddrSpace {
@@ -124,7 +125,11 @@ impl AddrSpace {
         debug!("mmap at: [{:#x}, {:#x})", start, start + size);
 
         let mut map_flags: MappingFlags = perm.into();
-         map_flags = map_flags.union(MappingFlags::DEVICE);
+        // Lazy mapping.
+        if !populate && !flags.contains(MmapFlags::MAP_ANONYMOUS) {
+            map_flags.remove(MappingFlags::READ)
+        };
+        map_flags = map_flags.union(MappingFlags::DEVICE);
 
         // #[cfg(feature = "COW")]
         // // TODO: Why check flags here?
@@ -157,13 +162,12 @@ impl AddrSpace {
         orig_flags: MappingFlags,
     ) -> AxResult {
         debug_assert!(vaddr.is_aligned_4k());
-        let mut flags = orig_flags | MappingFlags::READ | MappingFlags::USER;
+        let flags = orig_flags | MappingFlags::READ | MappingFlags::USER;
         // #[cfg(feature = "COW")]
         // MappingFlags::mark_cow(&mut flags);
 
         if let Some(frame) = alloc_frame(true) {
-            if self
-                .page_table()
+            if let Err(_) = self.page_table()
                 // READ | WRITE for copying data from file later.
                 .map(
                     vaddr,
@@ -172,14 +176,13 @@ impl AddrSpace {
                     MappingFlags::READ | MappingFlags::WRITE,
                 )
                 .map(|tlb| tlb.flush())
-                .is_err()
             {
-                return Err(AxError::BadAddress);
+                return ax_err!(BadAddress);
             }
 
             let area = match self.areas.find_mut(vaddr) {
                 Some(area) => area,
-                None => return Err(AxError::BadAddress),
+                None => return ax_err!(BadAddress),
             };
             debug!(
                 "pa: {:?}, start: {:?}, end: {:?}, flags: {:?}",

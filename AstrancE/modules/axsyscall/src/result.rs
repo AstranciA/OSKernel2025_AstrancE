@@ -12,7 +12,7 @@ impl LinuxResultToIsize for SyscallResult {
     fn as_isize(self) -> isize {
         match self {
             Ok(val) => val,
-            Err(e) => e.code() as isize,
+            Err(e) => -e.code() as isize,
         }
     }
 }

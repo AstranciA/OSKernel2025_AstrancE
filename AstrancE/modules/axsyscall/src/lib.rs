@@ -3,19 +3,14 @@
 // #![cfg(test)]
 
 mod test;
-#[macro_use]
-use core::fmt::Debug;
 extern crate axlog;
-use axerrno::{AxError, LinuxError, LinuxResult};
-use syscall_imp::{fs::{sys_chdir, sys_getdents}, sys::sys_uname};
-use syscalls::Sysno;
-mod syscall_imp;
-use arceos_posix_api::{char_ptr_to_str, ctypes, FD_TABLE};
-use axfs::{
-    CURRENT_DIR,
-    api::{create_dir, current_dir, set_current_dir},
-    fops::Directory,
+use axerrno::LinuxError;
+use syscall_imp::{
+    fs::{sys_chdir, sys_getdents},
+    sys::sys_uname,
 };
+mod syscall_imp;
+use arceos_posix_api::ctypes;
 use core::ffi::*;
 pub mod result;
 pub use result::{SyscallResult, ToLinuxResult};
@@ -34,7 +29,7 @@ macro_rules! syscall_handler_def {
                 $(
                     $(#[$attr])*
                     Sysno::$sys => {
-                        axlog::debug!("handle syscall: {}({:?})", stringify!($sys), args);
+                        axlog::debug!("handle syscall: {}({:x?})", stringify!($sys), args);
                         // TODO: remove #![feature(stmt_expr_attributes)]
                         Some((
                             #[inline(always)]
@@ -45,7 +40,7 @@ macro_rules! syscall_handler_def {
                     }
                 ),*,
                 _ => {
-                        axlog::debug!("handle syscall: {}({:?})", stringify!(none), args);
+                        //axlog::debug!("handle syscall: {}({:?})", stringify!(none), args);
                         None
                 }
             };
@@ -92,9 +87,33 @@ syscall_handler_def!(
             apply!(syscall_imp::fd::sys_close, fd)
         }
 
+        #[cfg(all(feature = "fs", target_arch = "x86_64"))]
+        unlink => [path_name, ..] {
+             apply!(syscall_imp::fs::sys_unlink, path_name)
+        }
+
         #[cfg(all(feature = "fs", feature = "fd"))]
-        statfs => args {
+        unlinkat => [dirfd, path_name, ..] {
+             apply!(syscall_imp::fs::sys_unlinkat, dirfd, path_name)
+        }
+
+        #[cfg(all(feature = "fs", feature = "fd"))]
+        statfs => _args {
             todo!()
+        }
+
+        #[cfg(all(feature = "fs", feature = "fd"))]
+        chdir => [path, ..] apply!(sys_chdir, path),
+        // TODO: handle dir_fd and prem
+        #[cfg(all(feature = "fs", feature = "fd"))]
+        mkdirat => [dir_fd, path, perm, ..] {
+            apply!(syscall_imp::fs::sys_mkdirat, dir_fd, path, perm)
+        }
+        #[cfg(all(feature = "fs", feature = "fd"))]
+        getdents64 => [fd, buf, count, ..] {
+            //apply!(sys_getdents, fd, buf, count)
+            let count:c_int = count.try_into().unwrap();
+            sys_getdents(fd as _, buf as _, count)
         }
 
         /*
@@ -155,8 +174,9 @@ syscall_handler_def!(
         exit => [code,..] {
             apply!(syscall_imp::task::sys_exit, code)
         }
-        getpid => args syscall_imp::task::sys_getpid()
-        sched_yield => args syscall_imp::task::sys_yield()
+        getpid => _ syscall_imp::task::sys_getpid()
+        gettid => _ syscall_imp::task::sys_gettid()
+        sched_yield => _ syscall_imp::task::sys_yield()
         // 时间相关系统调用
         clock_gettime => args {
             let cls = args[0];
@@ -187,19 +207,6 @@ syscall_handler_def!(
         }
         // 其他系统调用
         uname => [buf, ..] apply!(sys_uname, buf),
-
-        #[cfg(all(feature = "fs", feature = "fd"))]
-        chdir => [path, ..] apply!(sys_chdir, path),
-        // TODO: handle dir_fd and prem
-        #[cfg(all(feature = "fs", feature = "fd"))]
-        mkdirat => [dir_fd, path, perm, ..] {
-            apply!(syscall_imp::fs::sys_mkdirat, dir_fd, path, perm)
-        }
-        getdents64 => [fd, buf, count, ..] {
-            //apply!(sys_getdents, fd, buf, count)
-            let count:c_int = count.try_into().unwrap();
-            sys_getdents(fd as _, buf as _, count)
-        }
 
         //网络相关
         #[cfg(feature = "net")]

@@ -59,7 +59,7 @@ pub(crate) fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
         tf.arg5(),
     ];
 
-    debug!("syscall {:?} with args: {:?}", syscall_num, args);
+    debug!("syscall {:?} with args: {:x?}", syscall_num, args);
 
     for handler in SYSCALL {
         if let Some(r) = handler(tf, syscall_num) {
@@ -71,7 +71,7 @@ pub(crate) fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
         }
     }
 
-    debug!("syscall_handler result: {:?}", result);
+    debug!("syscall_handler result: {:x?}", result);
     // 38: ENOSYS
     // TODO: loongarch ENOSYS??
     result.unwrap_or(-38)

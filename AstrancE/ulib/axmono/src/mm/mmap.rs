@@ -7,12 +7,13 @@ use axmm::MmapIO;
 pub struct MmapIOImpl {
     pub file_offset: ctypes::off_t,
     pub fd: c_int,
+    pub(crate) flags: axmm::MmapFlags,
 }
 
 impl MmapIO for MmapIOImpl {
     fn read(&self, start: usize, buf: &mut [u8]) {
         let fd = self.fd;
-        if fd <= 0{
+        if fd <= 0 {
             return;
         }
         let start: ctypes::off_t = start.try_into().unwrap();
@@ -25,5 +26,9 @@ impl MmapIO for MmapIOImpl {
 
     fn write(&self, offset: usize, data: &[u8]) {
         todo!()
+    }
+
+    fn flags(&self) -> axmm::MmapFlags {
+        self.flags
     }
 }

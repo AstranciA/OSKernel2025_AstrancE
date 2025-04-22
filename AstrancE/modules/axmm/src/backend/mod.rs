@@ -98,9 +98,6 @@ impl Backend {
         vaddr: VirtAddr,
         orig_flags: MappingFlags,
         aspace: &mut AddrSpace,
-        //areas: &mut MemorySet<Backend>,
-        //page_table: &mut PageTable,
-        //page_table: &mut PageTable,
     ) -> bool {
         match self {
             Self::Linear { .. } => false, // Linear mappings should not trigger page faults.
