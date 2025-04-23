@@ -8,11 +8,11 @@ use crate::{
     mm::mmap::MmapIOImpl,
     task::{self, time_stat_from_user_to_kernel, time_stat_ns, time_stat_output},
 };
-use alloc::sync::Arc;
-use arceos_posix_api::{self as api, get_file_like, sys_read};
+use alloc::{string::String, sync::Arc, vec::Vec};
+use axhal::trap::{PRE_TRAP, register_trap_handler};
+use arceos_posix_api::{self as api, char_ptr_to_str, get_file_like, str_vec_ptr_to_str, sys_read};
 use axerrno::{AxError, LinuxError};
 use axfs::{CURRENT_DIR, api::set_current_dir, fops::Directory};
-use axhal::trap::{SYSCALL, register_trap_handler};
 use axhal::{arch::TrapFrame, time::nanos_to_ticks};
 use axmm::{MmapFlags, MmapPerm};
 use axsyscall::{ToLinuxResult, syscall_handler_def};
@@ -67,15 +67,17 @@ syscall_handler_def!(
             }
             result
         }
-        execve => args {
-            let program_name = unsafe { CStr::from_ptr((args[0] as *const u8).cast()) };
-            // FIXME: drop curr ref?
-            match task::exec_current(program_name.to_str().expect("cannot convert").into()) {
-                Ok(()) => {
-                    unreachable!("Successful execve should not reach here");
-                }
-                Err(_) => (-1).to_linux_result(),
-            }
+        execve => [pathname, argv, envp, ..] {
+            let pathname = char_ptr_to_str(pathname as *const c_char)?;
+            let argv: Vec<String> = str_vec_ptr_to_str(argv as *const *const c_char)?.into_iter().map(|s| String::from(s)).collect();
+            let envp: Vec<String> = str_vec_ptr_to_str(envp as *const *const c_char)?.into_iter().map(|s| String::from(s)).collect();
+
+            let err = task::exec_current(
+                pathname,
+                &argv.as_slice(),
+                &envp.as_slice()
+            ).expect_err("successful execve should not reach here");
+            Err(err.into())
         }
         brk => args {
             let res = (|| -> axerrno::LinuxResult<_> {
@@ -106,7 +108,7 @@ syscall_handler_def!(
             let fd = args[4];
             //let file = get_file_like(args[4].try_into().unwrap()).expect("invalid file descriptor");
             let offset = args[5];
-            error!("mmap flags: {flags:?}");
+            error!("mmap flags: {flags:?}, perm: {perm:?}");
             if let Ok(va) = aspace.mmap(
                 args[0].into(),
                 args[1],
@@ -157,3 +159,9 @@ syscall_handler_def!(
             //unsafe { core::slice::from_raw_parts_mut(args[0] as *mut api::ctypes::tms, 1).copy_from_slice(tms); }
         }
 );
+
+#[register_trap_handler(PRE_TRAP)]
+fn pre_trap_handler(trap_frame: &TrapFrame) -> bool {
+    warn!("trap from 0x{:x?}", trap_frame.sepc);
+    true
+}

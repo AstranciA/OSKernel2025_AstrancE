@@ -74,7 +74,7 @@ pub struct TaskInner {
     task_ext: AxTaskExt,
 
     #[cfg(feature = "tls")]
-    tls: TlsArea,
+    pub tls: TlsArea,
 }
 
 impl TaskId {

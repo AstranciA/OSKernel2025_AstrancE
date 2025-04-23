@@ -23,10 +23,10 @@ pub static PAGE_FAULT: [fn(VirtAddr, MappingFlags, bool) -> bool];
 pub static SYSCALL: [fn(&TrapFrame, usize) -> Option<isize>];
 
 #[def_trap_handler]
-pub static PRE_TRAP: [fn() -> bool];
+pub static PRE_TRAP: [fn(&TrapFrame) -> bool];
 
 #[def_trap_handler]
-pub static POST_TRAP: [fn() -> bool];
+pub static POST_TRAP: [fn(&TrapFrame) -> bool];
 
 #[allow(unused_macros)]
 macro_rules! handle_trap {
@@ -77,10 +77,10 @@ pub(crate) fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
     result.unwrap_or(-38)
 }
 
-pub(crate) fn pre_trap() -> bool {
+pub(crate) fn pre_trap(tf: &TrapFrame) -> bool {
     let mut result = true;
     for handler in PRE_TRAP {
-        if !handler() {
+        if !handler(tf) {
             result = false;
             break;
         }
@@ -88,10 +88,10 @@ pub(crate) fn pre_trap() -> bool {
     result
 }
 
-pub(crate) fn post_trap() -> bool {
+pub(crate) fn post_trap(tf: &TrapFrame) -> bool {
     let mut result = true;
     for handler in POST_TRAP {
-        if !handler() {
+        if !handler(tf) {
             result = false;
             break;
         }

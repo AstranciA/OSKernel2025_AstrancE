@@ -129,7 +129,7 @@ impl AddrSpace {
         if !populate && !flags.contains(MmapFlags::MAP_ANONYMOUS) {
             map_flags.remove(MappingFlags::READ)
         };
-        map_flags = map_flags.union(MappingFlags::DEVICE);
+        map_flags = map_flags | MappingFlags::DEVICE;
 
         // #[cfg(feature = "COW")]
         // // TODO: Why check flags here?

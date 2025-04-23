@@ -284,7 +284,7 @@ impl<G: BaseGuard> CurrentRunQueueRef<'_, G> {
     /// and reschedule to the next task on this run queue.
     pub fn yield_current(&mut self) {
         let curr = &self.current_task;
-        trace!("task yield: {}", curr.id_name());
+        //trace!("task yield: {}", curr.id_name());
         assert!(curr.is_running());
 
         self.inner
@@ -528,11 +528,13 @@ impl AxRunQueue {
             !axhal::arch::irqs_enabled(),
             "IRQs must be disabled during scheduling"
         );
-        trace!(
-            "context switch: {} -> {}",
-            prev_task.id_name(),
-            next_task.id_name()
-        );
+        /*
+         *trace!(
+         *    "context switch: {} -> {}",
+         *    prev_task.id_name(),
+         *    next_task.id_name()
+         *);
+         */
         #[cfg(feature = "preempt")]
         next_task.set_preempt_pending(false);
         next_task.set_state(TaskState::Running);
