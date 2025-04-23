@@ -2,21 +2,22 @@
 resolver = "2"
 
 members = [
-    "modules/*",
-    #"crates/*",
+  "modules/*",
+  #"crates/*",
 
-    "api/axfeat",
-    "api/arceos_api",
-    "api/arceos_posix_api",
+  "api/axfeat",
+  "api/arceos_api",
+  "api/arceos_posix_api",
 
-    "ulib/axstd",
-    "ulib/axlibc",
+  "ulib/axstd",
+  "ulib/axlibc",
 
-    "examples/helloworld",
-    "examples/httpclient",
-    "examples/httpserver",
-    "examples/httpserver",
-    "examples/shell", "ulib/axmono",
+  "examples/helloworld",
+  "examples/httpclient",
+  "examples/httpserver",
+  "examples/httpserver",
+  "examples/shell",
+  "ulib/axmono",
 ]
 
 [workspace.package]
@@ -33,7 +34,7 @@ categories = ["os", "no-std"]
 [workspace.dependencies]
 axstd = { path = "ulib/axstd" }
 axlibc = { path = "ulib/axlibc" }
-axmono = {path = "ulib/axmono"}
+axmono = { path = "ulib/axmono" }
 arceos_api = { path = "api/arceos_api" }
 arceos_posix_api = { path = "api/arceos_posix_api" }
 axfeat = { path = "api/axfeat" }
@@ -52,10 +53,14 @@ axruntime = { path = "modules/axruntime" }
 axsync = { path = "modules/axsync" }
 axtask = { path = "modules/axtask" }
 axdma = { path = "modules/axdma" }
-axsyscall = { path = "modules/axsyscall"}
+axsyscall = { path = "modules/axsyscall" }
 acbat = { path = "modules/acbat" }
 
-syscalls = { version = "0.6.18", default-features = false }
+syscalls = { git = "https://github.com/jasonwhite/syscalls.git", default-features = false, features = [
+  "loongarch64",
+  "riscv64",
+] }
+
 memory_set = { path = "./crates/axmm_crates/memory_set" }
 memory_addr = { path = "./crates/axmm_crates/memory_addr" }
 page_table_multiarch = { path = "./crates/page_table_multiarch/page_table_multiarch" }
@@ -63,6 +68,8 @@ page_table_entry = { path = "./crates/page_table_multiarch/page_table_entry" }
 axfs_vfs = {path = "./crates/axfs_crates/axfs_vfs" }
 axfs_devfs = {path = "./crates/axfs_crates/axfs_devfs"}
 axfs_ramfs = {path ="./crates/axfs_crates/axfs_ramfs"}
+bitflags = "2.9.0"
+linkme = "0.3.32"
 
 
 #[patch.crates-io]

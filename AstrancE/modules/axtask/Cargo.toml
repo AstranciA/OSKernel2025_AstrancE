@@ -13,21 +13,22 @@ documentation = "https://arceos-org.github.io/arceos/axtask/index.html"
 default = []
 
 multitask = [
-    "dep:axconfig",
-    "dep:percpu",
-    "dep:kspin",
-    "dep:lazyinit",
-    "dep:memory_addr",
-    "dep:scheduler",
-    "dep:timer_list",
-    "kernel_guard",
-    "dep:crate_interface",
-    "dep:cpumask",
+  "dep:axconfig",
+  "dep:percpu",
+  "dep:kspin",
+  "dep:lazyinit",
+  "dep:memory_addr",
+  "dep:scheduler",
+  "dep:timer_list",
+  "kernel_guard",
+  "dep:crate_interface",
+  "dep:cpumask",
 ]
 irq = []
 tls = ["axhal/tls"]
 preempt = ["irq", "percpu?/preempt", "kernel_guard/preempt"]
 smp = ["kspin/smp"]
+sig = []
 
 sched_fifo = ["multitask"]
 sched_rr = ["multitask", "preempt"]

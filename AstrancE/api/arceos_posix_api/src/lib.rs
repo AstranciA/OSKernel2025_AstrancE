@@ -18,7 +18,7 @@ extern crate alloc;
 mod utils;
 
 mod imp;
-pub use utils::char_ptr_to_str;
+pub use utils::{char_ptr_to_str, str_vec_ptr_to_str};
 
 /// Platform-specific constants and parameters.
 pub mod config {
@@ -35,7 +35,7 @@ pub use imp::io::{sys_read, sys_write, sys_writev};
 #[cfg(feature = "fs")]
 pub use imp::path_link::{AT_FDCWD, FilePath, HARDLINK_MANAGER, handle_file_path};
 pub use imp::resources::{sys_getrlimit, sys_setrlimit};
-pub use imp::sys::sys_sysconf;
+pub use imp::sys::{UtsName, sys_sysconf, sys_uname};
 pub use imp::task::{sys_exit, sys_getpid, sys_sched_yield};
 pub use imp::time::{sys_clock_gettime, sys_get_time_of_day, sys_nanosleep};
 
@@ -45,8 +45,8 @@ pub use imp::fd_ops::{
 };
 #[cfg(feature = "fs")]
 pub use imp::fs::{
-    Directory, File, sys_fstat, sys_getcwd, sys_lseek, sys_lstat, sys_open, sys_openat, sys_rename,
-    sys_stat,
+    Directory, File, sys_fstat, sys_fstatat, sys_getcwd, sys_getdents, sys_lseek, sys_lstat,
+    sys_mkdirat, sys_open, sys_openat, sys_rename, sys_stat, sys_unlink, sys_unlinkat,
 };
 #[cfg(feature = "select")]
 pub use imp::io_mpx::sys_select;

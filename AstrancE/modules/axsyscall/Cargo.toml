@@ -10,7 +10,9 @@ repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
 [features]
-fs = ["arceos_posix_api/fs"]
+default = ["basic_impl"]
+basic_impl = []
+fs = ["arceos_posix_api/fs", "dep:axfs"]
 fd = ["arceos_posix_api/fd"]
 net = ["arceos_posix_api/net"]
 pipe = ["arceos_posix_api/pipe"]
@@ -19,7 +21,11 @@ multitask = ["arceos_posix_api/multitask"]
 syscalls = { workspace = true }
 arceos_posix_api = { workspace = true }
 axerrno = "0.1"
-axtask = {workspace = true}
-axconfig = {workspace = true}
-axmono = {workspace = true}
-axlog = {workspace = true}
+axhal = { workspace = true }
+axtask = { workspace = true }
+axfs = { workspace = true, optional = true }
+axmm = { workspace = true }
+axconfig = { workspace = true }
+axlog = { workspace = true }
+
+linkme = { workspace = true }

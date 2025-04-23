@@ -201,6 +201,10 @@ impl File {
     pub fn open(path: &str, opts: &OpenOptions) -> AxResult<Self> {
         Self::_open_at(None, path, opts)
     }
+    
+    pub fn open_at(dir: &VfsNodeRef,path: &str, opts: &OpenOptions) -> AxResult<Self>{
+        Self::_open_at(Some(dir), path, opts)
+    }
 
     /// Truncates the file to the specified size.
     pub fn truncate(&self, size: u64) -> AxResult {
@@ -381,6 +385,11 @@ impl Directory {
     /// This only works then the new path is in the same mounted fs.
     pub fn rename(&self, old: &str, new: &str) -> AxResult {
         crate::root::rename(old, new)
+    }
+
+    /// Gets the file attributes.
+    pub fn get_attr(&self) -> AxResult<FileAttr> {
+        self.access_node(Cap::empty())?.get_attr()
     }
 }
 

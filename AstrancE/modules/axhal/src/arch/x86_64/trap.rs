@@ -4,6 +4,8 @@ use x86_64::structures::idt::PageFaultErrorCode;
 
 use super::context::TrapFrame;
 
+use crate::trap::{post_trap, pre_trap};
+
 core::arch::global_asm!(include_str!("trap.S"));
 
 #[cfg(feature = "uspace")]
@@ -31,6 +33,7 @@ fn handle_page_fault(tf: &TrapFrame) {
 
 #[unsafe(no_mangle)]
 fn x86_trap_handler(tf: &mut TrapFrame) {
+    pre_trap();
     match tf.vector as u8 {
         PAGE_FAULT_VECTOR => handle_page_fault(tf),
         BREAKPOINT_VECTOR => debug!("#BP @ {:#x} ", tf.rip),
@@ -56,6 +59,7 @@ fn x86_trap_handler(tf: &mut TrapFrame) {
             );
         }
     }
+    post_trap();
 }
 
 fn vec_to_str(vec: u64) -> &'static str {

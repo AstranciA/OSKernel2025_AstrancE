@@ -22,6 +22,12 @@ pub static PAGE_FAULT: [fn(VirtAddr, MappingFlags, bool) -> bool];
 #[def_trap_handler]
 pub static SYSCALL: [fn(&TrapFrame, usize) -> Option<isize>];
 
+#[def_trap_handler]
+pub static PRE_TRAP: [fn(&TrapFrame) -> bool];
+
+#[def_trap_handler]
+pub static POST_TRAP: [fn(&TrapFrame) -> bool];
+
 #[allow(unused_macros)]
 macro_rules! handle_trap {
     ($trap:ident, $($args:tt)*) => {{
@@ -53,7 +59,8 @@ pub(crate) fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
         tf.arg5(),
     ];
 
-    debug!("handling syscall: {} with args: {:?}", syscall_num, args);
+    debug!("syscall {:?} with args: {:x?}", syscall_num, args);
+
     for handler in SYSCALL {
         if let Some(r) = handler(tf, syscall_num) {
             if result_count > 1 {
@@ -64,8 +71,30 @@ pub(crate) fn handle_syscall(tf: &TrapFrame, syscall_num: usize) -> isize {
         }
     }
 
-    debug!("syscall_handler result: {:?}", result);
+    debug!("syscall_handler result: {:x?}", result);
     // 38: ENOSYS
     // TODO: loongarch ENOSYS??
-    result.unwrap_or(38)
+    result.unwrap_or(-38)
+}
+
+pub(crate) fn pre_trap(tf: &TrapFrame) -> bool {
+    let mut result = true;
+    for handler in PRE_TRAP {
+        if !handler(tf) {
+            result = false;
+            break;
+        }
+    }
+    result
+}
+
+pub(crate) fn post_trap(tf: &TrapFrame) -> bool {
+    let mut result = true;
+    for handler in POST_TRAP {
+        if !handler(tf) {
+            result = false;
+            break;
+        }
+    }
+    result
 }

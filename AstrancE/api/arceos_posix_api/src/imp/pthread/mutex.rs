@@ -8,7 +8,7 @@ use core::mem::{ManuallyDrop, size_of};
 
 /*
 * WARN:
-* TOOD: 
+* TOOD:
  *static_assertions::const_assert_eq!(
  *    size_of::<ctypes::pthread_mutex_t>(),
  *    size_of::<PthreadMutex>()

@@ -548,3 +548,9 @@ impl LinuxError {
         }
     }
 }
+
+impl From<axerrno::LinuxError> for LinuxError {
+    fn from(value: axerrno::LinuxError) -> Self {
+        Self::try_from(value as i32 as isize).unwrap()
+    }
+}

@@ -37,6 +37,7 @@ typedef struct {{
 
         let allow_types = [
             "stat",
+            "dirent",
             "size_t",
             "ssize_t",
             "off_t",
@@ -44,6 +45,7 @@ typedef struct {{
             "sock.*",
             "fd_set",
             "timeval",
+            "tms",
             "pthread_t",
             "pthread_attr_t",
             "pthread_mutex_t",

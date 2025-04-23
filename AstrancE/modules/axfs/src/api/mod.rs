@@ -7,6 +7,7 @@ pub use self::dir::{DirBuilder, DirEntry, ReadDir};
 pub use self::file::{File, FileType, Metadata, OpenOptions, Permissions};
 
 use alloc::{string::String, vec::Vec};
+use axfs_vfs::VfsNodeRef;
 use axio::{self as io, prelude::*};
 
 /// Returns an iterator over the entries within a directory.
@@ -33,6 +34,14 @@ pub fn set_current_dir(path: &str) -> io::Result<()> {
 /// Read the entire contents of a file into a bytes vector.
 pub fn read(path: &str) -> io::Result<Vec<u8>> {
     let mut file = File::open(path)?;
+    let size = file.metadata().map(|m| m.len()).unwrap_or(0);
+    let mut bytes = Vec::with_capacity(size as usize);
+    file.read_to_end(&mut bytes)?;
+    Ok(bytes)
+}
+
+pub fn read_at(dir: &VfsNodeRef,path: &str) -> io::Result<Vec<u8>> {
+    let mut file = File::open_at(dir, path)?;
     let size = file.metadata().map(|m| m.len()).unwrap_or(0);
     let mut bytes = Vec::with_capacity(size as usize);
     file.read_to_end(&mut bytes)?;

@@ -1,6 +1,8 @@
 use alloc::vec::Vec;
+use axfs_vfs::{VfsNodeOps, VfsNodeRef};
 use axio::{Result, SeekFrom, default_read_to_end, prelude::*};
 use core::fmt;
+use lwext4_rust::KernelDevOp;
 
 use crate::fops;
 
@@ -69,6 +71,10 @@ impl OpenOptions {
     pub fn open(&self, path: &str) -> Result<File> {
         fops::File::open(path, &self.0).map(|inner| File { inner })
     }
+
+    pub fn open_at(&self,dir: &VfsNodeRef, path: &str) -> Result<File> {
+        fops::File::open_at(dir,path, &self.0).map(|inner| File { inner })
+    }
 }
 
 impl Metadata {
@@ -128,6 +134,10 @@ impl File {
     /// Attempts to open a file in read-only mode.
     pub fn open(path: &str) -> Result<Self> {
         OpenOptions::new().read(true).open(path)
+    }
+    
+    pub fn open_at(dir: &VfsNodeRef, path: &str) -> Result<Self> {
+        OpenOptions::new().read(true).open_at(dir, path)
     }
 
     /// Opens a file in write-only mode.
@@ -192,5 +202,42 @@ impl Write for File {
 impl Seek for File {
     fn seek(&mut self, pos: SeekFrom) -> Result<u64> {
         self.inner.seek(pos)
+    }
+}
+
+impl KernelDevOp for File {
+    type DevType = File;
+
+    fn write(dev: &mut Self::DevType, buf: &[u8]) -> core::result::Result<usize, i32> {
+        dev.write(buf).map_err(|_| -1)
+    }
+
+    fn read(dev: &mut Self::DevType, buf: &mut [u8]) -> core::result::Result<usize, i32> {
+        dev.read(buf).map_err(|_| -1)
+    }
+
+    fn seek(dev: &mut Self::DevType, off: i64, whence: i32) -> core::result::Result<i64, i32> {
+        // TODO: whence
+        let seek_from = match whence {
+            0 => SeekFrom::Start(off as u64),
+            1 => SeekFrom::Current(off as i64),
+            2 => SeekFrom::End(off as i64),
+            _ => return Err(-1),
+        };
+        match dev.seek(seek_from) {
+            Ok(pos) => Ok(pos as i64),
+            Err(_) => Err(-1),
+        }
+    }
+
+    fn flush(dev: &mut Self::DevType) -> core::result::Result<usize, i32>
+    where
+        Self: Sized,
+    {
+        // TODO: correct return value
+        match dev.flush() {
+            Ok(_) => Ok(0),
+            Err(_) => Err(0),
+        }
     }
 }

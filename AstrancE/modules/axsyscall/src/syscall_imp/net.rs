@@ -4,44 +4,32 @@ use core::ffi::c_int;
 use core::ffi::c_void;
 
 #[cfg(feature = "net")]
-pub fn sys_socket(domain: c_int, socktype: c_int, protocol: c_int) -> SyscallResult
-{
-    let ret = api::sys_socket(domain, socktype, protocol) as isize;
-    if ret < 0 {
-        SyscallResult::Error((-ret).try_into().unwrap())
-    }else {
-        SyscallResult::Success(ret)
-    }
+#[inline]
+pub fn sys_socket(domain: c_int, socktype: c_int, protocol: c_int) -> SyscallResult {
+    api::sys_socket(domain, socktype, protocol).to_linux_result()
 }
 #[cfg(feature = "net")]
+#[inline]
 pub fn sys_bind(
     socket_fd: c_int,
     addr: *const ctypes::sockaddr,
     addrlen: ctypes::socklen_t,
 ) -> SyscallResult {
-    let ret = api::sys_bind(socket_fd, addr, addrlen) as isize;
-    if ret < 0 {
-        SyscallResult::Error((-ret).try_into().unwrap())
-    }else {
-        SyscallResult::Success(ret)
-    }
+    api::sys_bind(socket_fd, addr, addrlen).to_linux_result()
 }
 #[cfg(feature = "net")]
 // Socket connection
+#[inline]
 pub fn sys_connect(
     socket_fd: c_int,
     addr: *const ctypes::sockaddr,
     addrlen: ctypes::socklen_t,
 ) -> SyscallResult {
-    let ret = api::sys_connect(socket_fd, addr, addrlen) as isize;
-    if ret < 0 {
-        SyscallResult::Error((-ret).try_into().unwrap())
-    }else {
-        SyscallResult::Success(ret)
-    }
+    api::sys_connect(socket_fd, addr, addrlen).to_linux_result()
 }
 #[cfg(feature = "net")]
 // Data sending with address
+#[inline]
 pub fn sys_sendto(
     socket_fd: c_int,
     buf: *const c_void,
@@ -50,30 +38,17 @@ pub fn sys_sendto(
     addr: *const ctypes::sockaddr,
     addrlen: ctypes::socklen_t,
 ) -> SyscallResult {
-    let ret = api::sys_sendto(socket_fd, buf, len, 0, addr, addrlen) as isize;
-    if ret < 0 {
-        SyscallResult::Error((-ret).try_into().unwrap())
-    }else {
-        SyscallResult::Success(ret)
-    }
+    api::sys_sendto(socket_fd, buf, len, 0, addr, addrlen).to_linux_result()
 }
 #[cfg(feature = "net")]
 // Data sending (connected socket)
-pub fn sys_send(
-    socket_fd: c_int,
-    buf: *const c_void,
-    len: usize,
-    _flag: c_int,
-) -> SyscallResult {
-    let ret = api::sys_send(socket_fd, buf, len, 0) as isize;
-    if ret < 0 {
-        SyscallResult::Error((-ret).try_into().unwrap())
-    }else {
-        SyscallResult::Success(ret)
-    }
+#[inline]
+pub fn sys_send(socket_fd: c_int, buf: *const c_void, len: usize, _flag: c_int) -> SyscallResult {
+    api::sys_send(socket_fd, buf, len, 0).to_linux_result()
 }
 #[cfg(feature = "net")]
 // Data receiving with address
+#[inline]
 pub unsafe fn sys_recvfrom(
     socket_fd: c_int,
     buf: *mut c_void,
@@ -82,87 +57,53 @@ pub unsafe fn sys_recvfrom(
     addr: *mut ctypes::sockaddr,
     addrlen: *mut ctypes::socklen_t,
 ) -> SyscallResult {
-    let ret = unsafe{ api::sys_recvfrom(socket_fd, buf, len, 0, addr, addrlen) } as isize;
-    if ret < 0 {
-        SyscallResult::Error((-ret).try_into().unwrap())
-    }else {
-        SyscallResult::Success(ret)
-    }
+    unsafe { api::sys_recvfrom(socket_fd, buf, len, 0, addr, addrlen) }.to_linux_result()
 }
 #[cfg(feature = "net")]
 // Data receiving (connected socket)
-pub fn sys_recv(
-    socket_fd: c_int,
-    buf: *mut c_void,
-    len: usize,
-    _flag: c_int,
-) -> SyscallResult {
-    let ret = api::sys_recv(socket_fd, buf, len, 0) as isize;
-    if ret < 0 {
-        SyscallResult::Error((-ret).try_into().unwrap())
-    }else {
-        SyscallResult::Success(ret)
-    }
+#[inline]
+pub fn sys_recv(socket_fd: c_int, buf: *mut c_void, len: usize, _flag: c_int) -> SyscallResult {
+    api::sys_recv(socket_fd, buf, len, 0).to_linux_result()
 }
 #[cfg(feature = "net")]
 // Socket listening
+#[inline]
 pub fn sys_listen(socket_fd: c_int, backlog: c_int) -> SyscallResult {
-    let ret = api::sys_listen(socket_fd, backlog) as isize;
-    if ret < 0 {
-        SyscallResult::Error((-ret).try_into().unwrap())
-    }else {
-        SyscallResult::Success(ret)
-    }
+    api::sys_listen(socket_fd, backlog).to_linux_result()
 }
 #[cfg(feature = "net")]
 // Connection acceptance
+#[inline]
 pub unsafe fn sys_accept(
     socket_fd: c_int,
     addr: *mut ctypes::sockaddr,
     addrlen: *mut ctypes::socklen_t,
-) -> SyscallResult { 
-    let ret = unsafe{ api::sys_accept(socket_fd, addr, addrlen) } as isize;
-    if ret < 0 {
-        SyscallResult::Error((-ret).try_into().unwrap())
-    }else {
-        SyscallResult::Success(ret)
-    }
+) -> SyscallResult {
+    unsafe { api::sys_accept(socket_fd, addr, addrlen) }.to_linux_result()
 }
 #[cfg(feature = "net")]
 // Socket shutdown
+#[inline]
 pub fn sys_shutdown(socket_fd: c_int, _how: c_int) -> SyscallResult {
-    let ret = api::sys_shutdown(socket_fd, 0) as isize;
-    if ret < 0 {
-        SyscallResult::Error((-ret).try_into().unwrap())
-    }else {
-        SyscallResult::Success(ret)
-    }
+    api::sys_shutdown(socket_fd, 0).to_linux_result()
 }
 #[cfg(feature = "net")]
 // Socket address query
+#[inline]
 pub unsafe fn sys_getsockname(
     socket_fd: c_int,
     addr: *mut ctypes::sockaddr,
     addrlen: *mut ctypes::socklen_t,
 ) -> SyscallResult {
-    let ret = unsafe{ api::sys_getsockname(socket_fd, addr, addrlen) } as isize;
-    if ret < 0 {
-        SyscallResult::Error((-ret).try_into().unwrap())
-    }else {
-        SyscallResult::Success(ret)
-    }
+    unsafe { api::sys_getsockname(socket_fd, addr, addrlen) }.to_linux_result()
 }
 #[cfg(feature = "net")]
 // Peer address query
+#[inline]
 pub unsafe fn sys_getpeername(
     socket_fd: c_int,
     addr: *mut ctypes::sockaddr,
     addrlen: *mut ctypes::socklen_t,
 ) -> SyscallResult {
-    let ret = unsafe{api::sys_getpeername(socket_fd, addr, addrlen) }as isize;
-    if ret < 0 {
-        SyscallResult::Error((-ret).try_into().unwrap())
-    } else {
-        SyscallResult::Success(ret) 
-    }
+    unsafe { api::sys_getpeername(socket_fd, addr, addrlen) }.to_linux_result()
 }

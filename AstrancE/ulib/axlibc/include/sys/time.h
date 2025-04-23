@@ -27,6 +27,13 @@ struct timezone {
     int tz_dsttime;     /* (type of DST correction) */
 };
 
+struct tms {
+    time_t tms_utime;  /* user time */
+    time_t tms_stime;  /* system time */
+    time_t tms_cutime; /* user time of children */
+    time_t tms_cstime; /* system time of children */
+};
+
 struct itimerval {
     struct timeval it_interval;
     struct timeval it_value;

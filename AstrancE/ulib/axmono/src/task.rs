@@ -4,15 +4,16 @@ use alloc::{
     vec::Vec,
 };
 use arceos_posix_api::FD_TABLE;
-use axerrno::{AxError, AxResult};
+use axerrno::{ax_err_type, AxError, AxResult};
 use axfs::{CURRENT_DIR, CURRENT_DIR_PATH};
+use axhal::trap::{POST_TRAP, PRE_TRAP, register_trap_handler};
+use core::sync::atomic::AtomicUsize;
 use core::{
     cell::UnsafeCell,
     sync::atomic::{AtomicU64, Ordering},
 };
-use core::sync::atomic::AtomicUsize;
 use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange};
-
+use axfs::api::set_current_dir;
 use crate::{
     copy_from_kernel,
     ctypes::{CloneFlags, TimeStat, WaitStatus},
@@ -23,14 +24,13 @@ use crate::{
 
 use axhal::{
     arch::{TrapFrame, UspaceContext},
-    time::{monotonic_time_nanos, NANOS_PER_MICROS, NANOS_PER_SEC},
+    time::{NANOS_PER_MICROS, NANOS_PER_SEC, monotonic_time_nanos},
 };
-use axmm::{kernel_aspace, AddrSpace};
 use axmm::heap::HeapSpace;
+use axmm::{AddrSpace, kernel_aspace};
 use axns::{AxNamespace, AxNamespaceIf};
 use axsync::Mutex;
-use axtask::{current, AxTaskRef, TaskExtMut, TaskExtRef, TaskInner, WeakAxTaskRef};
-
+use axtask::{AxTaskRef, TaskExtMut, TaskExtRef, TaskInner, WeakAxTaskRef, current};
 
 pub fn new_user_aspace_empty() -> AxResult<AddrSpace> {
     /*
@@ -69,6 +69,7 @@ pub struct TaskExt {
     pub time: UnsafeCell<TimeStat>,
 }
 
+#[allow(unused)]
 impl TaskExt {
     pub fn new(proc_id: usize, uctx: UspaceContext, aspace: Arc<Mutex<AddrSpace>>) -> Self {
         Self {
@@ -149,16 +150,16 @@ impl TaskExt {
     pub(crate) fn set_heap_top(&self, top: VirtAddr) -> VirtAddr {
         self.aspace.lock().set_heap_top(top)
     }
-            
-    pub(crate) fn set_heap_size(&self, size:usize) -> VirtAddr {
+
+    pub(crate) fn set_heap_size(&self, size: usize) -> VirtAddr {
         self.aspace.lock().set_heap_size(size)
     }
 
     pub(crate) fn heap_size(&self) -> usize {
         self.aspace.lock().heap().size()
     }
-    
-    pub(crate) fn heap_top(&self) -> VirtAddr{
+
+    pub(crate) fn heap_top(&self) -> VirtAddr {
         self.aspace.lock().heap().top()
     }
 }
@@ -211,12 +212,15 @@ pub fn spawn_user_task_inner(
             // TODO: no current
             let curr = axtask::current();
             let kstack_top = curr.kernel_stack_top().unwrap();
+            error!("tp:{:?}", curr.task_ext().uctx.0.regs.tp);
             trace!(
                 "Enter user space: entry={:#x}, ustack={:#x}, kstack={:#x}",
                 curr.task_ext().uctx.get_ip(),
                 curr.task_ext().uctx.get_sp(),
                 kstack_top,
             );
+            // FIXME:
+            set_current_dir("/");
             unsafe { curr.task_ext().uctx.enter_uspace(kstack_top) };
         },
         app_name.into(),
@@ -224,6 +228,7 @@ pub fn spawn_user_task_inner(
     );
     task.ctx_mut()
         .set_page_table_root(aspace.lock().page_table_root());
+
     task.init_task_ext(TaskExt::new(task.id().as_u64() as usize, uctx, aspace));
 
     // TODO:
@@ -396,13 +401,16 @@ pub fn clone_task(
 /// **Return**
 /// - `Ok(handler)` if exec successfully, call handler to enter task.
 /// - `Err(AxError)` if exec failed
-pub fn exec_current(program_name: &str) -> AxResult<()> {
-    debug!("exec: {}", program_name);
+pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxResult {
+    warn!("exec: {} with args {:?}, envs {:?}", program_name, args, envs);
+
+    let program_path = program_name.to_string();
+    let elf_file = load_app_from_disk(&program_path)?;
 
     let current_task = current();
-    let program_path = program_name.to_string();
 
     let mut aspace = current_task.task_ext().aspace.lock();
+    let elf_info = ELFInfo::new(elf_file, aspace.base());
 
     if Arc::strong_count(&current_task.task_ext().aspace) != 1 {
         warn!("Address space is shared by multiple tasks, exec is not supported.");
@@ -412,22 +420,16 @@ pub fn exec_current(program_name: &str) -> AxResult<()> {
     aspace.unmap_user_areas()?;
     axhal::arch::flush_tlb(None);
 
-    let elf_file = load_app_from_disk(&program_path).map_err(|_| {
-        error!("Failed to load app {}", program_path);
-        AxError::NotFound
-    })?;
-    let elf_info = ELFInfo::new(elf_file, aspace.base());
-
-    current_task.set_name(&program_path);
-
-    //TODO: clone envs
+    //TODO: clone envs??
     let (entry_point, user_stack_base) =
-        map_elf_sections(elf_info, &mut aspace, Some(&[program_path]), None)?;
+        map_elf_sections(elf_info, &mut aspace, Some(args), Some(envs))?;
 
     let task_ext = unsafe { &mut *(current_task.task_ext_ptr() as *mut TaskExt) };
     task_ext.uctx = UspaceContext::new(entry_point.as_usize(), user_stack_base, 0);
 
     unsafe { current_task.task_ext().aspace.force_unlock() };
+
+    current_task.set_name(&program_path);
 
     unsafe {
         task_ext.uctx.enter_uspace(
@@ -440,6 +442,9 @@ pub fn exec_current(program_name: &str) -> AxResult<()> {
 
 pub fn time_stat_from_kernel_to_user() {
     let curr_task = current();
+    if (unsafe { curr_task.task_ext_ptr().is_null() }) {
+        return;
+    }
     curr_task
         .task_ext()
         .time_stat_from_kernel_to_user(monotonic_time_nanos() as usize);
@@ -447,6 +452,9 @@ pub fn time_stat_from_kernel_to_user() {
 
 pub fn time_stat_from_user_to_kernel() {
     let curr_task = current();
+    if (unsafe { curr_task.task_ext_ptr().is_null() }) {
+        return;
+    }
     curr_task
         .task_ext()
         .time_stat_from_user_to_kernel(monotonic_time_nanos() as usize);
@@ -463,6 +471,11 @@ pub fn time_stat_output() -> (usize, usize, usize, usize) {
     )
 }
 
+pub fn time_stat_ns() -> (usize, usize) {
+    let curr_task = current();
+    curr_task.task_ext().time_stat_output()
+}
+
 pub fn test(task: AxTaskRef) {
     let task_ext = task.task_ext();
     let mut buf = [0u8; 16];
@@ -471,5 +484,16 @@ pub fn test(task: AxTaskRef) {
         .lock()
         .read(0x1161c.into(), &mut buf)
         .unwrap();
-    info!("{:x?}", buf);
+}
+
+#[register_trap_handler(PRE_TRAP)]
+fn pre_trap_handler(trap_frame: &TrapFrame) -> bool {
+    time_stat_from_user_to_kernel();
+    true
+}
+
+#[register_trap_handler(POST_TRAP)]
+fn post_trap_handler(trap_frame: &TrapFrame) -> bool {
+    time_stat_from_kernel_to_user();
+    true
 }

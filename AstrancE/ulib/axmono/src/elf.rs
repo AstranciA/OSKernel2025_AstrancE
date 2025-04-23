@@ -1,3 +1,4 @@
+use alloc::format;
 use alloc::string::ToString;
 use alloc::{string::String, vec::Vec};
 use axhal::{
@@ -87,10 +88,18 @@ impl ELFInfo {
             header::Machine::AArch64
         } else if cfg!(target_arch = "riscv64") {
             header::Machine::RISC_V
+        } else if cfg!(target_arch = "loongarch64") {
+            // https://github.com/loongson/la-abi-specs/blob/release/laelf.adoc
+            header::Machine::Other(258)
         } else {
             return Err("Unsupported architecture!");
         };
         if elf_header.pt2.machine().as_machine() != expect_arch {
+            error!(
+                "Invalid ELF arch! expect: {:?}, got: {:?}",
+                expect_arch,
+                elf_header.pt2.machine().as_machine()
+            );
             return Err("Invalid ELF arch!");
         }
         Ok(())
