@@ -1306,6 +1306,7 @@ name = "lwext4_rust"
 version = "0.2.0"
 source = "git+https://github.com/Azure-stars/lwext4_rust.git?rev=ee5131#ee5131ca3fbb03f39ea0878431aadb521d191122"
 dependencies = [
+ "byteorder",
  "log",
 ]
 
@@ -2193,3 +2194,19 @@ dependencies = [
  "quote",
  "syn 2.0.100",
 ]
+
+[[patch.unused]]
+name = "axfs_devfs"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "axfs_ramfs"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "axfs_vfs"
+version = "0.1.0"
+
+[[patch.unused]]
+name = "lwext4_rust"
+version = "0.2.0"

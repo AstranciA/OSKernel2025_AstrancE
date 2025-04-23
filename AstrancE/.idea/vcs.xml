@@ -2,7 +2,11 @@
 <project version="4">
   <component name="VcsDirectoryMappings">
     <mapping directory="$PROJECT_DIR$" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/crates/axfs_crates" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/crates/axfs_vfs" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/crates/axmm_crates" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/crates/lwext4_rust" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/crates/page_table_multiarch" vcs="Git" />
   </component>
 </project>
