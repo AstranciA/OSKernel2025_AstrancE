@@ -11,7 +11,7 @@ keywords.workspace = true
 categories.workspace = true
 
 [features]
-default = ["process", "mm", "syscalls", "mmap", "heap"]
+default = ["process", "mm", "syscalls", "mmap", "heap", "sig"]
 process = ["axns", "axtask", "axfeat/multitask"]
 mm = ["axmm"]
 COW = ["axmm/COW", "page_table_entry/COW"]
@@ -19,6 +19,7 @@ irq = ["axfeat/irq", "axtask?/sched_rr"]
 syscalls = ["dep:syscalls"]
 heap = ["axmm/heap"]
 mmap = ["axmm/mmap"]
+sig = []
 [dependencies]
 page_table_entry = { workspace = true }
 page_table_multiarch = { workspace = true }

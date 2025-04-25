@@ -1,5 +1,6 @@
 //! clone 任务时指定的参数。
 
+use arceos_posix_api::ctypes::*;
 use bitflags::*;
 
 bitflags! {
@@ -66,7 +67,6 @@ bitflags! {
     }
 
 }
-
 /// sys_wait4 的返回值
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum WaitStatus {
