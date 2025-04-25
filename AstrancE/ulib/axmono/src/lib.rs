@@ -4,6 +4,7 @@ This library mainly provides a set of functions for userspace applications to in
 Although AstrancE is designed to be a unikernel, some may want to use user mode codes.
 */
 #![no_std]
+#![feature(never_type)]
 #![feature(stmt_expr_attributes)]
 extern crate alloc;
 #[macro_use]
