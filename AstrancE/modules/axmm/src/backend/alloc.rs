@@ -124,8 +124,8 @@ impl Backend {
         aspace: &mut AddrSpace,
     ) -> bool {
         debug_assert!(!orig_flags.contains(MappingFlags::WRITE));
-        debug_assert!(orig_flags.contains(MappingFlags::COW));
         trace!("handle_page_fault_alloc: COW page fault at {:#x}", vaddr);
+        error!("hdhdhdhdhdhdh");
         let origin = aspace.find_frame(vaddr.align_down_4k()).unwrap();
         let count = Arc::strong_count(&origin) - 1; // exclude origin self
         let origin_pa = origin.pa;
@@ -137,7 +137,7 @@ impl Backend {
                 .remap(
                     vaddr,
                     origin_pa,
-                    (orig_flags - MappingFlags::COW) | MappingFlags::WRITE,
+                    orig_flags,
                 )
                 .map(|(_, tlb)| tlb.flush())
                 .is_ok();
@@ -167,29 +167,8 @@ impl Backend {
             return aspace.remap(
                 vaddr,
                 frame,
-                (orig_flags - MappingFlags::COW) | MappingFlags::WRITE,
+                orig_flags,
             );
-
-            /*
-             *let result = pt
-             *    .remap(
-             *        vaddr,
-             *        frame.pa,
-             *        (orig_flags - MappingFlags::COW) | MappingFlags::WRITE,
-             *    )
-             *    .map(|(_, tlb)| tlb.flush());
-             *return result.and_then(|_| {
-             *        // TODO: Remap frame tracker here
-             *        let vaddr = vaddr.align_down_4k();
-             *        let origin = aspace.find_frame(vaddr).unwrap();
-             *        error!("Trying to remap frame tracker {:?} from {:?} to {:?}.", vaddr, origin, frame);
-             *        error!("count: of {origin:?} {}", Arc::strong_count(&origin));
-             *        error!("count: of {origin:?} {}", Arc::strong_count(&origin));
-             *        let origin = aspace.find_frame(vaddr).unwrap();
-             *        error!("count: of {origin:?} {}", Arc::strong_count(&origin));
-             *        Ok(())
-             *    }).is_ok();
-             */
         }
         false
     }
@@ -203,16 +182,25 @@ impl Backend {
         populate: bool,
     ) -> bool {
         if populate {
+            error!("000");
             #[cfg(not(feature = "COW"))]
             return false; // Populated mappings should not trigger page faults.
             // should be COW page faults
             // TODO: update frame ref in addr space
             #[cfg(feature = "COW")]
             return match va_type {
-                VmAreaType::Normal => Self::handle_page_fault_cow(vaddr, orig_flags, aspace),
+                VmAreaType::Normal => {
+                    if let Ok((_, flags, _)) = aspace.page_table().query(vaddr) {
+                        if flags.contains(MappingFlags::COW) {
+                            return Self::handle_page_fault_cow(vaddr, orig_flags, aspace)
+                        }
+                    }
+                    return false
+                },
                 _ => false,
             };
         }
+        error!("111");
         match va_type {
             VmAreaType::Normal => {
                 if let Some(frame) = alloc_frame(true) {
@@ -232,11 +220,13 @@ impl Backend {
                 return false;
             }
             VmAreaType::Mmap(mmio) => {
+                error!("222");
                 let flags = orig_flags;
                 if !flags.contains(MappingFlags::DEVICE) {
                     return false;
                 };
                 if mmio.flags().contains(MmapFlags::MAP_ANONYMOUS) {
+                    error!("333");
                     if let Some(frame) = alloc_frame(true) {
                         // Allocate a physical frame lazily and map it to the fault address.
                         // `vaddr` does not need to be aligned. It will be automatically
@@ -254,10 +244,12 @@ impl Backend {
                     return false
                 }
                 if !flags.contains(MappingFlags::READ) {
+                    error!("444");
                     return aspace
                         .map_mmap(mmio, vaddr, PageSize::Size4K, flags)
                         .is_ok();
                 }
+                error!("555");
 
                 /*
                  *if flags.contains(MappingFlags::COW) {
