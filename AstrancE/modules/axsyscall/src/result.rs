@@ -1,6 +1,6 @@
 use core::ffi::c_long;
 
-use axerrno::{LinuxError, LinuxResult};
+use axerrno::{AxError, LinuxError, LinuxResult};
 
 pub type SyscallResult = LinuxResult<isize>;
 

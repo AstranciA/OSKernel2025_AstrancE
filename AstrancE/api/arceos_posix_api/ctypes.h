@@ -14,3 +14,4 @@
 #include <sys/uio.h>
 #include <time.h>
 #include <unistd.h>
+#include <signal.h>

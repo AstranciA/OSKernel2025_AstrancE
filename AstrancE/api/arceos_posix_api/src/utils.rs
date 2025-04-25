@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 #![allow(unused_macros)]
 
+use alloc::vec::Vec;
 use axerrno::{LinuxError, LinuxResult};
 use core::ffi::{CStr, c_char};
 
@@ -16,16 +17,24 @@ pub fn char_ptr_to_str<'a>(str: *const c_char) -> LinuxResult<&'a str> {
     }
 }
 
+/// Convert a C string vector to a Rust string
+/// vector should be terminated by a null pointer
+/// e.g. char* argv[]
+pub fn str_vec_ptr_to_str<'a>(strv: *const *const c_char) -> LinuxResult<Vec<&'a str>> {
+    let mut strs = Vec::new();
+    let mut ptr = strv;
+    while !(unsafe { *ptr }).is_null() {
+        strs.push(char_ptr_to_str(unsafe { *ptr })?);
+        ptr = ptr.wrapping_add(1);
+    }
+    Ok(strs)
+}
+
 /// Convert a Rust string to a C string
-pub unsafe fn str_to_cstr(s: &str, buf: *mut c_char) -> usize{
+pub unsafe fn str_to_cstr(s: &str, buf: *mut c_char) -> usize {
     let len = s.len();
     let dst = unsafe { core::slice::from_raw_parts_mut(buf, len + 1) };
-    let src = unsafe {
-        core::slice::from_raw_parts(
-            s.as_ptr() as *const c_char,
-            len
-        )
-    };
+    let src = unsafe { core::slice::from_raw_parts(s.as_ptr() as *const c_char, len) };
     dst[..len].copy_from_slice(src);
     dst[len] = (b'\0') as c_char;
     len + 1
