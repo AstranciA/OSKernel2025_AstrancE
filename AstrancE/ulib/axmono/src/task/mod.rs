@@ -1,44 +1,41 @@
+use crate::{
+    copy_from_kernel,
+    ctypes::{CloneFlags, TimeStat, WaitStatus},
+    elf::ELFInfo,
+    loader::load_app_from_disk,
+    mm::map_elf_sections,
+};
 use alloc::{
     string::{String, ToString},
     sync::Arc,
     vec::Vec,
 };
 use arceos_posix_api::FD_TABLE;
-use axerrno::{ax_err_type, AxError, AxResult};
+use axerrno::{AxError, AxResult};
+use axfs::api::set_current_dir;
 use axfs::{CURRENT_DIR, CURRENT_DIR_PATH};
 use axhal::trap::{POST_TRAP, PRE_TRAP, register_trap_handler};
-use core::sync::atomic::AtomicUsize;
+use signal::SignalContext;
 use core::{
     cell::UnsafeCell,
     sync::atomic::{AtomicU64, Ordering},
 };
-use memory_addr::{MemoryAddr, VirtAddr, VirtAddrRange};
-use axfs::api::set_current_dir;
-use crate::{
-    copy_from_kernel,
-    ctypes::{CloneFlags, TimeStat, WaitStatus},
-    elf::ELFInfo,
-    loader::load_app_from_disk,
-    mm::{load_elf_to_mem, map_elf_sections},
-};
+use memory_addr::{VirtAddr, VirtAddrRange};
 
 use axhal::{
     arch::{TrapFrame, UspaceContext},
-    time::{NANOS_PER_MICROS, NANOS_PER_SEC, monotonic_time_nanos},
+    time::{monotonic_time_nanos, NANOS_PER_MICROS, NANOS_PER_SEC},
 };
 use axmm::heap::HeapSpace;
 use axmm::{AddrSpace, kernel_aspace};
 use axns::{AxNamespace, AxNamespaceIf};
 use axsync::Mutex;
-use axtask::{AxTaskRef, TaskExtMut, TaskExtRef, TaskInner, WeakAxTaskRef, current};
+use axtask::{current, AxTaskRef, TaskExtRef, TaskInner};
+
+#[cfg(feature = "sig")]
+mod signal;
 
 pub fn new_user_aspace_empty() -> AxResult<AddrSpace> {
-    /*
-     *AddrSpace::new_empty(
-     *    VirtAddr::from_usize(config::USER_SPACE_BASE),
-     *    config::USER_SPACE_SIZE,
-     *)
-     */
     AddrSpace::new_empty(
         VirtAddr::from_usize(axconfig::plat::USER_SPACE_BASE),
         axconfig::plat::USER_SPACE_SIZE,
@@ -67,6 +64,8 @@ pub struct TaskExt {
     pub ns: AxNamespace,
     /// The time statistics
     pub time: UnsafeCell<TimeStat>,
+    #[cfg(feature = "sig")]
+    pub sigctx: SignalContext,
 }
 
 #[allow(unused)]
@@ -81,6 +80,7 @@ impl TaskExt {
             aspace,
             ns: AxNamespace::new_thread_local(false),
             time: TimeStat::new().into(),
+            sigctx: SignalContext::default()
         }
     }
 
@@ -402,7 +402,10 @@ pub fn clone_task(
 /// - `Ok(handler)` if exec successfully, call handler to enter task.
 /// - `Err(AxError)` if exec failed
 pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxResult {
-    warn!("exec: {} with args {:?}, envs {:?}", program_name, args, envs);
+    warn!(
+        "exec: {} with args {:?}, envs {:?}",
+        program_name, args, envs
+    );
 
     let program_path = program_name.to_string();
     let elf_file = load_app_from_disk(&program_path)?;

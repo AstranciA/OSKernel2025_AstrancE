@@ -46,6 +46,7 @@ typedef struct {{
             "fd_set",
             "timeval",
             "tms",
+            "signal",
             "pthread_t",
             "pthread_attr_t",
             "pthread_mutex_t",
@@ -58,6 +59,7 @@ typedef struct {{
         ];
         let allow_vars = [
             "CLOCK_.*",
+            "SIG.*",
             "O_.*",
             "AF_.*",
             "SOCK_.*",
