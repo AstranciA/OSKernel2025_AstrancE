@@ -458,9 +458,16 @@ impl AddrSpace {
         if let Some(area) = self.areas.find(vaddr) {
             let orig_flags = area.flags();
             debug!("Page fault original flags: {:?}", orig_flags);
+            #[cfg(feature = "COW")]
+            if orig_flags.contains(access_flags) || orig_flags.contains(MappingFlags::COW) {
+                let backed = area.backend().clone();
+                return backed.handle_page_fault(vaddr, orig_flags, self);
+            }
+            #[cfg(not(feature = "COW"))]
             if orig_flags.contains(access_flags) {
-                let backend = area.backend().clone();
-                return backend.handle_page_fault(vaddr, orig_flags, self);
+                return area
+                    .backend()
+                    .handle_page_fault(vaddr, orig_flags, &mut self.pt);
             }
         }
         false
@@ -529,8 +536,6 @@ impl AddrSpace {
         for area in self.areas.iter() {
             // Remap the memory areajin the new address space.
             let mut flags = area.flags();
- 
-            let area = area.clone_(flags);
             if let Backend::Alloc {
                 va_type,
                 populate: _,
@@ -540,6 +545,8 @@ impl AddrSpace {
                     flags = MappingFlags::mark_cow(flags);
                 }
             }
+            let area = area.clone_(flags);
+
             new_aspace
                 .areas
                 .insert(area.clone())

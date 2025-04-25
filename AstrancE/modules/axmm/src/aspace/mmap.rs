@@ -126,7 +126,9 @@ impl AddrSpace {
 
         let mut map_flags: MappingFlags = perm.into();
         // Lazy mapping.
-
+        if !populate && !flags.contains(MmapFlags::MAP_ANONYMOUS) {
+            map_flags.remove(MappingFlags::READ)
+        };
         map_flags = map_flags | MappingFlags::DEVICE;
 
         // #[cfg(feature = "COW")]
@@ -146,14 +148,9 @@ impl AddrSpace {
         if populate {
             todo!("populate from file");
         }
-        // Lazy mapping.
-        if !populate && !flags.contains(MmapFlags::MAP_ANONYMOUS) {
-            map_flags.remove(MappingFlags::READ)
-        };
         self.areas
             .map(area, &mut self.pt, false, Some(map_flags))
             .map_err(mapping_err_to_ax_err)?;
-        
         Ok(start)
     }
 
