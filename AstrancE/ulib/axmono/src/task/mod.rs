@@ -2,7 +2,7 @@ use crate::{
     copy_from_kernel,
     ctypes::{CloneFlags, TimeStat, WaitStatus},
     elf::ELFInfo,
-    loader::load_app_from_disk,
+    loader::load_elf_from_disk,
     mm::map_elf_sections,
 };
 use alloc::{
@@ -10,16 +10,20 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
+use axio;
 use arceos_posix_api::FD_TABLE;
 use axerrno::{AxError, AxResult};
-use axfs::api::set_current_dir;
+use axfs::api::{current_dir, read, set_current_dir};
 use axfs::{CURRENT_DIR, CURRENT_DIR_PATH};
 use axhal::trap::{POST_TRAP, PRE_TRAP, register_trap_handler};
+#[cfg(feature = "sig")]
 use signal::SignalContext;
 use core::{
     cell::UnsafeCell,
     sync::atomic::{AtomicU64, Ordering},
 };
+use axio::Read;
+use xmas_elf::symbol_table::Type::File;
 use memory_addr::{VirtAddr, VirtAddrRange};
 
 use axhal::{
@@ -31,6 +35,7 @@ use axmm::{AddrSpace, kernel_aspace};
 use axns::{AxNamespace, AxNamespaceIf};
 use axsync::Mutex;
 use axtask::{current, AxTaskRef, TaskExtRef, TaskInner};
+use crate::mm::load_elf_to_mem;
 
 #[cfg(feature = "sig")]
 mod signal;
@@ -80,6 +85,7 @@ impl TaskExt {
             aspace,
             ns: AxNamespace::new_thread_local(false),
             time: TimeStat::new().into(),
+            #[cfg(feature = "sig")]
             sigctx: SignalContext::default()
         }
     }
@@ -206,6 +212,7 @@ pub fn spawn_user_task_inner(
     app_name: &str,
     aspace: Arc<Mutex<AddrSpace>>,
     uctx: UspaceContext,
+    pwd:String,
 ) -> TaskInner {
     let mut task = TaskInner::new(
         move || {
@@ -220,7 +227,7 @@ pub fn spawn_user_task_inner(
                 kstack_top,
             );
             // FIXME:
-            set_current_dir("/");
+            set_current_dir(pwd.as_str()).unwrap();
             unsafe { curr.task_ext().uctx.enter_uspace(kstack_top) };
         },
         app_name.into(),
@@ -240,8 +247,9 @@ pub fn spawn_user_task(
     app_name: &str,
     aspace: Arc<Mutex<AddrSpace>>,
     uctx: UspaceContext,
+    pwd:String,
 ) -> AxTaskRef {
-    spawn_user_task_inner(app_name, aspace, uctx).into_arc()
+    spawn_user_task_inner(app_name, aspace, uctx,pwd).into_arc()
     /*
      *let task_inner = spawn_user_task_inner(app_name, aspace, uctx);
      *axtask::spawn_task(task_inner)
@@ -329,12 +337,11 @@ pub fn wait_pid(task: AxTaskRef, pid: i32, exit_code_ptr: *mut i32) -> Result<u6
 /// fork current task
 /// **Return**
 /// - `Ok(new_task_ref)` if fork successfully
-pub fn fork(current_task: AxTaskRef, from_umode: bool) -> AxResult<AxTaskRef> {
-    clone_task(current_task, None, CloneFlags::FORK, from_umode)
+pub fn fork(from_umode: bool) -> AxResult<AxTaskRef> {
+    clone_task(None, CloneFlags::FORK, from_umode)
 }
 
 pub fn clone_task(
-    current_task: AxTaskRef,
     stack: Option<usize>,
     clone_flags: CloneFlags,
     from_umode: bool,
@@ -346,7 +353,7 @@ pub fn clone_task(
 ) -> AxResult<AxTaskRef> {
     axconfig::plat::KERNEL_STACK_SIZE;
     // TODO: support all flags
-
+    let current_task = current();
     let current_task_ext = current_task.task_ext();
     // new task with same ip and sp of current task
     let mut trap_frame = read_trapframe_from_kstack(current_task.get_kernel_stack_top().unwrap());
@@ -383,11 +390,12 @@ pub fn clone_task(
     //new_uctx.0 = trap_frame;
     let new_uctx = UspaceContext::from(&trap_frame);
     //panic!();
-
+    let current_d = current_dir()?;
     let new_task_ref = spawn_user_task(
         current_task.name(),
         Arc::new(Mutex::new(new_aspace)),
         new_uctx,
+        current_d
     );
 
     // TODO: children task management
@@ -401,14 +409,44 @@ pub fn clone_task(
 /// **Return**
 /// - `Ok(handler)` if exec successfully, call handler to enter task.
 /// - `Err(AxError)` if exec failed
-pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxResult {
+pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxResult<> {
     warn!(
         "exec: {} with args {:?}, envs {:?}",
         program_name, args, envs
     );
 
     let program_path = program_name.to_string();
-    let elf_file = load_app_from_disk(&program_path)?;
+    let mut buffer: [u8; 64] = [0; 64];
+    let mut file = axfs::api::File::open(program_path.as_str())?;
+    file.read(&mut buffer)?;
+    if buffer[..2] == [b'#',b'!']{
+        debug!("execve:{:?} starts with {:?}", program_name,&buffer[..2] as &[u8]);
+        let app_path = "/musl/busybox";
+        let (entry_vaddr, user_stack_base, uspace) = load_elf_to_mem(
+            load_elf_from_disk(app_path).unwrap(),
+            Some(&[app_path.into(),"ash".into(),program_path.into()]),
+            None,
+        ).unwrap();
+        debug!(
+        "app_entry: {:?}, app_stack: {:?}, app_aspace: {:?}",
+        entry_vaddr,
+        user_stack_base,
+        uspace,);
+
+        let uctx = UspaceContext::new(entry_vaddr.into(), user_stack_base, 2333);
+        let current_d = current_dir()?;
+        let user_task = spawn_user_task(app_path, Arc::new(Mutex::new(uspace)), uctx, current_d);
+
+        axtask::spawn_task_by_ref(user_task.clone());
+
+        let exit_code = user_task.join().unwrap();
+        info!("app exit with code: {:?}", exit_code);
+        return AxResult::Ok(())
+    }
+
+
+
+    let elf_file = load_elf_from_disk(&program_path)?;
 
     let current_task = current();
 

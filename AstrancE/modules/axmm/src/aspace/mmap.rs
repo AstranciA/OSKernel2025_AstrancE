@@ -149,7 +149,7 @@ impl AddrSpace {
             todo!("populate from file");
         }
         self.areas
-            .map(area, &mut self.pt, false)
+            .map(area, &mut self.pt, false, Some(map_flags))
             .map_err(mapping_err_to_ax_err)?;
         Ok(start)
     }

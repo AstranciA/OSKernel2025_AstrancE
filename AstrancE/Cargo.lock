@@ -557,6 +557,7 @@ dependencies = [
  "axfeat",
  "axfs",
  "axhal",
+ "axio",
  "axlog",
  "axmm",
  "axns",
