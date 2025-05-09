@@ -73,10 +73,6 @@ bitflags = "2.9.0"
 linkme = "0.3.32"
 
 
-[patch.crates-io]
-memory_addr = { version = "0.3.2", path = "./crates/axmm_crates/memory_addr" }
-page_table_multiarch = {version = "0.5", path = "./crates/page_table_multiarch/page_table_multiarch"}
-page_table_entry = {version = "0.5.4", path = "./crates/page_table_multiarch/page_table_entry"}
 
 #[patch.crates-io]
 #page_table_multiarch = { git = "https://github.com/oscomp/page_table_multiarch.git", rev = "c8a13b0"}
@@ -90,6 +86,7 @@ lto = true
 #page_table_entry = { git = "https://github.com/Mivik/page_table_multiarch.git", rev = "19ededd" }
 
 [patch.crates-io]
+memory_addr = { version = "0.3.2", path = "./crates/axmm_crates/memory_addr" }
 page_table_multiarch = { path = "./crates/page_table_multiarch/page_table_multiarch" }
 page_table_entry = { path = "./crates/page_table_multiarch/page_table_entry" }
 axfs_vfs = {path = "./crates/axfs_crates/axfs_vfs" }
