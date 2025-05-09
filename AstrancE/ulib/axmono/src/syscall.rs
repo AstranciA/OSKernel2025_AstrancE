@@ -160,6 +160,6 @@ syscall_handler_def!(
 
 #[register_trap_handler(PRE_TRAP)]
 fn pre_trap_handler(trap_frame: &TrapFrame) -> bool {
-    warn!("trap from 0x{:x?}", trap_frame.sepc);
+    trace!("trap from 0x{:x?}", trap_frame.sepc);
     true
 }

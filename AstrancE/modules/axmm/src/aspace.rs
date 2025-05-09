@@ -452,7 +452,6 @@ impl AddrSpace {
     /// Returns `true` if the page fault is handled successfully (not a real
     /// fault).
     pub fn handle_page_fault(&mut self, vaddr: VirtAddr, access_flags: MappingFlags) -> bool {
-        error!("{:?}",self.va_range);
         if !self.va_range.contains(vaddr) {
             return false;
         }
