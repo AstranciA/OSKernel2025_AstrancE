@@ -203,7 +203,6 @@ impl Backend {
         aspace: &mut AddrSpace,
         populate: bool,
     ) -> bool {
-        warn!("populate: {populate}");
         if populate {
             #[cfg(not(feature = "COW"))]
             return false; // Populated mappings should not trigger page faults.
@@ -234,7 +233,6 @@ impl Backend {
                 return false;
             }
             VmAreaType::Mmap(mmio) => {
-                warn!("mmap..");
                 let flags = orig_flags;
 
                 if !flags.contains(MappingFlags::DEVICE) {

@@ -104,9 +104,7 @@ syscall_handler_def!(
             let perm = MmapPerm::from_bits(args[2]).ok_or(LinuxError::EINVAL)?;
             let flags = MmapFlags::from_bits(args[3]).ok_or(LinuxError::EINVAL)?;
             let fd = args[4];
-            //let file = get_file_like(args[4].try_into().unwrap()).expect("invalid file descriptor");
             let offset = args[5];
-            error!("mmap flags: {flags:?}, perm: {perm:?}");
             if let Ok(va) = aspace.mmap(
                 args[0].into(),
                 args[1],

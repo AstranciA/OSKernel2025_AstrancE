@@ -160,7 +160,24 @@ impl VfsNodeOps for FileWrapper {
             blocks,
         );
 
-        Ok(VfsNodeAttr::new(perm, vtype, size, blocks, inode.st_ino(), inode.nlink(), inode.uid(), inode.gid(), inode.nblk_lo()))
+        Ok(VfsNodeAttr::new(
+            0,
+            perm,
+            vtype,
+            size,
+            blocks,
+            inode.st_ino(),
+            inode.nlink(),
+            inode.uid(),
+            inode.gid(),
+            inode.nblk_lo(),
+            inode.atime(),
+            inode.mtime(),
+            inode.ctime(),
+            inode.atime_ex(),
+            inode.mtime_ex(),
+            inode.ctime_ex(),
+        ))
     }
 
     fn create(&self, path: &str, ty: VfsNodeType) -> VfsResult {

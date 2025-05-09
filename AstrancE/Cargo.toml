@@ -44,10 +44,10 @@ axalloc = { path = "modules/axalloc" }
 axconfig = { path = "modules/axconfig" }
 axdisplay = { path = "modules/axdisplay" }
 axdriver = { path = "modules/axdriver" }
-axfs = { path = "modules/axfs" ,features = ["lwext4_rs"]}
-axhal = { path = "modules/axhal",features = ["uspace"] }
+axfs = { path = "modules/axfs", features = ["lwext4_rs"] }
+axhal = { path = "modules/axhal", features = ["uspace"] }
 axlog = { path = "modules/axlog" }
-axmm = { path = "modules/axmm",features = ["mmap","heap","COW"] }
+axmm = { path = "modules/axmm", features = ["mmap", "heap", "COW"] }
 axnet = { path = "modules/axnet" }
 axns = { path = "modules/axns" }
 axruntime = { path = "modules/axruntime" }
@@ -62,16 +62,16 @@ syscalls = { git = "https://github.com/jasonwhite/syscalls.git", default-feature
   "riscv64",
 ] }
 
-memory_set = { path = "./crates/axmm_crates/memory_set" ,features = ["RAII"]}
+memory_set = { path = "./crates/axmm_crates/memory_set", features = ["RAII"] }
 memory_addr = { path = "./crates/axmm_crates/memory_addr" }
 page_table_multiarch = { path = "./crates/page_table_multiarch/page_table_multiarch" }
 page_table_entry = { path = "./crates/page_table_multiarch/page_table_entry" }
-axfs_vfs = {path = "./crates/axfs_crates/axfs_vfs" }
-axfs_devfs = {path = "./crates/axfs_crates/axfs_devfs"}
-axfs_ramfs = {path ="./crates/axfs_crates/axfs_ramfs"}
+axfs_vfs = { path = "./crates/axfs_crates/axfs_vfs" }
+axfs_devfs = { path = "./crates/axfs_crates/axfs_devfs" }
+axfs_ramfs = { path = "./crates/axfs_crates/axfs_ramfs" }
+lwext4_rust = { path = "./crates/lwext4_rust", default-features = false }
 bitflags = "2.9.0"
 linkme = "0.3.32"
-
 
 
 #[patch.crates-io]
@@ -89,8 +89,7 @@ lto = true
 memory_addr = { version = "0.3.2", path = "./crates/axmm_crates/memory_addr" }
 page_table_multiarch = { path = "./crates/page_table_multiarch/page_table_multiarch" }
 page_table_entry = { path = "./crates/page_table_multiarch/page_table_entry" }
-axfs_vfs = {path = "./crates/axfs_crates/axfs_vfs" }
-axfs_devfs = {path = "./crates/axfs_crates/axfs_devfs"}
-axfs_ramfs = {path ="./crates/axfs_crates/axfs_ramfs"}
-lwext4_rust ={path ="./crates/lwext4_rust"}
-
+axfs_vfs = { path = "./crates/axfs_crates/axfs_vfs" }
+axfs_devfs = { path = "./crates/axfs_crates/axfs_devfs" }
+axfs_ramfs = { path = "./crates/axfs_crates/axfs_ramfs" }
+lwext4_rust = { path = "./crates/lwext4_rust" }

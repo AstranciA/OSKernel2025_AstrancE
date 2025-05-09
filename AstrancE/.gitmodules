@@ -7,7 +7,10 @@
 
 [submodule "crates/axfs_crates"]
 	path = crates/axfs_crates
-	url = https://github.com/MukioXun/axfs_crates.git
+	url = git@github.com:AstranciA/axfs_crates.git
 [submodule "crates/lwext4_rust"]
 	path = crates/lwext4_rust
 	url = https://github.com/MukioXun/lwext4_rust.git
+[submodule "crates/fast-trap"]
+	path = crates/fast-trap
+	url = git@github.com:AstranciA/fast-trap.git
