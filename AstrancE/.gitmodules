@@ -4,3 +4,10 @@
 [submodule "crates/page_table_multiarch"]
 	path = crates/page_table_multiarch
 	url = git@github.com:AstranciA/page_table_multiarch.git
+
+[submodule "crates/axfs_crates"]
+	path = crates/axfs_crates
+	url = https://github.com/MukioXun/axfs_crates.git
+[submodule "crates/lwext4_rust"]
+	path = crates/lwext4_rust
+	url = https://github.com/MukioXun/lwext4_rust.git

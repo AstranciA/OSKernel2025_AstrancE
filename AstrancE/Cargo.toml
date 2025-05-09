@@ -66,6 +66,9 @@ memory_set = { path = "./crates/axmm_crates/memory_set" ,features = ["RAII"]}
 memory_addr = { path = "./crates/axmm_crates/memory_addr" }
 page_table_multiarch = { path = "./crates/page_table_multiarch/page_table_multiarch" }
 page_table_entry = { path = "./crates/page_table_multiarch/page_table_entry" }
+axfs_vfs = {path = "./crates/axfs_crates/axfs_vfs" }
+axfs_devfs = {path = "./crates/axfs_crates/axfs_devfs"}
+axfs_ramfs = {path ="./crates/axfs_crates/axfs_ramfs"}
 bitflags = "2.9.0"
 linkme = "0.3.32"
 
@@ -85,6 +88,12 @@ lto = true
 #[patch.crates-io]
 #page_table_multiarch = { git = "https://github.com/Mivik/page_table_multiarch.git", rev = "19ededd" }
 #page_table_entry = { git = "https://github.com/Mivik/page_table_multiarch.git", rev = "19ededd" }
-#[patch.crates-io]
-#page_table_multiarch = { path = "./crates/page_table_multiarch/page_table_multiarch" }
-#page_table_entry = { path = "./crates/page_table_multiarch/page_table_entry" }
+
+[patch.crates-io]
+page_table_multiarch = { path = "./crates/page_table_multiarch/page_table_multiarch" }
+page_table_entry = { path = "./crates/page_table_multiarch/page_table_entry" }
+axfs_vfs = {path = "./crates/axfs_crates/axfs_vfs" }
+axfs_devfs = {path = "./crates/axfs_crates/axfs_devfs"}
+axfs_ramfs = {path ="./crates/axfs_crates/axfs_ramfs"}
+lwext4_rust ={path ="./crates/lwext4_rust"}
+
