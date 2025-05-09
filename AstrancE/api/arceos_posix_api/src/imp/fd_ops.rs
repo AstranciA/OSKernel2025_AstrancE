@@ -84,8 +84,6 @@ pub fn sys_dup(old_fd: c_int) -> c_int {
 }
 
 /// Duplicate a file descriptor, but it uses the file descriptor number specified in `new_fd`.
-///
-/// TODO: `dup2` should forcibly close new_fd if it is already opened.
 pub fn sys_dup2(old_fd: c_int, new_fd: c_int) -> c_int {
     debug!("sys_dup2 <= old_fd: {}, new_fd: {}", old_fd, new_fd);
     syscall_body!(sys_dup2, {
@@ -102,15 +100,23 @@ pub fn sys_dup2(old_fd: c_int, new_fd: c_int) -> c_int {
         }
 
         let f = get_file_like(old_fd)?;
-        FD_TABLE
-            .write()
+        let mut fd_table = FD_TABLE.write();
+        // 先关闭 new_fd（如果存在）
+        if fd_table.is_assigned(new_fd as usize) {
+            debug!("Removing existing resource at new_fd={}", new_fd);
+            fd_table.remove(new_fd as usize); // 移除旧资源
+        }
+        // 再绑定新资源
+        fd_table
             .add_at(new_fd as usize, f)
-            .map_err(|_| LinuxError::EMFILE)?;
+            .map_err(|e| {
+                debug!("FD_TABLE.add_at failed for new_fd={}", new_fd);
+                LinuxError::EMFILE
+            })?;
 
         Ok(new_fd)
     })
 }
-
 /// Manipulate file descriptor.
 ///
 /// TODO: `SET/GET` command is ignored, hard-code stdin/stdout
