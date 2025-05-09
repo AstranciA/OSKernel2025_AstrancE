@@ -4,13 +4,20 @@ use crate::{
     elf::ELFInfo,
     loader::load_elf_from_disk,
     mm::map_elf_sections,
+    utils::get_pwd_from_envs,
 };
-use alloc::{string::{String, ToString}, sync::Arc, vec, vec::Vec};
+use alloc::{
+    string::{String, ToString},
+    sync::Arc,
+    vec,
+    vec::Vec,
+};
+
 use arceos_posix_api::FD_TABLE;
 use axerrno::{AxError, AxResult};
 use axfs::api::{current_dir, read, set_current_dir};
 use axfs::{CURRENT_DIR, CURRENT_DIR_PATH};
-use axhal::trap::{register_trap_handler, POST_TRAP, PRE_TRAP};
+use axhal::trap::{POST_TRAP, PRE_TRAP, register_trap_handler};
 use axio;
 use axio::Read;
 use core::{
@@ -25,13 +32,13 @@ use xmas_elf::symbol_table::Type::File;
 use crate::mm::load_elf_to_mem;
 use axhal::{
     arch::{TrapFrame, UspaceContext},
-    time::{monotonic_time_nanos, NANOS_PER_MICROS, NANOS_PER_SEC},
+    time::{NANOS_PER_MICROS, NANOS_PER_SEC, monotonic_time_nanos},
 };
 use axmm::heap::HeapSpace;
-use axmm::{kernel_aspace, AddrSpace};
+use axmm::{AddrSpace, kernel_aspace};
 use axns::{AxNamespace, AxNamespaceIf};
 use axsync::Mutex;
-use axtask::{current, AxTaskRef, TaskExtRef, TaskInner};
+use axtask::{AxTaskRef, TaskExtRef, TaskInner, current};
 
 #[cfg(feature = "sig")]
 mod signal;
@@ -215,7 +222,6 @@ pub fn spawn_user_task_inner(
             // TODO: no current
             let curr = axtask::current();
             let kstack_top = curr.kernel_stack_top().unwrap();
-            error!("tp:{:?}", curr.task_ext().uctx.0.regs.tp);
             trace!(
                 "Enter user space: entry={:#x}, ustack={:#x}, kstack={:#x}",
                 curr.task_ext().uctx.get_ip(),
@@ -405,30 +411,32 @@ pub fn clone_task(
 /// **Return**
 /// - `Ok(handler)` if exec successfully, call handler to enter task.
 /// - `Err(AxError)` if exec failed
-/// 
+///
 pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxResult<!> {
     warn!(
         "exec: {} with args {:?}, envs {:?}",
         program_name, args, envs
     );
     let mut args_ = vec![];
-    let mut program_path = program_name.to_string();
+    let (oldpwd, pwd) = get_pwd_from_envs(envs);
+    let mut program_path = if let Some(ref pwd) = pwd {
+        pwd.clone() + "/" + program_name
+    } else {
+        program_name.to_string()
+    };
     let mut buffer: [u8; 64] = [0; 64];
     let mut file = axfs::api::File::open(program_path.as_str())?;
     file.read(&mut buffer)?;
+    // FIXME: parse shebang
     if buffer[..2] == [b'#', b'!'] {
-        debug!(
-            "execve:{:?} starts with {:?}",
-            program_name,
-            &buffer as &[u8]
-        );
-        // TODO: read real shabang
-        let shabang = "/musl/busybox";
+        debug!("execve:{:?} starts with shebang #!...", program_name);
+        // FIXME: read real shabang
+        let shebang = "/riscv/musl/busybox";
 
-        args_.push(shabang.into());
+        args_.push(shebang.into());
         args_.push("ash".into());
 
-        program_path = shabang.parse().unwrap(); // busybox
+        program_path = shebang.parse().unwrap(); // busybox
     }
     args_.extend_from_slice(args);
     let args_: &[String] = args_.as_slice();
@@ -455,6 +463,9 @@ pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxR
     unsafe { current_task.task_ext().aspace.force_unlock() };
 
     current_task.set_name(&program_path);
+    if let Some(pwd) = pwd {
+        set_current_dir(pwd.as_str())?;
+    }
 
     unsafe {
         task_ext.uctx.enter_uspace(

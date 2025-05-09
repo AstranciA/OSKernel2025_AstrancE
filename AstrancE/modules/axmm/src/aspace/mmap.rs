@@ -125,10 +125,6 @@ impl AddrSpace {
         debug!("mmap at: [{:#x}, {:#x})", start, start + size);
 
         let mut map_flags: MappingFlags = perm.into();
-        // Lazy mapping.
-        if !populate && !flags.contains(MmapFlags::MAP_ANONYMOUS) {
-            map_flags.remove(MappingFlags::READ)
-        };
         map_flags = map_flags | MappingFlags::DEVICE;
 
         // #[cfg(feature = "COW")]

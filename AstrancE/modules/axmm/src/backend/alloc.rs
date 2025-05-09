@@ -2,6 +2,7 @@ use alloc::sync::Arc;
 use axalloc::global_allocator;
 use axhal::mem::{phys_to_virt, virt_to_phys};
 use axhal::paging::{MappingFlags, PageSize, PageTable};
+use bitflags::Flags;
 use memory_addr::{FrameTracker, MemoryAddr, PAGE_SIZE_4K, PageIter4K, PhysAddr, VirtAddr};
 
 use crate::{AddrSpace, MmapFlags};
@@ -202,6 +203,7 @@ impl Backend {
         aspace: &mut AddrSpace,
         populate: bool,
     ) -> bool {
+        warn!("populate: {populate}");
         if populate {
             #[cfg(not(feature = "COW"))]
             return false; // Populated mappings should not trigger page faults.
@@ -232,7 +234,9 @@ impl Backend {
                 return false;
             }
             VmAreaType::Mmap(mmio) => {
+                warn!("mmap..");
                 let flags = orig_flags;
+
                 if !flags.contains(MappingFlags::DEVICE) {
                     return false;
                 };
@@ -251,13 +255,11 @@ impl Backend {
                             })
                             .is_ok();
                     }
-                    return false
+                    return false;
                 }
-                if !flags.contains(MappingFlags::READ) {
-                    return aspace
-                        .map_mmap(mmio, vaddr, PageSize::Size4K, flags)
-                        .is_ok();
-                }
+                return aspace
+                    .map_mmap(mmio, vaddr, PageSize::Size4K, flags)
+                    .is_ok();
 
                 /*
                  *if flags.contains(MappingFlags::COW) {
