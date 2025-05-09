@@ -12,6 +12,7 @@ extern crate axlog;
 
 extern crate axsyscall;
 pub mod ctypes;
+pub mod utils;
 use core::clone;
 
 use axerrno::AxResult;

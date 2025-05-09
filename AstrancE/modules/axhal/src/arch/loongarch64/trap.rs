@@ -37,7 +37,7 @@ fn handle_page_fault(tf: &TrapFrame, mut access_flags: MappingFlags, is_user: bo
 
 #[unsafe(no_mangle)]
 fn loongarch64_trap_handler(tf: &mut TrapFrame, from_user: bool) {
-    pre_trap();
+    pre_trap(tf);
     let estat = estat::read();
 
     match estat.cause() {
@@ -72,5 +72,5 @@ fn loongarch64_trap_handler(tf: &mut TrapFrame, from_user: bool) {
             );
         }
     }
-    post_trap();
+    post_trap(tf);
 }
