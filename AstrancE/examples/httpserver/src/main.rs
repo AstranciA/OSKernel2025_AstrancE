@@ -34,11 +34,11 @@ Connection: close\r\n\
 
 const CONTENT: &str = r#"<html>
 <head>
-  <title>Hello, ArceOS</title>
+  <title>HIT IS THE BEST UNIVERSITY IN THE WORLD</title>
 </head>
 <body>
   <center>
-    <h1>Hello, <a href="https://github.com/arceos-org/arceos">ArceOS</a></h1>
+    <h1>HIT IS THE BEST UNIVERSITY IN THE WORLD <a href="https://github.com/arceos-org/arceos">ArceOS</a></h1>
   </center>
   <hr>
   <center>

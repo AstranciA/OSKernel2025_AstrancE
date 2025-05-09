@@ -181,7 +181,7 @@ impl AddrSpace {
         let offset = start_vaddr.as_usize() - start_paddr.as_usize();
         let area = MemoryArea::new(start_vaddr, size, None, flags, Backend::new_linear(offset));
         self.areas
-            .map(area, &mut self.pt, false)
+            .map(area, &mut self.pt, false,None)
             .map_err(mapping_err_to_ax_err)?;
         Ok(())
     }
@@ -205,7 +205,7 @@ impl AddrSpace {
 
         let area = MemoryArea::new(start, size, None, flags, Backend::new_alloc(populate));
         self.areas
-            .map(area, &mut self.pt, false)
+            .map(area, &mut self.pt, false,None)
             .map_err(mapping_err_to_ax_err)?;
         Ok(())
     }
@@ -452,6 +452,7 @@ impl AddrSpace {
     /// Returns `true` if the page fault is handled successfully (not a real
     /// fault).
     pub fn handle_page_fault(&mut self, vaddr: VirtAddr, access_flags: MappingFlags) -> bool {
+        error!("{:?}",self.va_range);
         if !self.va_range.contains(vaddr) {
             return false;
         }
@@ -485,7 +486,7 @@ impl AddrSpace {
             let new_area = MemoryArea::new(area.start(), area.size(), None, flags, backend.clone());
             new_aspace
                 .areas
-                .map(new_area, &mut new_aspace.pt, false)
+                .map(new_area, &mut new_aspace.pt, false,None)
                 .map_err(mapping_err_to_ax_err)?;
 
             // Copy data from old memory area to new memory area.

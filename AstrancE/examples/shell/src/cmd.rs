@@ -1,7 +1,7 @@
 use std::fs::{self, File, FileType};
 use std::io::{self, prelude::*};
 use std::{string::String, vec::Vec};
-
+use std::os::arceos::modules::axlog::error;
 #[cfg(all(not(feature = "axstd"), unix))]
 use std::os::unix::fs::{FileTypeExt, PermissionsExt};
 
@@ -78,6 +78,7 @@ fn do_ls(args: &str) {
     let name_count = args.split_whitespace().count();
 
     fn show_entry_info(path: &str, entry: &str) -> io::Result<()> {
+        // error!("into show_entry_info: {:?},{:?}", path,entry);
         let metadata = fs::metadata(path)?;
         let size = metadata.len();
         let file_type = metadata.file_type();
@@ -90,6 +91,7 @@ fn do_ls(args: &str) {
 
     fn list_one(name: &str, print_name: bool) -> io::Result<()> {
         let is_dir = fs::metadata(name)?.is_dir();
+        // error!("is_dir: {:?}", is_dir);
         if !is_dir {
             return show_entry_info(name, name);
         }

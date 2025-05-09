@@ -2,32 +2,33 @@ use crate::{
     copy_from_kernel,
     ctypes::{CloneFlags, TimeStat, WaitStatus},
     elf::ELFInfo,
-    loader::load_app_from_disk,
+    loader::load_elf_from_disk,
     mm::map_elf_sections,
 };
-use alloc::{
-    string::{String, ToString},
-    sync::Arc,
-    vec::Vec,
-};
+use alloc::{string::{String, ToString}, sync::Arc, vec, vec::Vec};
 use arceos_posix_api::FD_TABLE;
 use axerrno::{AxError, AxResult};
-use axfs::api::set_current_dir;
+use axfs::api::{current_dir, read, set_current_dir};
 use axfs::{CURRENT_DIR, CURRENT_DIR_PATH};
-use axhal::trap::{POST_TRAP, PRE_TRAP, register_trap_handler};
-use signal::SignalContext;
+use axhal::trap::{register_trap_handler, POST_TRAP, PRE_TRAP};
+use axio;
+use axio::Read;
 use core::{
     cell::UnsafeCell,
     sync::atomic::{AtomicU64, Ordering},
 };
 use memory_addr::{VirtAddr, VirtAddrRange};
+#[cfg(feature = "sig")]
+use signal::SignalContext;
+use xmas_elf::symbol_table::Type::File;
 
+use crate::mm::load_elf_to_mem;
 use axhal::{
     arch::{TrapFrame, UspaceContext},
     time::{monotonic_time_nanos, NANOS_PER_MICROS, NANOS_PER_SEC},
 };
 use axmm::heap::HeapSpace;
-use axmm::{AddrSpace, kernel_aspace};
+use axmm::{kernel_aspace, AddrSpace};
 use axns::{AxNamespace, AxNamespaceIf};
 use axsync::Mutex;
 use axtask::{current, AxTaskRef, TaskExtRef, TaskInner};
@@ -80,7 +81,8 @@ impl TaskExt {
             aspace,
             ns: AxNamespace::new_thread_local(false),
             time: TimeStat::new().into(),
-            sigctx: SignalContext::default()
+            #[cfg(feature = "sig")]
+            sigctx: SignalContext::default(),
         }
     }
 
@@ -206,6 +208,7 @@ pub fn spawn_user_task_inner(
     app_name: &str,
     aspace: Arc<Mutex<AddrSpace>>,
     uctx: UspaceContext,
+    pwd: String,
 ) -> TaskInner {
     let mut task = TaskInner::new(
         move || {
@@ -220,7 +223,7 @@ pub fn spawn_user_task_inner(
                 kstack_top,
             );
             // FIXME:
-            set_current_dir("/");
+            set_current_dir(pwd.as_str()).unwrap();
             unsafe { curr.task_ext().uctx.enter_uspace(kstack_top) };
         },
         app_name.into(),
@@ -240,8 +243,9 @@ pub fn spawn_user_task(
     app_name: &str,
     aspace: Arc<Mutex<AddrSpace>>,
     uctx: UspaceContext,
+    pwd: String,
 ) -> AxTaskRef {
-    spawn_user_task_inner(app_name, aspace, uctx).into_arc()
+    spawn_user_task_inner(app_name, aspace, uctx, pwd).into_arc()
     /*
      *let task_inner = spawn_user_task_inner(app_name, aspace, uctx);
      *axtask::spawn_task(task_inner)
@@ -329,12 +333,11 @@ pub fn wait_pid(task: AxTaskRef, pid: i32, exit_code_ptr: *mut i32) -> Result<u6
 /// fork current task
 /// **Return**
 /// - `Ok(new_task_ref)` if fork successfully
-pub fn fork(current_task: AxTaskRef, from_umode: bool) -> AxResult<AxTaskRef> {
-    clone_task(current_task, None, CloneFlags::FORK, from_umode)
+pub fn fork(from_umode: bool) -> AxResult<AxTaskRef> {
+    clone_task(None, CloneFlags::FORK, from_umode)
 }
 
 pub fn clone_task(
-    current_task: AxTaskRef,
     stack: Option<usize>,
     clone_flags: CloneFlags,
     from_umode: bool,
@@ -346,7 +349,7 @@ pub fn clone_task(
 ) -> AxResult<AxTaskRef> {
     axconfig::plat::KERNEL_STACK_SIZE;
     // TODO: support all flags
-
+    let current_task = current();
     let current_task_ext = current_task.task_ext();
     // new task with same ip and sp of current task
     let mut trap_frame = read_trapframe_from_kstack(current_task.get_kernel_stack_top().unwrap());
@@ -383,11 +386,12 @@ pub fn clone_task(
     //new_uctx.0 = trap_frame;
     let new_uctx = UspaceContext::from(&trap_frame);
     //panic!();
-
+    let current_d = current_dir()?;
     let new_task_ref = spawn_user_task(
         current_task.name(),
         Arc::new(Mutex::new(new_aspace)),
         new_uctx,
+        current_d,
     );
 
     // TODO: children task management
@@ -401,17 +405,36 @@ pub fn clone_task(
 /// **Return**
 /// - `Ok(handler)` if exec successfully, call handler to enter task.
 /// - `Err(AxError)` if exec failed
-pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxResult {
+/// 
+pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxResult<!> {
     warn!(
         "exec: {} with args {:?}, envs {:?}",
         program_name, args, envs
     );
+    let mut args_ = vec![];
+    let mut program_path = program_name.to_string();
+    let mut buffer: [u8; 64] = [0; 64];
+    let mut file = axfs::api::File::open(program_path.as_str())?;
+    file.read(&mut buffer)?;
+    if buffer[..2] == [b'#', b'!'] {
+        debug!(
+            "execve:{:?} starts with {:?}",
+            program_name,
+            &buffer as &[u8]
+        );
+        // TODO: read real shabang
+        let shabang = "/musl/busybox";
 
-    let program_path = program_name.to_string();
-    let elf_file = load_app_from_disk(&program_path)?;
+        args_.push(shabang.into());
+        args_.push("ash".into());
 
+        program_path = shabang.parse().unwrap(); // busybox
+    }
+    args_.extend_from_slice(args);
+    let args_: &[String] = args_.as_slice();
+
+    let elf_file = load_elf_from_disk(&program_path)?;
     let current_task = current();
-
     let mut aspace = current_task.task_ext().aspace.lock();
     let elf_info = ELFInfo::new(elf_file, aspace.base());
 
@@ -419,13 +442,12 @@ pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxR
         warn!("Address space is shared by multiple tasks, exec is not supported.");
         return Err(AxError::Unsupported);
     }
-
     aspace.unmap_user_areas()?;
     axhal::arch::flush_tlb(None);
 
     //TODO: clone envs??
     let (entry_point, user_stack_base) =
-        map_elf_sections(elf_info, &mut aspace, Some(args), Some(envs))?;
+        map_elf_sections(elf_info, &mut aspace, Some(args_), Some(envs))?;
 
     let task_ext = unsafe { &mut *(current_task.task_ext_ptr() as *mut TaskExt) };
     task_ext.uctx = UspaceContext::new(entry_point.as_usize(), user_stack_base, 0);

@@ -38,7 +38,7 @@ pub fn load_app_elf(idx: usize) -> ElfFile<'static> {
     ElfFile::new(app_slice).unwrap()
 }
 
-pub fn load_app_from_disk(app_path: &str) -> AxResult<ElfFile<'static>> {
+pub fn load_elf_from_disk(app_path: &str) -> AxResult<ElfFile<'static>> {
     let dir = CURRENT_DIR.lock().clone();
     let file = axfs::api::read_at(&dir,app_path)?;
     let slice = file.leak();

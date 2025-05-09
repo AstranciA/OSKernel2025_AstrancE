@@ -11,7 +11,7 @@ keywords.workspace = true
 categories.workspace = true
 
 [features]
-default = ["process", "mm", "syscalls", "mmap", "heap", "sig"]
+default = ["process", "mm", "syscalls", "mmap", "heap"]
 process = ["axns", "axtask", "axfeat/multitask"]
 mm = ["axmm"]
 COW = ["axmm/COW", "page_table_entry/COW"]
@@ -39,7 +39,7 @@ axsyscall = { workspace = true, features = [
   "pipe",
   "multitask",
 ] }
-
+axio = { version = "0.1.1", features = ["alloc"] }
 axerrno = "0.1"
 memory_addr = "0.3.2"
 bitflags = "2.9.0"

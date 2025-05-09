@@ -23,7 +23,6 @@ use syscalls::Sysno;
 
 syscall_handler_def!(
         clone => args {
-            let curr = current();
             let clone_flags = CloneFlags::from_bits(args[0] as u32);
             if clone_flags.is_none() {
                 error!("Invalid clone flags: {:x}", args[0]);
@@ -33,7 +32,6 @@ syscall_handler_def!(
             let sp = args[1];
 
             let child_task = task::clone_task(
-                curr.as_task_ref().clone(),
                 if (sp != 0) { Some(sp) } else { None },
                 clone_flags,
                 true,
