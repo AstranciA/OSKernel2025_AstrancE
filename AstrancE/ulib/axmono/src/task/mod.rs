@@ -377,7 +377,7 @@ pub fn clone_task(
 
     if from_umode {
         trap_frame.set_ret_code(0);
-        trap_frame.inc_sepc();
+        trap_frame.step_ip();
     }
 
     // TODO: clone stack since it's always changed.
