@@ -5,7 +5,7 @@ use riscv::register::{scause, stval};
 
 use super::TrapFrame;
 
-use crate::trap::{post_trap, pre_trap};
+use crate::trap::{PAGE_FAULT, post_trap, pre_trap};
 
 core::arch::global_asm!(
     include_asm_macros!(),
@@ -15,6 +15,9 @@ core::arch::global_asm!(
 
 fn handle_breakpoint(sepc: &mut usize) {
     debug!("Exception(Breakpoint) @ {:#x} ", sepc);
+    if *sepc == 1 {
+        warn!("123123");
+    }
     *sepc += 2
 }
 
@@ -35,10 +38,19 @@ fn handle_page_fault(tf: &TrapFrame, mut access_flags: MappingFlags, is_user: bo
     }
 }
 
+fn tmp() {
+    debug!("tmp");
+}
+
 #[unsafe(no_mangle)]
 fn riscv_trap_handler(tf: &mut TrapFrame, from_user: bool) {
     let scause = scause::read();
-    pre_trap(tf);
+    //pre_trap(tf);
+    warn!("trap from {:x?}", tf.get_ip());
+    if tf.get_ip() == 0x105330 {
+        //unsafe { core::arch::asm!("ebreak") }; // 手动触发断点
+    }
+    //warn!("trap from {:x?}", tf);
     if let Ok(cause) = scause.cause().try_into::<I, E>() {
         match cause {
             #[cfg(feature = "uspace")]
@@ -57,6 +69,7 @@ fn riscv_trap_handler(tf: &mut TrapFrame, from_user: bool) {
             }
             Trap::Exception(E::Breakpoint) => handle_breakpoint(&mut tf.sepc),
             Trap::Interrupt(_) => {
+                //warn!("asdaf");
                 handle_trap!(IRQ, scause.bits());
             }
             _ => {
@@ -71,5 +84,5 @@ fn riscv_trap_handler(tf: &mut TrapFrame, from_user: bool) {
             tf
         );
     }
-    post_trap(tf);
+    //post_trap(tf);
 }

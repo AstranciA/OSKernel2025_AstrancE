@@ -181,7 +181,7 @@ dependencies = [
  "axio",
  "axlog",
  "axnet",
- "axns",
+ "axns 0.1.0 (git+https://github.com/oscomp/arceos.git)",
  "axruntime",
  "axsync",
  "axtask",
@@ -189,7 +189,7 @@ dependencies = [
  "ctor_bare",
  "flatten_objects",
  "lazy_static",
- "spin",
+ "spin 0.9.8",
  "static_assertions",
 ]
 
@@ -353,7 +353,7 @@ dependencies = [
  "fxmac_rs",
  "ixgbe-driver",
  "log",
- "spin",
+ "spin 0.9.8",
 ]
 
 [[package]]
@@ -413,7 +413,7 @@ dependencies = [
  "axfs_ramfs",
  "axfs_vfs",
  "axio",
- "axns",
+ "axns 0.1.0 (git+https://github.com/oscomp/arceos.git)",
  "axsync",
  "axtask",
  "cap_access",
@@ -423,7 +423,7 @@ dependencies = [
  "lazyinit",
  "log",
  "lwext4_rust",
- "spin",
+ "spin 0.9.8",
 ]
 
 [[package]]
@@ -432,7 +432,7 @@ version = "0.1.0"
 dependencies = [
  "axfs_vfs",
  "log",
- "spin",
+ "spin 0.9.8",
 ]
 
 [[package]]
@@ -441,7 +441,7 @@ version = "0.1.0"
 dependencies = [
  "axfs_vfs",
  "log",
- "spin",
+ "spin 0.9.8",
 ]
 
 [[package]]
@@ -554,7 +554,9 @@ dependencies = [
  "axio",
  "axlog",
  "axmm",
- "axns",
+ "axns 0.1.0 (git+https://github.com/oscomp/arceos.git)",
+ "axprocess",
+ "axsignal",
  "axsync",
  "axsyscall",
  "axtask",
@@ -562,11 +564,16 @@ dependencies = [
  "crate_interface",
  "kernel-elf-parser",
  "linkme",
+ "linux-raw-sys 0.9.4",
  "memory_addr",
  "numeric-enum-macro",
  "page_table_entry",
  "page_table_multiarch",
+ "percpu",
+ "spin 0.10.0",
+ "static_assertions",
  "syscalls",
+ "weak-map",
  "xmas-elf",
 ]
 
@@ -585,16 +592,35 @@ dependencies = [
  "lazyinit",
  "log",
  "smoltcp",
- "spin",
+ "spin 0.9.8",
 ]
 
 [[package]]
 name = "axns"
 version = "0.1.0"
 dependencies = [
- "axns",
+ "axns 0.1.0 (git+https://github.com/oscomp/arceos.git)",
  "crate_interface",
  "lazyinit",
+]
+
+[[package]]
+name = "axns"
+version = "0.1.0"
+source = "git+https://github.com/oscomp/arceos.git#99c579b6038ea8a22ee8312d83b3f0ad02328d8d"
+dependencies = [
+ "crate_interface",
+ "lazyinit",
+]
+
+[[package]]
+name = "axprocess"
+version = "0.1.0"
+source = "git+https://github.com/Starry-OS/axprocess.git#57d448062c992613dc34d877fc6cada9d4d23909"
+dependencies = [
+ "kspin",
+ "lazyinit",
+ "weak-map",
 ]
 
 [[package]]
@@ -616,6 +642,19 @@ dependencies = [
  "ctor_bare",
  "kernel_guard",
  "percpu",
+]
+
+[[package]]
+name = "axsignal"
+version = "0.1.0"
+dependencies = [
+ "arceos_posix_api",
+ "axerrno",
+ "axhal",
+ "axlog",
+ "bitflags 2.9.0",
+ "memory_addr",
+ "syscalls",
 ]
 
 [[package]]
@@ -1110,7 +1149,7 @@ dependencies = [
  "atomic-polyfill",
  "hash32",
  "rustc_version",
- "spin",
+ "spin 0.9.8",
  "stable_deref_trait",
 ]
 
@@ -1255,7 +1294,7 @@ version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bbd2bcb4c963f2ddae06a2efc7e9f3591312473c50c6685e1f298068316e66fe"
 dependencies = [
- "spin",
+ "spin 0.9.8",
 ]
 
 [[package]]
@@ -1316,6 +1355,12 @@ name = "linux-raw-sys"
 version = "0.4.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d26c52dbd32dccf2d10cac7725f8eae5296885fb5703b261f7d0a0739ec807ab"
+
+[[package]]
+name = "linux-raw-sys"
+version = "0.9.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cd945864f07fe9f5371a27ad7b52a172b4b499999f1d97574c9fa68373937e12"
 
 [[package]]
 name = "lock_api"
@@ -1453,7 +1498,7 @@ dependencies = [
  "cfg-if",
  "kernel_guard",
  "percpu_macros",
- "spin",
+ "spin 0.9.8",
  "x86",
 ]
 
@@ -1688,7 +1733,7 @@ dependencies = [
  "bitflags 2.9.0",
  "errno",
  "libc",
- "linux-raw-sys",
+ "linux-raw-sys 0.4.15",
  "windows-sys",
 ]
 
@@ -1766,6 +1811,15 @@ name = "spin"
 version = "0.9.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6980e8d7511241f8acf4aebddbb1ff938df5eebe98691418c4468d0b72a96a67"
+dependencies = [
+ "lock_api",
+]
+
+[[package]]
+name = "spin"
+version = "0.10.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d5fe4ccb98d9c292d56fec89a5e07da7fc4cf0dc11e156b41793132775d3e591"
 dependencies = [
  "lock_api",
 ]
@@ -2000,6 +2054,11 @@ checksum = "1a05d73b933a847d6cccdda8f838a22ff101ad9bf93e33684f39c1f5f0eece3d"
 dependencies = [
  "unicode-ident",
 ]
+
+[[package]]
+name = "weak-map"
+version = "0.1.0"
+source = "git+https://github.com/Starry-OS/weak-map.git#b19a081d251a8027638e05ad84ff0efad8a7a3b3"
 
 [[package]]
 name = "which"

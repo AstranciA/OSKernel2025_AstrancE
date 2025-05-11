@@ -138,6 +138,15 @@ impl UspaceContext {
         self.0.rax = rax as _;
     }
 
+    pub fn set_args(&mut self, args: [usize; 6]) {
+        self.0.rdi = args[0] as _;
+        self.0.rsi = args[1] as _;
+        self.0.rdx = args[2] as _;
+        self.0.r10 = args[3] as _;
+        self.0.r8 = args[4] as _;
+        self.0.r9 = args[5] as _;
+    }
+
     /// Enters user space.
     ///
     /// It restores the user registers and jumps to the user entry point

@@ -8,7 +8,7 @@ use axhal::{
 };
 use axmm::AddrSpace;
 use axtask::{TaskExtRef, current};
-use memory_addr::MemoryAddr;
+use memory_addr::{MemoryAddr, VirtAddrRange};
 use xmas_elf::ElfFile;
 
 use crate::{copy_from_kernel, elf::ELFInfo};
@@ -98,7 +98,7 @@ pub fn map_elf_sections(
     let ustack_size = axconfig::plat::USER_STACK_SIZE;
     let ustack_start = ustack_end - ustack_size;
     debug!(
-        "Mapping user stack: {:#x?} -> {:#x?}",
+        "Mapping user stack: {:#x?}..{:#x?}",
         ustack_start, ustack_end
     );
     // FIXME: Add more arguments and environment variables
@@ -119,17 +119,50 @@ pub fn map_elf_sections(
     uspace.write(ustack_end - stack_data.len(), stack_data.as_slice())?;
     let sp_offset = stack_data.len();
     //Ok((elf_info.entry, VirtAddr::from_ptr_of(stack_data.as_ptr())))
+    #[cfg(feature = "sig")]
+    {
+        let signal_stack = (ustack_start - axconfig::plat::SIGNAL_STACK_SIZE)
+            .align_down_4k()
+            .wrapping_sub(0x1000); //sub to protect
+        let signal_stack =
+            VirtAddrRange::from_start_size(signal_stack, axconfig::plat::SIGNAL_STACK_SIZE);
+        uspace.map_alloc(
+            signal_stack.start,
+            signal_stack.size(),
+            MappingFlags::READ | MappingFlags::WRITE | MappingFlags::USER,
+            false,
+        )?;
+    }
     Ok((elf_info.entry, ustack_end - sp_offset))
 }
 
+#[percpu::def_percpu]
+static mut ACCESSING_USER_MEM: bool = false;
+
+/// Enables scoped access into user memory, allowing page faults to occur inside
+/// kernel.
+pub fn access_user_memory<R>(f: impl FnOnce() -> R) -> R {
+    ACCESSING_USER_MEM.with_current(|v| {
+        *v = true;
+        let result = f();
+        *v = false;
+        result
+    })
+}
+
+/// Check if the current thread is accessing user memory.
+pub fn is_accessing_user_memory() -> bool {
+    ACCESSING_USER_MEM.read_current()
+}
 #[register_trap_handler(PAGE_FAULT)]
 fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool) -> bool {
     debug!(
         "Page fault at {:#x?}, flags: {:#x?}, is_user: {:?}",
         vaddr, access_flags, is_user
     );
-    let curr = current();
-    let mut aspace = curr.task_ext().aspace.lock();
-
-    aspace.handle_page_fault(vaddr, access_flags)
+    let current = current();
+    let mut aspace = current.task_ext().process_data().aspace.lock();
+    let result = aspace.handle_page_fault(vaddr, access_flags);
+    warn!("Page fault result: {result:?}");
+    result
 }

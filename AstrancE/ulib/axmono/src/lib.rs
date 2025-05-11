@@ -6,6 +6,8 @@ Although AstrancE is designed to be a unikernel, some may want to use user mode 
 #![no_std]
 #![feature(never_type)]
 #![feature(stmt_expr_attributes)]
+#![feature(naked_functions)]
+#[macro_use]
 extern crate alloc;
 #[macro_use]
 extern crate axlog;
@@ -13,15 +15,17 @@ extern crate axlog;
 extern crate axsyscall;
 pub mod ctypes;
 pub mod utils;
+pub mod ptr;
 use core::clone;
 
 use axerrno::AxResult;
 use axhal::arch::TrapFrame;
 use axhal::trap::{SYSCALL, register_trap_handler};
 use axmm::kernel_aspace;
+use axprocess::Process;
 use axtask::{current, yield_now};
 use ctypes::{CloneFlags, WaitStatus};
-use task::wait_pid;
+use task::sys_waitpid;
 
 pub mod elf;
 pub mod loader;
@@ -37,7 +41,6 @@ pub mod mm;
 #[cfg(any(feature = "mm", feature = "process"))]
 /// If the target architecture requires it, the kernel portion of the address
 /// space will be copied to the user address space.
-/// TODO: unsafe. using trampoline instead
 pub fn copy_from_kernel(aspace: &mut axmm::AddrSpace) -> AxResult {
     use axmm::kernel_aspace;
 

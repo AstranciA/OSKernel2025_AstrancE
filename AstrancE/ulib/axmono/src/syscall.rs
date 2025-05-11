@@ -6,13 +6,15 @@ use core::{
 use crate::{
     ctypes::{CloneFlags, WaitStatus},
     mm::mmap::MmapIOImpl,
-    task::{self, time_stat_from_user_to_kernel, time_stat_ns, time_stat_output},
+    task::{self, time_stat_from_user_to_kernel, time_stat_output},
 };
 use alloc::{string::String, sync::Arc, vec::Vec};
-use axhal::trap::{PRE_TRAP, register_trap_handler};
-use arceos_posix_api::{self as api, char_ptr_to_str, get_file_like, str_vec_ptr_to_str, sys_read};
+use arceos_posix_api::{
+    self as api, char_ptr_to_str, ctypes::*, get_file_like, str_vec_ptr_to_str, sys_read,
+};
 use axerrno::{AxError, LinuxError};
 use axfs::{CURRENT_DIR, api::set_current_dir, fops::Directory};
+use axhal::trap::{PRE_TRAP, register_trap_handler};
 use axhal::{arch::TrapFrame, time::nanos_to_ticks};
 use axmm::{MmapFlags, MmapPerm};
 use axsyscall::{ToLinuxResult, syscall_handler_def};
@@ -22,14 +24,8 @@ use memory_addr::MemoryAddr;
 use syscalls::Sysno;
 
 syscall_handler_def!(
-        clone => args {
-            let clone_flags = CloneFlags::from_bits(args[0] as u32);
-            if clone_flags.is_none() {
-                error!("Invalid clone flags: {:x}", args[0]);
-                return Err(LinuxError::EINVAL);
-            }
-            let clone_flags = clone_flags.unwrap();
-            let sp = args[1];
+        clone => [flags, sp, ..] {
+            let clone_flags = CloneFlags::from_bits_retain(flags as u32);
 
             let child_task = task::clone_task(
                 if (sp != 0) { Some(sp) } else { None },
@@ -37,33 +33,41 @@ syscall_handler_def!(
                 true,
             )
             .unwrap();
-            axtask::spawn_task_by_ref(child_task.clone());
             Ok(child_task.id().as_u64() as isize)
         }
         wait4 => args {
             let curr = current();
-            // FIXME: error code
-            let mut result = Err(LinuxError::EPERM);
-            while let wait_result = task::wait_pid(
-                curr.as_task_ref().clone(),
-                args[0] as i32,
-                args[1] as *mut i32,
-            ) {
-                let r = match wait_result {
-                    Ok(pid) => {
-                        result = Ok(pid as isize);
-                        break;
-                    }
-                    Err(WaitStatus::NotExist) => {
-                        result = Ok(0);
-                        break;
-                    }
-                    Err(e) => {
-                        debug!("wait4: {:?}, keep waiting...", e);
-                    }
-                };
-            }
-            result
+            crate::sys_waitpid(
+                curr.task_ext().thread.process().pid() as i32,
+                args[0].into(),
+                args[1] as u32,
+            )
+            /*
+             *let curr = current();
+             *error!("wait4: {args:x?}");
+             *let mut result = Err(LinuxError::EPERM);
+             *while let wait_result = task::wait_pid(
+             *    curr.as_task_ref().clone(),
+             *    args[0] as i32,
+             *    args[1] as *mut i32,
+             *) {
+             *    let r = match wait_result {
+             *        Ok(pid) => {
+             *            error!("wait success! {pid}");
+             *            result = Ok(pid as isize);
+             *            break;
+             *        }
+             *        Err(WaitStatus::NotExist) => {
+             *            result = Ok(0);
+             *            break;
+             *        }
+             *        Err(e) => {
+             *            //debug!("wait4: {:?}, keep waiting...", e);
+             *        }
+             *    };
+             *}
+             *result
+             */
         }
         execve => [pathname, argv, envp, ..] {
             let pathname = char_ptr_to_str(pathname as *const c_char)?;
@@ -100,7 +104,7 @@ syscall_handler_def!(
         }
         mmap => args {
             let curr = current();
-            let mut aspace = curr.task_ext().aspace.lock();
+            let mut aspace = curr.task_ext().process_data().aspace.lock();
             let perm = MmapPerm::from_bits(args[2]).ok_or(LinuxError::EINVAL)?;
             let flags = MmapFlags::from_bits(args[3]).ok_or(LinuxError::EINVAL)?;
             let fd = args[4];
@@ -123,7 +127,7 @@ syscall_handler_def!(
         }
         munmap => args {
             let curr = current();
-            let mut aspace = curr.task_ext().aspace.lock();
+            let mut aspace = curr.task_ext().process_data().aspace.lock();
             let start = args[0].into();
             let size = args[1].align_up_4k();
             if aspace.munmap(start, size).is_ok() {
@@ -133,13 +137,19 @@ syscall_handler_def!(
                 Err(LinuxError::EPERM)
             }
         }
-        getppid => args {
-            let curr = current();
-            (curr.task_ext().get_parent() as isize).to_linux_result()
+        getpid => _ {
+            Ok(current().task_ext().thread.process().pid() as _)
+        }
+        gettid => _ {
+            Ok(current().task_ext().thread.tid() as _)
+        }
+        getppid => _ {
+            current().task_ext().thread.process().parent().map(|p|p.pid() as _).ok_or(LinuxError::EINVAL)
         }
         // FIXME: cutime cstimes
         times => args {
-            let (utime_ns, stime_ns) = time_stat_ns();
+            let curr_task = current();
+            let (utime_ns, stime_ns) = curr_task.task_ext().time_stat_output();
             let utime = nanos_to_ticks(utime_ns.try_into().map_err(|_| AxError::BadState)?);
             let stime = nanos_to_ticks(stime_ns.try_into().map_err(|_| AxError::BadState)?);
             let tms = api::ctypes::tms {
@@ -154,10 +164,11 @@ syscall_handler_def!(
             Ok(0)
             //unsafe { core::slice::from_raw_parts_mut(args[0] as *mut api::ctypes::tms, 1).copy_from_slice(tms); }
         }
+        rt_sigaction => [signum, act, oldact, ..] {
+            error!("123");
+            task::signal::sys_sigaction(signum.try_into().map_err(|_| LinuxError::EINVAL)?, act as *const arceos_posix_api::ctypes::sigaction, oldact as *mut arceos_posix_api::ctypes::sigaction)
+        }
+        rt_sigprocmask => [how, set, oldset, ..] {
+            task::signal::sys_sigprocmask(how.try_into().map_err(|_| LinuxError::EINVAL)?, set as *const sigset_t, oldset as *mut sigset_t)
+        }
 );
-
-#[register_trap_handler(PRE_TRAP)]
-fn pre_trap_handler(trap_frame: &TrapFrame) -> bool {
-    //warn!("trap from 0x{:x?}", trap_frame.sepc);
-    true
-}

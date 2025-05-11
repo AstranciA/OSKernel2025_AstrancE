@@ -1,0 +1,20 @@
+[package]
+name = "axsignal"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+arceos_posix_api = { workspace = true }
+syscalls = { workspace = true }
+memory_addr = "0.3.2"
+bitflags = "2.9.0"
+axlog = { workspace = true }
+axhal = { workspace = true }
+axerrno = "0.1"
