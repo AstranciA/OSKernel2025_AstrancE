@@ -6,6 +6,7 @@ use axhal::{
     paging::MappingFlags,
 };
 use kernel_elf_parser::{AuxvEntry, ELFParser};
+use xmas_elf::program::Type;
 use xmas_elf::{
     ElfFile,
     header::{self, Header},
@@ -40,7 +41,10 @@ impl ELFInfo {
 
         let segments = elf
             .program_iter()
-            .filter(|ph| ph.get_type() == Ok(xmas_elf::program::Type::Load))
+            .filter(|ph| {
+                ph.get_type() == Ok(xmas_elf::program::Type::Load)
+                    || ph.get_type() == Ok(xmas_elf::program::Type::Tls)
+            })
             .map(|ph| {
                 let st_va = VirtAddr::from(ph.virtual_addr() as usize) + elf_offset;
                 let st_va_align: VirtAddr = st_va.align_down_4k();
@@ -51,6 +55,7 @@ impl ELFInfo {
 
                 let ph_flags = ph.flags();
                 let flags = ELFSegment::into_to_mapping_flag(ph_flags);
+                error!("{st_va:?} {ed_vaddr_align:?} {flags:?}");
 
                 let size = ed_vaddr_align.as_usize() - st_va_align.as_usize();
 
@@ -65,6 +70,7 @@ impl ELFInfo {
                     size,
                     data,
                     offset: st_va.align_offset_4k(),
+                    type_: ph.get_type().unwrap(),
                 }
             })
             .collect();
@@ -111,6 +117,7 @@ pub struct ELFSegment {
     pub flags: MappingFlags,
     pub data: &'static [u8],
     pub offset: usize,
+    pub type_: Type,
 }
 
 impl ELFSegment {

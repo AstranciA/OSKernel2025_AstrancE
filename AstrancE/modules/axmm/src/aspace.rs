@@ -393,6 +393,18 @@ impl AddrSpace {
         })
     }
 
+    /// To write data to the address space.
+    ///
+    /// # Arguments
+    ///
+    /// * `start_vaddr` - The start virtual address to write.
+    /// * `buf` - The buffer to write to the address space.
+    pub fn fill_zero(&self, start: VirtAddr, size: usize) -> AxResult {
+        self.process_area_data(start, size, |dst, offset, write_size| unsafe {
+            core::ptr::write_bytes(dst.as_mut_ptr().add(offset), 0, write_size);
+        })
+    }
+
     /// Updates mapping within the specified virtual address range.
     ///
     /// Returns an error if the address range is out of the address space or not
@@ -589,10 +601,14 @@ impl AddrSpace {
             {
                 match self.pt.query(vaddr) {
                     Ok((paddr, _, page_size)) => {
-                        new_aspace.pt.map(vaddr, paddr, page_size, pte_flags).unwrap();
+                        new_aspace
+                            .pt
+                            .map(vaddr, paddr, page_size, pte_flags)
+                            .unwrap();
                         self.pt
                             .remap(vaddr, paddr, pte_flags)
-                            .map(|(_, tlb)| tlb.flush()).unwrap();
+                            .map(|(_, tlb)| tlb.flush())
+                            .unwrap();
                     }
                     // If the page is not mapped, skip it.
                     Err(PagingError::NotMapped) => continue,

@@ -4,22 +4,17 @@ use axerrno::AxResult;
 use axhal::{
     mem::VirtAddr,
     paging::MappingFlags,
+    tls::{self, TlsArea},
     trap::{PAGE_FAULT, register_trap_handler},
 };
 use axmm::AddrSpace;
 use axtask::{TaskExtRef, current};
-use memory_addr::{MemoryAddr, VirtAddrRange};
+use memory_addr::{MemoryAddr, VirtAddrRange, va};
 use xmas_elf::ElfFile;
 
 use crate::{copy_from_kernel, elf::ELFInfo};
 
 pub fn new_user_aspace_empty() -> AxResult<AddrSpace> {
-    /*
-     *AddrSpace::new_empty(
-     *    VirtAddr::from_usize(config::USER_SPACE_BASE),
-     *    config::USER_SPACE_SIZE,
-     *)
-     */
     AddrSpace::new_empty(
         VirtAddr::from_usize(axconfig::plat::USER_SPACE_BASE),
         axconfig::plat::USER_SPACE_SIZE,
@@ -30,12 +25,13 @@ pub fn new_user_aspace_empty() -> AxResult<AddrSpace> {
 /// # Returns
 /// - The first return value is the entry point of the user app.
 /// - The second return value is the top of the user stack.
-/// - The third return value is the address space of the user app.
+/// - Third: thread pointer.
+/// - The last return value is the address space of the user app.
 pub fn load_elf_to_mem(
     elf_file: ElfFile<'static>,
     args: Option<&[String]>,
     envs: Option<&[String]>,
-) -> AxResult<(VirtAddr, VirtAddr, AddrSpace)> {
+) -> AxResult<(VirtAddr, VirtAddr, Option<VirtAddr>, AddrSpace)> {
     let mut uspace = new_user_aspace_empty()
         .and_then(|mut it| {
             copy_from_kernel(&mut it)?;
@@ -43,8 +39,8 @@ pub fn load_elf_to_mem(
         })
         .expect("Failed ot create user address space");
     let elf_info = ELFInfo::new(elf_file, uspace.base());
-    let (entry, ustack_pointer) = map_elf_sections(elf_info, &mut uspace, args, envs)?;
-    Ok((entry, ustack_pointer, uspace))
+    let (entry, ustack_pointer, tp) = map_elf_sections(elf_info, &mut uspace, args, envs)?;
+    Ok((entry, ustack_pointer, tp, uspace))
 }
 
 /**
@@ -52,6 +48,7 @@ init stack with args, envs, argc and argv.
 Returns:
 - The entry point of the user app.
 - The initial stack pointer
+- The thread pointer
 [argc | argv | env ]
 ^
 sp
@@ -61,26 +58,46 @@ pub fn map_elf_sections(
     uspace: &mut AddrSpace,
     args: Option<&[String]>,
     envs: Option<&[String]>,
-) -> Result<(VirtAddr, VirtAddr), axerrno::AxError> {
+) -> Result<(VirtAddr, VirtAddr, Option<VirtAddr>), axerrno::AxError> {
     //let elf_info = loader::load_elf(app_name, uspace.base());
     //let mut elf_info = ELFInfo::new(loader::load_app_from_disk(app_path), uspace.base());
     //let mut elf_info = elf_info.borrow_mut();
+    let mut tp: Option<VirtAddr> = None;
     for segement in elf_info.segments.iter() {
-        let segement_end = segement.start_va + segement.size;
-        debug!(
-            "Mapping ELF segment: [{:#x?}, {:#x?}) flags: {:#x?}",
-            segement.start_va, segement_end, segement.flags
-        );
+        match segement.type_ {
+            xmas_elf::program::Type::Load => {
+                let segement_end = segement.start_va + segement.size;
+                debug!(
+                    "Mapping ELF segment: [{:#x?}, {:#x?}) -> [{:#x?}, {:#x?}), flags: {:#x?}",
+                    segement.start_va + segement.offset,
+                    segement_end + segement.offset,
+                    segement.start_va,
+                    segement_end,
+                    segement.flags
+                );
 
-        uspace.map_alloc(segement.start_va, segement.size, segement.flags, true)?;
+                uspace.map_alloc(segement.start_va, segement.size, segement.flags, true)?;
 
-        if segement.data.is_empty() {
-            continue;
+                if segement.data.is_empty() {
+                    continue;
+                }
+                //uspace.populate_area(segement.start_va, segement.size);
+
+                warn!("data: len: {}", segement.data.len());
+                uspace.write(segement.start_va + segement.offset, segement.data)?;
+                uspace.fill_zero(
+                    segement.start_va + segement.offset + segement.data.len(),
+                    segement.size - segement.data.len(),
+                );
+                // TDOO: flush the I-cache
+            }
+            xmas_elf::program::Type::Tls => {
+                tp = Some(segement.start_va + segement.offset);
+            }
+            _ => {
+                panic!("Unsupported segment type");
+            }
         }
-        //uspace.populate_area(segement.start_va, segement.size);
-
-        uspace.write(segement.start_va + segement.offset, segement.data)?;
-        // TDOO: flush the I-cache
     }
 
     // heap
@@ -118,7 +135,7 @@ pub fn map_elf_sections(
 
     uspace.write(ustack_end - stack_data.len(), stack_data.as_slice())?;
     let sp_offset = stack_data.len();
-    //Ok((elf_info.entry, VirtAddr::from_ptr_of(stack_data.as_ptr())))
+
     #[cfg(feature = "sig")]
     {
         let signal_stack = (ustack_start - axconfig::plat::SIGNAL_STACK_SIZE)
@@ -133,7 +150,7 @@ pub fn map_elf_sections(
             false,
         )?;
     }
-    Ok((elf_info.entry, ustack_end - sp_offset))
+    Ok((elf_info.entry, ustack_end - sp_offset, tp))
 }
 
 #[percpu::def_percpu]

@@ -23,7 +23,6 @@ use memory_addr::{VirtAddr, VirtAddrRange};
 use time::TimeStat;
 use xmas_elf::symbol_table::Type::File;
 
-use crate::mm::load_elf_to_mem;
 use axhal::arch::{TrapFrame, UspaceContext};
 use axmm::AddrSpace;
 use axns::{AxNamespace, AxNamespaceIf};

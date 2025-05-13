@@ -178,6 +178,11 @@ impl UspaceContext {
         self.0.regs.a0 = a0;
     }
 
+    /// Sets the thread pointer.
+    pub const fn set_tp(&mut self, tp: usize) {
+        self.0.regs.tp = tp;
+    }
+
     /// Enters user space.
     ///
     /// It restores the user registers and jumps to the user entry point

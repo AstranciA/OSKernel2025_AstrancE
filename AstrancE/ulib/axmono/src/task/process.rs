@@ -401,7 +401,7 @@ pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxR
     axhal::arch::flush_tlb(None);
 
     //TODO: clone envs??
-    let (entry_point, user_stack_base) =
+    let (entry_point, user_stack_base, thread_pointer) =
         map_elf_sections(elf_info, &mut aspace, Some(args_), Some(envs))?;
 
     let task_ext = unsafe { &mut *(current_task.task_ext_ptr() as *mut TaskExt) };
@@ -413,9 +413,13 @@ pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxR
         set_current_dir(pwd.as_str())?;
     }
 
-    error!("to uspace");
+    debug!("to uspace");
+    let mut uctx = UspaceContext::new(entry_point.as_usize(), user_stack_base, 0);
+    if let Some(tp) = thread_pointer {
+        uctx.set_tp(tp.as_usize());
+    }
     unsafe {
-        UspaceContext::new(entry_point.as_usize(), user_stack_base, 0).enter_uspace(
+        uctx.enter_uspace(
             current_task
                 .kernel_stack_top()
                 .expect("No kernel stack top"),

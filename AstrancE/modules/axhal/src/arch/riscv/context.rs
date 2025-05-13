@@ -166,6 +166,11 @@ impl UspaceContext {
         self.0.regs.a0 = a0;
     }
 
+    /// Sets the thread pointer.
+    pub const fn set_tp(&mut self, tp: usize) {
+        self.0.regs.tp = tp;
+    }
+
     pub fn set_args(&mut self, args: [usize; 6]) {
         self.0.regs.a0 = args[0];
         self.0.regs.a1 = args[1];
