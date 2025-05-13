@@ -5,70 +5,71 @@ extern crate bitflags;
 #[macro_use]
 extern crate axlog;
 use core::{
-    arch::{asm, global_asm, naked_asm},
+    arch::naked_asm,
     ffi::{c_int, c_void},
     mem::MaybeUninit,
+    u64,
 };
 
-use arceos_posix_api::ctypes::{self, *};
 use axerrno::{LinuxError, LinuxResult};
 use axhal::arch::{TrapFrame, UspaceContext};
 use bitflags::*;
+use linux_raw_sys::general::*;
 use memory_addr::{VirtAddr, VirtAddrRange};
 use syscalls::Sysno;
 
-const NSIG: usize = 32;
+const NSIG: usize = 64;
 /// signals
-//#[repr(u32)]
-//#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-//pub enum Signal {
-//SIGBLOCK = SIG_BLOCK,
-//SIGUNBLOCK = SIG_UNBLOCK,
-//SIGSETMASK = SIG_SETMASK,
-//SIGHUP = SIGHUP,
-//SIGINT = SIGINT,
-//SIGQUIT = SIGQUIT,
-//SIGILL = SIGILL,
-//SIGTRAP = SIGTRAP,
-//SIGABRT = SIGABRT,
-//SIGIOT = SIGIOT,
-//SIGBUS = SIGBUS,
-//SIGFPE = SIGFPE,
-//SIGKILL = SIGKILL,
-//SIGUSR1 = SIGUSR1,
-//SIGSEGV = SIGSEGV,
-//SIGUSR2 = SIGUSR2,
-//SIGPIPE = SIGPIPE,
-//SIGALRM = SIGALRM,
-//SIGTERM = SIGTERM,
-//SIGSTKFLT = SIGSTKFLT,
-//SIGCHLD = SIGCHLD,
-//SIGCONT = SIGCONT,
-//SIGSTOP = SIGSTOP,
-//SIGTSTP = SIGTSTP,
-//SIGTTIN = SIGTTIN,
-//SIGTTOU = SIGTTOU,
-//SIGURG = SIGURG,
-//SIGXCPU = SIGXCPU,
-//SIGXFSZ = SIGXFSZ,
-//SIGVTALRM = SIGVTALRM,
-//SIGPROF = SIGPROF,
-//SIGWINCH = SIGWINCH,
-//SIGIO = SIGIO,
-////SIGPOLL = SIGPOLL,
-//SIGPWR = SIGPWR,
-//SIGSYS = SIGSYS,
-//SIGUNUSED = SIGUNUSED,
-//}
-//
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Signal(u32);
+#[repr(usize)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Signal {
+    SIGBLOCK = SIG_BLOCK as usize,
+    //SIGUNBLOCK = SIG_UNBLOCK,
+    //SIGSETMASK = SIG_SETMASK,
+    SIGHUP = SIGHUP as usize,
+    SIGINT = SIGINT as usize,
+    SIGQUIT = SIGQUIT as usize,
+    SIGILL = SIGILL as usize,
+    SIGTRAP = SIGTRAP as usize,
+    //SIGABRT = SIGABRT,
+    SIGIOT = SIGIOT as usize,
+    SIGBUS = SIGBUS as usize,
+    SIGFPE = SIGFPE as usize,
+    SIGKILL = SIGKILL as usize,
+    SIGUSR1 = SIGUSR1 as usize,
+    SIGSEGV = SIGSEGV as usize,
+    SIGUSR2 = SIGUSR2 as usize,
+    SIGPIPE = SIGPIPE as usize,
+    SIGALRM = SIGALRM as usize,
+    SIGTERM = SIGTERM as usize,
+    SIGSTKFLT = SIGSTKFLT as usize,
+    SIGCHLD = SIGCHLD as usize,
+    SIGCONT = SIGCONT as usize,
+    SIGSTOP = SIGSTOP as usize,
+    SIGTSTP = SIGTSTP as usize,
+    SIGTTIN = SIGTTIN as usize,
+    SIGTTOU = SIGTTOU as usize,
+    SIGURG = SIGURG as usize,
+    SIGXCPU = SIGXCPU as usize,
+    SIGXFSZ = SIGXFSZ as usize,
+    SIGVTALRM = SIGVTALRM as usize,
+    SIGPROF = SIGPROF as usize,
+    SIGWINCH = SIGWINCH as usize,
+    SIGIO = SIGIO as usize,
+    //SIGPOLL = SIGPOLL as usize,
+    SIGPWR = SIGPWR as usize,
+    //SIGSYS = SIGSYS as usize,
+    SIGUNUSED = SIGUNUSED as usize,
+}
+
+//#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+//pub struct Signal(u32);
 impl Signal {
     pub fn from_u32(n: u32) -> Option<Self> {
         if n as usize > NSIG {
             None
         } else {
-            Some(unsafe { core::mem::transmute(n) })
+            Some(unsafe { core::mem::transmute(n as usize) })
         }
     }
 }
@@ -79,83 +80,116 @@ impl TryFrom<c_int> for Signal {
         if value < 0 || value as usize > NSIG {
             Err(SignalError::InvalidSignal)
         } else {
-            Ok(Signal(value as u32))
+            Ok(unsafe { core::mem::transmute(value as usize) })
         }
     }
 }
-impl From<u32> for Signal {
-    fn from(n: u32) -> Self {
-        Self(n)
-    }
-}
-impl Into<u32> for Signal {
-    fn into(self) -> u32 {
-        self.0
-    }
-}
-impl Into<u64> for Signal {
-    fn into(self) -> u64 {
-        self.0 as u64
-    }
-}
+/*
+ *impl Into<u32> for Signal {
+ *    fn into(self) -> u32 {
+ *        self as
+ *    }
+ *}
+ *impl Into<u64> for Signal {
+ *    fn into(self) -> u64 {
+ *        self.0 as u64
+ *    }
+ *}
+ */
 
 bitflags! {
     #[derive(Clone, Copy, Default, Debug)]
     pub struct SignalSet :u64 {
         const EMPTY = 0;
-        const SIGHUP     = 1 << SIGHUP as usize;
-        const SIGINT     = 1 << SIGINT as usize;
-        const SIGQUIT    = 1 << SIGQUIT as usize;
-        const SIGILL     = 1 << SIGILL as usize;
-        const SIGTRAP    = 1 << SIGTRAP as usize;
-        const SIGABRT    = 1 << SIGABRT as usize;
-        const SIGIOT     = 1 << SIGIOT as usize;
-        const SIGBUS     = 1 << SIGBUS as usize;
-        const SIGFPE     = 1 << SIGFPE as usize;
-        const SIGKILL    = 1 << SIGKILL as usize;
-        const SIGUSR1    = 1 << SIGUSR1 as usize;
-        const SIGSEGV    = 1 << SIGSEGV as usize;
-        const SIGUSR2    = 1 << SIGUSR2 as usize;
-        const SIGPIPE    = 1 << SIGPIPE as usize;
-        const SIGALRM    = 1 << SIGALRM as usize;
-        const SIGTERM    = 1 << SIGTERM as usize;
-        const SIGSTKFLT  = 1 << SIGSTKFLT as usize;
-        const SIGCHLD    = 1 << SIGCHLD as usize;
-        const SIGCONT    = 1 << SIGCONT as usize;
-        const SIGSTOP    = 1 << SIGSTOP as usize;
-        const SIGTSTP    = 1 << SIGTSTP as usize;
-        const SIGTTIN    = 1 << SIGTTIN as usize;
-        const SIGTTOU    = 1 << SIGTTOU as usize;
-        const SIGURG     = 1 << SIGURG as usize;
-        const SIGXCPU    = 1 << SIGXCPU as usize;
-        const SIGXFSZ    = 1 << SIGXFSZ as usize;
-        const SIGVTALRM  = 1 << SIGVTALRM as usize;
-        const SIGPROF    = 1 << SIGPROF as usize;
-        const SIGWINCH   = 1 << SIGWINCH as usize;
-        const SIGIO      = 1 << SIGIO as usize;
-        const SIGPOLL    = 1 << SIGPOLL as usize;
-        const SIGPWR     = 1 << SIGPWR as usize;
-        const SIGSYS     = 1 << SIGSYS as usize;
-        const SIGUNUSED  = 1 << SIGUNUSED as usize;
+        const SIGHUP     = 1 << SIGHUP;
+        const SIGINT     = 1 << SIGINT;
+        const SIGQUIT    = 1 << SIGQUIT;
+        const SIGILL     = 1 << SIGILL;
+        const SIGTRAP    = 1 << SIGTRAP;
+        const SIGABRT    = 1 << SIGABRT;
+        const SIGIOT     = 1 << SIGIOT;
+        const SIGBUS     = 1 << SIGBUS;
+        const SIGFPE     = 1 << SIGFPE;
+        const SIGKILL    = 1 << SIGKILL;
+        const SIGUSR1    = 1 << SIGUSR1;
+        const SIGSEGV    = 1 << SIGSEGV;
+        const SIGUSR2    = 1 << SIGUSR2;
+        const SIGPIPE    = 1 << SIGPIPE;
+        const SIGALRM    = 1 << SIGALRM;
+        const SIGTERM    = 1 << SIGTERM;
+        const SIGSTKFLT  = 1 << SIGSTKFLT;
+        const SIGCHLD    = 1 << SIGCHLD;
+        const SIGCONT    = 1 << SIGCONT;
+        const SIGSTOP    = 1 << SIGSTOP;
+        const SIGTSTP    = 1 << SIGTSTP;
+        const SIGTTIN    = 1 << SIGTTIN;
+        const SIGTTOU    = 1 << SIGTTOU;
+        const SIGURG     = 1 << SIGURG;
+        const SIGXCPU    = 1 << SIGXCPU;
+        const SIGXFSZ    = 1 << SIGXFSZ;
+        const SIGVTALRM  = 1 << SIGVTALRM;
+        const SIGPROF    = 1 << SIGPROF;
+        const SIGWINCH   = 1 << SIGWINCH;
+        const SIGIO      = 1 << SIGIO;
+        const SIGPOLL    = 1 << SIGPOLL;
+        const SIGPWR     = 1 << SIGPWR;
+        const SIGSYS     = 1 << SIGSYS;
+        const SIGUNUSED  = 1 << SIGUNUSED ;
     }
 }
 
 impl SignalSet {
+    /// get lowest signal in the set
+    /// will return None if the set is empty (trailing_zeros == NSIG)
     pub fn get_one(&self) -> Option<Signal> {
         Signal::from_u32(self.bits().trailing_zeros())
+    }
+
+    /// get lowest signal in the set that is in the filter set
+    /// will return None if no signal in the set is in the filter set
+    pub fn get_one_in(&self, filter: SignalSet) -> Option<Signal> {
+        Signal::from_u32(self.intersection(filter).bits().trailing_zeros())
+    }
+
+    /// take the lowest signal in the set and remove it from the set
+    pub fn take_one(&mut self) -> Option<Signal> {
+        if let Some(sig) = self.get_one() {
+            self.remove(sig.into());
+            Some(sig)
+        } else {
+            None
+        }
+    }
+
+    /// take the lowest signal in the set that is in the filter set and remove it from the set
+    pub fn take_one_in(&mut self, filter: SignalSet) -> Option<Signal> {
+        if let Some(sig) = self.get_one_in(filter) {
+            self.remove(sig.into());
+            Some(sig)
+        } else {
+            None
+        }
     }
 }
 
 impl From<Signal> for SignalSet {
     fn from(sig: Signal) -> Self {
-        Self::from_bits_retain(1 << sig.0)
+        Self::from_bits_retain(1 << sig as usize)
     }
 }
+
+#[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
+impl From<sigset_t> for SignalSet {
+    fn from(value: sigset_t) -> Self {
+        Self::from_bits_retain(value.sig[0])
+    }
+}
+
 bitflags! {
     /// 信号处理标志位，匹配POSIX标准和Linux扩展
     #[repr(transparent)]
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-        pub struct SigFlags: u32 {
+        pub struct SigFlags: usize {
         /// 子进程停止时不发送SIGCHLD (SA_NOCLDSTOP)
         const NO_CHILD_STOP = 0x0000_0001;
         /// 子进程退出时不成为僵尸进程 (SA_NOCLDWAIT)
@@ -182,7 +216,9 @@ pub enum SigHandler {
     Default,
     Ignore,
     Handler(unsafe extern "C" fn(c_int)),
-    Action(unsafe extern "C" fn(c_int, *mut siginfo_t, *mut c_void)),
+    //actually Action(unsafe extern "C" fn(c_int, *mut siginfo_t, *mut c_void)),
+    // this is for capabilites, since the fn won't be called directly
+    Action(unsafe extern "C" fn(c_int)),
 }
 
 impl Default for SigHandler {
@@ -199,11 +235,11 @@ pub struct SigAction {
     pub flags: SigFlags,
 }
 
+#[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
 impl TryFrom<sigaction> for SigAction {
     type Error = SignalError;
 
     fn try_from(act: sigaction) -> Result<Self, Self::Error> {
-        warn!("flag: {:x?}", act.sa_flags);
         /*
          *let flags = if let Some(flags) = SigFlags::from_bits(act.sa_flags.try_into().unwrap()) {
          *    flags
@@ -211,22 +247,14 @@ impl TryFrom<sigaction> for SigAction {
          *    return Err(SignalError::InvalidFlags);
          *};
          */
-        let flags = SigFlags::from_bits_truncate(act.sa_flags as u32);
+        let flags = SigFlags::from_bits_retain(act.sa_flags as usize);
 
-        let mask = SignalSet::from_bits(act.sa_mask.__bits[0]).expect("Unimplemeted signal");
+        let mask = act.sa_mask.into();
 
         let handler = if flags.contains(SigFlags::SIG_INFO) {
-            SigHandler::Handler(unsafe {
-                act.__sa_handler
-                    .sa_handler
-                    .ok_or(SignalError::InvalidAction)?
-            })
+            SigHandler::Handler(unsafe { act.sa_handler.ok_or(SignalError::InvalidAction)? })
         } else {
-            SigHandler::Action(unsafe {
-                act.__sa_handler
-                    .sa_sigaction
-                    .ok_or(SignalError::InvalidAction)?
-            })
+            SigHandler::Action(unsafe { act.sa_handler.ok_or(SignalError::InvalidAction)? })
         };
 
         Ok(Self {
@@ -246,28 +274,28 @@ impl Into<sigaction> for SigAction {
         unsafe {
             match self.handler {
                 SigHandler::Handler(f) => {
-                    act.__sa_handler.sa_handler = Some(f);
+                    act.sa_handler = Some(f);
                 }
                 SigHandler::Action(f) => {
-                    act.__sa_handler.sa_sigaction = Some(f);
+                    act.sa_handler = Some(f);
                 }
                 SigHandler::Default => {
-                    act.__sa_handler.sa_handler = Some(tmp);
+                    act.sa_handler = Some(tmp);
                 }
                 SigHandler::Ignore => {
-                    act.__sa_handler.sa_handler = Some(core::mem::transmute(SIG_IGN));
+                    act.sa_handler = Some(core::mem::transmute(SIG_IGN));
                 }
             }
         }
 
         // 2. 设置信号掩码（RISC-V使用单个u64）
-        act.sa_mask.__bits[0] = self.mask.bits();
+        act.sa_mask = unsafe { core::mem::transmute(self.mask.bits()) };
 
         // 3. 设置标志位
-        act.sa_flags = self.flags.bits() as i32;
+        act.sa_flags = self.flags.bits() as u64;
 
         // 4. RISC-V不需要显式restorer，但保持ABI兼容
-        act.sa_restorer = None;
+        // act.sa_restorer = None;
 
         act
     }
@@ -291,36 +319,30 @@ unsafe extern "C" fn sigreturn_trampoline() {
 
 // 进程信号上下文
 pub struct SignalContext {
-    pub stack: SignalStackManager,
-    pub actions: [SigAction; NSIG], // 信号处理表
-    pub blocked: SignalSet,         // 被阻塞的信号
-    pub pending: SignalSet,         // 待处理信号
+    stack: SignalStackManager,
+    actions: [SigAction; NSIG], // 信号处理表
+    blocked: SignalSet,         // 被阻塞的信号
+    pending: SignalSet,         // 待处理信号
 }
 
 impl Default for SignalContext {
     fn default() -> Self {
         let mut default = Self {
             stack: Default::default(),
-            actions: Default::default(),
+            actions: [Default::default(); NSIG],
             blocked: Default::default(),
             pending: Default::default(),
         };
-        default.set_action(
-            Signal(SIGINT),
-            SigAction {
-                handler: SigHandler::Ignore,
-                mask: SignalSet::empty(),
-                flags: SigFlags::NO_DEFER,
-            },
-        );
-        default.set_action(
-            Signal(SIGSEGV),
-            SigAction {
-                handler: SigHandler::Default,
-                mask: SignalSet::empty(),
-                flags: SigFlags::NO_DEFER,
-            },
-        );
+        default.set_action(Signal::SIGINT, SigAction {
+            handler: SigHandler::Ignore,
+            mask: SignalSet::empty(),
+            flags: SigFlags::NO_DEFER,
+        });
+        default.set_action(Signal::SIGSEGV, SigAction {
+            handler: SigHandler::Default,
+            mask: SignalSet::empty(),
+            flags: SigFlags::NO_DEFER,
+        });
         default
     }
 }
@@ -341,13 +363,13 @@ impl SignalContext {
 
     /// 获取信号处理动作，返回之前的动作
     pub fn get_action(&mut self, sig: Signal) -> SigAction {
-        self.actions[sig.0 as usize]
+        self.actions[sig as usize]
     }
     /// 设置信号处理动作，返回之前的动作
     pub fn set_action(&mut self, sig: Signal, act: SigAction) -> SigAction {
         warn!("set action: {act:?}");
-        let old_act = self.actions[sig.0 as usize];
-        self.actions[sig.0 as usize] = act;
+        let old_act = self.actions[sig as usize];
+        self.actions[sig as usize] = act;
         old_act
     }
 
@@ -363,13 +385,29 @@ impl SignalContext {
         }
     }
 
-    pub fn get_mask(&self) -> SignalSet {
+    pub fn get_blocked(&self) -> SignalSet {
         self.blocked
+    }
+
+    pub fn take_pending_in(&mut self, filter: SignalSet) -> Option<Signal> {
+        self.pending.take_one_in(filter)
     }
 
     pub fn block(&mut self, mask: SignalSet) -> SignalSet {
         let old = self.blocked;
         self.blocked = self.blocked.union(mask);
+        old
+    }
+
+    pub fn unblock(&mut self, mask: SignalSet) -> SignalSet {
+        let old = self.blocked;
+        self.blocked = self.blocked.difference(mask);
+        old
+    }
+
+    pub fn set_mask(&mut self, mask: SignalSet) -> SignalSet {
+        let old = self.blocked;
+        self.blocked = mask;
         old
     }
 }
@@ -443,7 +481,7 @@ pub fn handle_pending_signals(sigctx: &mut SignalContext) {
             handler,
             mask,
             flags,
-        } = sigctx.actions[sig.0 as usize];
+        } = sigctx.actions[sig as usize];
 
         match handler {
             SigHandler::Default => handle_default_signal(sig, &mut *sigctx),
@@ -455,7 +493,7 @@ pub fn handle_pending_signals(sigctx: &mut SignalContext) {
                     let mut uctx = UspaceContext::new(
                         handler as usize,
                         sigctx.current_stack().expect("Sig stack not set").start,
-                        sig.0 as usize,
+                        sig as usize,
                     );
                     // 设置返回地址为信号返回trampoline
                     uctx.0.set_ra(sigreturn_trampoline as usize);
@@ -463,7 +501,7 @@ pub fn handle_pending_signals(sigctx: &mut SignalContext) {
                     // 设置信号屏蔽字
                     let old_mask = sigctx.blocked;
                     sigctx.blocked |= mask;
-                    handler(sig.0.try_into().unwrap());
+                    handler(sig as i32);
                     //unsafe { uctx.enter_uspace(current_task.kernel_stack_top().unwrap()) };
                 };
             }
@@ -474,12 +512,12 @@ pub fn handle_pending_signals(sigctx: &mut SignalContext) {
                     let mut uctx = UspaceContext::new(
                         handler as usize,
                         sigctx.current_stack().expect("Sig stack not set").start,
-                        sig.0 as usize,
+                        sig as usize,
                     );
                     // 设置返回地址为信号返回trampoline
                     uctx.0.set_ra(sigreturn_trampoline as usize);
                     // TODO: place siginfo_t in sig stack top
-                    //uctx.set_args([sig.0 as usize, ]);
+                    //uctx.set_args([sig as usize, ]);
 
                     // 设置信号屏蔽字
                     let old_mask = sigctx.blocked;

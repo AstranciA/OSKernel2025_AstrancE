@@ -28,7 +28,7 @@ use axhal::arch::{TrapFrame, UspaceContext};
 use axmm::AddrSpace;
 use axns::{AxNamespace, AxNamespaceIf};
 use axsync::Mutex;
-use axtask::{AxTaskRef, TaskExtRef, TaskInner, WaitQueue, current};
+use axtask::{AxTaskRef, TaskExtRef, TaskInner, WaitQueue, current, yield_now};
 
 #[cfg(feature = "sig")]
 pub mod signal;
@@ -43,6 +43,8 @@ pub use process::*;
 
 pub mod wait;
 pub use wait::sys_waitpid;
+pub mod exit;
+pub use exit::sys_exit;
 
 pub fn new_user_aspace_empty() -> AxResult<AddrSpace> {
     AddrSpace::new_empty(
@@ -287,6 +289,24 @@ pub fn time_stat_from_user_to_kernel() {
         .time_stat_from_user_to_kernel(monotonic_time_nanos() as usize);
 }
 
+pub fn time_stat_to_new_task() {
+    let curr_task = current();
+    curr_task
+        .task_ext()
+        .time
+        .borrow_mut()
+        .switch_to_new_task(monotonic_time_nanos() as usize);
+}
+
+pub fn time_stat_from_old_task() {
+    let curr_task = current();
+    curr_task
+        .task_ext()
+        .time
+        .borrow_mut()
+        .switch_from_old_task(monotonic_time_nanos() as usize);
+}
+
 /// Get the time statistics for the current task.
 pub fn time_stat_output() -> (usize, usize, usize, usize) {
     let curr_task = current();
@@ -297,6 +317,13 @@ pub fn time_stat_output() -> (usize, usize, usize, usize) {
         stime_ns / NANOS_PER_SEC as usize,
         stime_ns / NANOS_PER_MICROS as usize,
     )
+}
+/// Better using this instead of [`axtask::api::yield_now`]
+/// to get time statistics
+pub fn yield_with_time_stat() {
+    time_stat_to_new_task();
+    yield_now();
+    time_stat_from_old_task();
 }
 #[register_trap_handler(PRE_TRAP)]
 fn pre_trap_handler(trap_frame: &TrapFrame) -> bool {

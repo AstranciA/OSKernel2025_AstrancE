@@ -12,18 +12,23 @@ use alloc::{string::String, sync::Arc, vec::Vec};
 use arceos_posix_api::{
     self as api, char_ptr_to_str, ctypes::*, get_file_like, str_vec_ptr_to_str, sys_read,
 };
+use linux_raw_sys::general as linux;
 use axerrno::{AxError, LinuxError};
 use axfs::{CURRENT_DIR, api::set_current_dir, fops::Directory};
 use axhal::trap::{PRE_TRAP, register_trap_handler};
 use axhal::{arch::TrapFrame, time::nanos_to_ticks};
 use axmm::{MmapFlags, MmapPerm};
-use axsyscall::{ToLinuxResult, syscall_handler_def};
+use axsyscall::{ToLinuxResult, syscall_handler_def, apply};
 use axtask::{CurrentTask, TaskExtMut, TaskExtRef, current};
 use core::ffi::c_int;
 use memory_addr::MemoryAddr;
 use syscalls::Sysno;
+mod mm;
 
 syscall_handler_def!(
+        exit => [code,..] {
+            crate::task::sys_exit((code & 0xff) as i32)
+        }
         clone => [flags, sp, ..] {
             let clone_flags = CloneFlags::from_bits_retain(flags as u32);
 
@@ -31,43 +36,16 @@ syscall_handler_def!(
                 if (sp != 0) { Some(sp) } else { None },
                 clone_flags,
                 true,
-            )
-            .unwrap();
-            Ok(child_task.id().as_u64() as isize)
+            )?;
+            Ok(child_task.task_ext().thread.process().pid() as isize)
         }
-        wait4 => args {
+        wait4 => [pid, wstatus, options, reusage, ..] {
             let curr = current();
             crate::sys_waitpid(
-                curr.task_ext().thread.process().pid() as i32,
-                args[0].into(),
-                args[1] as u32,
+                pid as i32,
+                wstatus.into(),
+                options as u32
             )
-            /*
-             *let curr = current();
-             *error!("wait4: {args:x?}");
-             *let mut result = Err(LinuxError::EPERM);
-             *while let wait_result = task::wait_pid(
-             *    curr.as_task_ref().clone(),
-             *    args[0] as i32,
-             *    args[1] as *mut i32,
-             *) {
-             *    let r = match wait_result {
-             *        Ok(pid) => {
-             *            error!("wait success! {pid}");
-             *            result = Ok(pid as isize);
-             *            break;
-             *        }
-             *        Err(WaitStatus::NotExist) => {
-             *            result = Ok(0);
-             *            break;
-             *        }
-             *        Err(e) => {
-             *            //debug!("wait4: {:?}, keep waiting...", e);
-             *        }
-             *    };
-             *}
-             *result
-             */
         }
         execve => [pathname, argv, envp, ..] {
             let pathname = char_ptr_to_str(pathname as *const c_char)?;
@@ -81,26 +59,8 @@ syscall_handler_def!(
             ).expect_err("successful execve should not reach here");
             Err(err.into())
         }
-        brk => args {
-            let res = (|| -> axerrno::LinuxResult<_> {
-                let current_task = current();
-                let old_top = current_task.task_ext().heap_top();
-                if (args[0] != 0) {
-                    current_task.task_ext().set_heap_top(args[0].into());
-                }
-                Ok(old_top)
-            })();
-            match res {
-                Ok(v) => {
-                    debug!("sys_brk => {:?}", res);
-                    let v_: usize = v.try_into().unwrap();
-                    Ok(v_ as isize)
-                }
-                Err(_) => {
-                    info!("sys_brk => {:?}", res);
-                    (-1).to_linux_result()
-                }
-            }
+        brk => [brk, ..] {
+            apply!(mm::sys_brk, brk)
         }
         mmap => args {
             let curr = current();
@@ -138,6 +98,7 @@ syscall_handler_def!(
             }
         }
         getpid => _ {
+            error!("my pid:{:?}", current().task_ext().thread.process().pid());
             Ok(current().task_ext().thread.process().pid() as _)
         }
         gettid => _ {
@@ -166,9 +127,15 @@ syscall_handler_def!(
         }
         rt_sigaction => [signum, act, oldact, ..] {
             error!("123");
-            task::signal::sys_sigaction(signum.try_into().map_err(|_| LinuxError::EINVAL)?, act as *const arceos_posix_api::ctypes::sigaction, oldact as *mut arceos_posix_api::ctypes::sigaction)
+            task::signal::sys_sigaction(signum.try_into().map_err(|_| LinuxError::EINVAL)?, act as _, oldact as _)
         }
         rt_sigprocmask => [how, set, oldset, ..] {
-            task::signal::sys_sigprocmask(how.try_into().map_err(|_| LinuxError::EINVAL)?, set as *const sigset_t, oldset as *mut sigset_t)
+            task::signal::sys_sigprocmask(how.try_into().map_err(|_| LinuxError::EINVAL)?, set as _, oldset as _)
+        }
+        rt_sigtimedwait => [set, info, timeout, ..] {
+            task::signal::sys_sigtimedwait(set as _, info as _, timeout as _).map(|sig| sig as isize)
+        }
+        kill => [pid, sig, ..] {
+            task::signal::sys_kill(pid as _, sig as _)
         }
 );

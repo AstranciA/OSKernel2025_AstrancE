@@ -4,6 +4,7 @@ use crate::{ctypes::TimeStat, task::add_thread_to_table};
 use alloc::{
     string::{String, ToString},
     sync::Arc,
+    vec::Vec,
 };
 use arceos_posix_api::{FD_TABLE, ctypes::*};
 use axerrno::{AxError, AxResult, LinuxError, LinuxResult};
@@ -87,6 +88,10 @@ impl ProcessData {
 
     pub fn signal(&self) -> &Arc<Mutex<SignalContext>> {
         &self.signal
+    }
+
+    pub fn send_signal(&self, sig: Signal) {
+        self.signal.lock().send_signal(sig.into());
     }
 }
 impl Drop for ProcessData {
@@ -267,6 +272,16 @@ pub fn clone_task(
             curr.task_ext().thread.process().clone()
         };
         let builder = parent.fork(tid);
+        error!("fork: parent: {:?}, child: {:?}", parent.pid(), tid);
+        error!(
+            "fork: parent: {:?}, children: {:?}",
+            parent.pid(),
+            parent
+                .children()
+                .iter()
+                .map(|it| it.pid())
+                .collect::<Vec<_>>()
+        );
 
         let aspace = if flags.contains(CloneFlags::VM) {
             curr.task_ext().process_data().aspace.clone()
@@ -398,6 +413,7 @@ pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxR
         set_current_dir(pwd.as_str())?;
     }
 
+    error!("to uspace");
     unsafe {
         UspaceContext::new(entry_point.as_usize(), user_stack_base, 0).enter_uspace(
             current_task

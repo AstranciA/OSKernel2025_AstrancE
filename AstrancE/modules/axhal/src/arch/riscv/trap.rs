@@ -15,9 +15,6 @@ core::arch::global_asm!(
 
 fn handle_breakpoint(sepc: &mut usize) {
     debug!("Exception(Breakpoint) @ {:#x} ", sepc);
-    if *sepc == 1 {
-        warn!("123123");
-    }
     *sepc += 2
 }
 
@@ -38,15 +35,11 @@ fn handle_page_fault(tf: &TrapFrame, mut access_flags: MappingFlags, is_user: bo
     }
 }
 
-fn tmp() {
-    debug!("tmp");
-}
-
 #[unsafe(no_mangle)]
 fn riscv_trap_handler(tf: &mut TrapFrame, from_user: bool) {
     let scause = scause::read();
     //pre_trap(tf);
-    warn!("trap from {:x?}", tf.get_ip());
+    trace!("trap from {:x?}", tf.get_ip());
     if tf.get_ip() == 0x105330 {
         //unsafe { core::arch::asm!("ebreak") }; // 手动触发断点
     }

@@ -49,6 +49,7 @@ macro_rules! syscall_handler_def {
     };
 }
 
+#[macro_export]
 macro_rules! apply {
     ($fn:expr, $($arg:ident),* $(,)?) => {
         $fn($($arg as _),*)
@@ -171,9 +172,11 @@ syscall_handler_def!(
         }
 
         // 进程控制相关系统调用
-        exit => [code,..] {
-            apply!(syscall_imp::task::sys_exit, code)
-        }
+        /*
+         *exit => [code,..] {
+         *    apply!(syscall_imp::task::sys_exit, code)
+         *}
+         */
         /*
          *getpid => _ syscall_imp::task::sys_getpid()
          *gettid => _ syscall_imp::task::sys_gettid()

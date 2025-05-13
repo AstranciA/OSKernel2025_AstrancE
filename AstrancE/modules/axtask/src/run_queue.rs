@@ -284,7 +284,7 @@ impl<G: BaseGuard> CurrentRunQueueRef<'_, G> {
     /// and reschedule to the next task on this run queue.
     pub fn yield_current(&mut self) {
         let curr = &self.current_task;
-        //trace!("task yield: {}", curr.id_name());
+        trace!("task yield: {}", curr.id_name());
         assert!(curr.is_running());
 
         self.inner
