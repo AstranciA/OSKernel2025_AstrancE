@@ -6,13 +6,15 @@ extern crate bitflags;
 extern crate axlog;
 use core::{
     arch::naked_asm,
+    error,
     ffi::{c_int, c_void},
     mem::MaybeUninit,
+    sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     u64,
 };
 
 use axerrno::{LinuxError, LinuxResult};
-use axhal::arch::{TrapFrame, UspaceContext};
+use axhal::arch::{TaskContext, TrapFrame, UspaceContext};
 use bitflags::*;
 use linux_raw_sys::general::*;
 use memory_addr::{VirtAddr, VirtAddrRange};
@@ -23,7 +25,8 @@ const NSIG: usize = 64;
 #[repr(usize)]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Signal {
-    SIGBLOCK = SIG_BLOCK as usize,
+    NONE = 0,
+    //SIGBLOCK = SIG_BLOCK as usize,
     //SIGUNBLOCK = SIG_UNBLOCK,
     //SIGSETMASK = SIG_SETMASK,
     SIGHUP = SIGHUP as usize,
@@ -66,13 +69,14 @@ pub enum Signal {
 //pub struct Signal(u32);
 impl Signal {
     pub fn from_u32(n: u32) -> Option<Self> {
-        if n as usize > NSIG {
+        if n as usize >= NSIG {
             None
         } else {
             Some(unsafe { core::mem::transmute(n as usize) })
         }
     }
 }
+
 impl TryFrom<c_int> for Signal {
     type Error = SignalError;
 
@@ -82,6 +86,11 @@ impl TryFrom<c_int> for Signal {
         } else {
             Ok(unsafe { core::mem::transmute(value as usize) })
         }
+    }
+}
+impl Default for Signal {
+    fn default() -> Self {
+        Signal::NONE
     }
 }
 /*
@@ -191,19 +200,19 @@ bitflags! {
     #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
         pub struct SigFlags: usize {
         /// 子进程停止时不发送SIGCHLD (SA_NOCLDSTOP)
-        const NO_CHILD_STOP = 0x0000_0001;
+        const NO_CHILD_STOP = SA_NOCLDSTOP as usize;
         /// 子进程退出时不成为僵尸进程 (SA_NOCLDWAIT)
-        const NO_CHILD_WAIT = 0x0000_0002;
+        const NO_CHILD_WAIT = SA_NOCLDWAIT as usize;
         /// 使用三参数信号处理函数 (提供`siginfo_t`和上下文) (SA_SIGINFO)
-        const SIG_INFO = 0x0000_0004;
+        const SIG_INFO = SA_SIGINFO as usize;
         /// 被信号中断的系统调用自动重启 (SA_RESTART)
-        const RESTART = 0x0000_0010;
+        const RESTART = SA_RESTART as usize;
         /// 使用备用信号栈 (通过`sigaltstack`设置) (SA_ONSTACK)
-        const ON_STACK = 0x0800_0000;
+        const ON_STACK = SA_ONSTACK as usize;
         /// 不自动阻塞当前信号 (SA_NODEFER)
-        const NO_DEFER = 0x4000_0000;
+        const NO_DEFER = SA_NODEFER as usize;
         /// 执行处理程序后重置为默认处理 (SA_RESETHAND)
-        const RESET_HAND = 0x8000_0000;
+        const RESET_HAND = SA_RESETHAND as usize;
         /// 不自动重启系统调用 (历史遗留标志) (SA_INTERRUPT)
         const INTERRUPT = 0x2000_0000;
         /// 接收信号时通知ptrace (Linux特有) (SA_SIGINFO)
@@ -248,13 +257,14 @@ impl TryFrom<sigaction> for SigAction {
          *};
          */
         let flags = SigFlags::from_bits_retain(act.sa_flags as usize);
+        error!("flags: {flags:?}");
 
         let mask = act.sa_mask.into();
 
         let handler = if flags.contains(SigFlags::SIG_INFO) {
-            SigHandler::Handler(unsafe { act.sa_handler.ok_or(SignalError::InvalidAction)? })
+            SigHandler::Handler(act.sa_handler.ok_or(SignalError::InvalidAction)?)
         } else {
-            SigHandler::Action(unsafe { act.sa_handler.ok_or(SignalError::InvalidAction)? })
+            SigHandler::Action(act.sa_handler.ok_or(SignalError::InvalidAction)?)
         };
 
         Ok(Self {
@@ -308,7 +318,8 @@ unsafe extern "C" fn tmp(a: i32) {}
 
 #[naked]
 #[unsafe(no_mangle)]
-unsafe extern "C" fn sigreturn_trampoline() {
+#[unsafe(link_section = ".trampoline.sigreturn")]
+pub unsafe extern "C" fn sigreturn_trampoline() {
     // 内联汇编确保无函数前导/后导代码
     naked_asm!(
         "li a7, {sysno}",
@@ -319,7 +330,7 @@ unsafe extern "C" fn sigreturn_trampoline() {
 
 // 进程信号上下文
 pub struct SignalContext {
-    stack: SignalStackManager,
+    stack: SignalFrameManager,
     actions: [SigAction; NSIG], // 信号处理表
     blocked: SignalSet,         // 被阻塞的信号
     pending: SignalSet,         // 待处理信号
@@ -351,6 +362,10 @@ impl SignalContext {
     /// 向进程发送信号
     pub fn send_signal(&mut self, sig: SignalSet) {
         // 如果信号未被阻塞，则加入待处理队列
+        warn!(
+            "send signal: {:?}, pending: {:?}, blocked: {:?}",
+            sig, self.pending, self.blocked
+        );
         if self.blocked.intersection(sig).is_empty() {
             self.pending = self.pending.union(sig);
         }
@@ -373,16 +388,16 @@ impl SignalContext {
         old_act
     }
 
-    pub fn set_level(&mut self, ty: SignalStackType) -> SignalResult<VirtAddrRange> {
+    pub fn set_current_stack(&mut self, ty: SignalStackType) -> Option<&mut SignalFrame> {
         self.stack.switch_to(ty)
     }
 
-    pub fn current_stack(&self) -> SignalResult<VirtAddrRange> {
-        if let Some(range) = self.stack.current_stack() {
-            Ok(range)
-        } else {
-            Err(SignalError::NoStack)
-        }
+    pub fn current_frame(&mut self) -> SignalResult<&mut SignalFrame> {
+        self.stack.current_frame().ok_or(SignalError::NoStack)
+    }
+
+    pub fn set_stack(&mut self, ty: SignalStackType, range: VirtAddrRange) {
+        self.stack.set_stack(ty, range);
     }
 
     pub fn get_blocked(&self) -> SignalSet {
@@ -410,16 +425,44 @@ impl SignalContext {
         self.blocked = mask;
         old
     }
+
+    /// 加载当前信号栈帧，返回之前的sscratch
+    /// 用户不能手动调用
+    fn load(&mut self, scratch: usize, data: SignalFrameData) -> SignalResult<usize> {
+        let curr_frame = self.current_frame()?;
+        curr_frame.load(scratch, data)?;
+        Ok(curr_frame.scratch(scratch))
+    }
+
+    /// 释放当前信号栈帧，恢复blocked，返回原scratch(原陷入栈)，必须和load成对
+    /// 用户需要在sigreturn中手动调用
+    pub fn unload(&mut self) -> SignalResult<(usize, TrapFrame)> {
+        let curr_frame = self.current_frame()?;
+        let (
+            SignalFrameData {
+                signal,
+                uc_sigmask,
+                orig_frame,
+                ..
+            },
+            trap_frame,
+        ) = curr_frame.unload()?;
+        self.blocked = uc_sigmask;
+        self.pending.remove(signal.into());
+        Ok((trap_frame, orig_frame))
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
 pub enum SignalError {
-    NoStack,          // 信号栈不可用
-    SigNotImpl,       // 信号未实现
-    InvalidAction,    // 无效的处理动作
-    InvalidFlags,     // 无效的标志位组合
-    InvalidSignal,    // 无效的信号编号
-    PermissionDenied, // 权限不足(如设置SIGKILL)
+    NoStack,            // 信号栈不可用
+    StackNotLoaded,     // 信号栈已初始化
+    StackAlreadyLoaded, // 信号栈已初始化
+    SigNotImpl,         // 信号未实现
+    InvalidAction,      // 无效的处理动作
+    InvalidFlags,       // 无效的标志位组合
+    InvalidSignal,      // 无效的信号编号
+    PermissionDenied,   // 权限不足(如设置SIGKILL)
 }
 impl From<SignalError> for LinuxError {
     fn from(err: SignalError) -> LinuxError {
@@ -430,6 +473,7 @@ impl From<SignalError> for LinuxError {
             SignalError::InvalidFlags => LinuxError::EINVAL, // 无效标志
             SignalError::InvalidSignal => LinuxError::EINVAL, // 无效信号号
             SignalError::PermissionDenied => LinuxError::EPERM,
+            _ => panic!("{err:?}"),
         }
     }
 }
@@ -442,95 +486,204 @@ pub enum SignalStackType {
     Emergency = 2, // 内核紧急栈（只用于同步信号）
 }
 
-pub struct SignalStackManager {
-    stacks: [Option<VirtAddrRange>; 3],
-    current: SignalStackType,
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SignalFrameData {
+    pub signal: Signal,
+    pub uc_sigmask: SignalSet,
+    pub sigmask: SignalSet,
+    pub flags: SigFlags,
+    pub orig_frame: TrapFrame,
 }
 
-impl SignalStackManager {
-    pub fn current_stack(&self) -> Option<VirtAddrRange> {
-        self.stacks[self.current as usize]
+#[derive(Debug)]
+pub struct SignalFrame {
+    loaded: AtomicBool,
+    range: VirtAddrRange,
+    scratch: AtomicUsize,
+    data: SignalFrameData,
+}
+
+impl SignalFrame {
+    // TODO: check align
+    pub fn set_stack(&mut self, range: VirtAddrRange) {
+        self.range = range;
     }
-    pub fn set_stack(&mut self, ty: SignalStackType, range: VirtAddrRange) {
-        self.stacks[ty as usize] = Some(range);
+
+    pub fn range(&self) -> VirtAddrRange {
+        self.range
+    }
+
+    pub fn ptr(&self) -> VirtAddr {
+        self.range.end
+    }
+    pub fn size(&self) -> usize {
+        self.range.size()
+    }
+
+    fn scratch(&mut self, scratch: usize) -> usize {
+        self.scratch
+            .swap(scratch, core::sync::atomic::Ordering::SeqCst)
+    }
+
+    // 准备作为信号处理栈帧，返回之前的scratch, 一般是0
+    fn load(&mut self, scratch: usize, data: SignalFrameData) -> SignalResult<usize> {
+        error!("loaded, {scratch:x?}");
+        self.loaded
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
+            .map_err(|_| SignalError::StackAlreadyLoaded)?;
+        self.data = data;
+        Ok(self.scratch(scratch))
+    }
+
+    // 释放当前的信号处理帧，返回处理函数和原scratch(原陷入栈)，必须和load成对
+    fn unload(&mut self) -> SignalResult<(SignalFrameData, usize)> {
+        error!("unloaded");
+        self.loaded
+            .compare_exchange(true, false, Ordering::AcqRel, Ordering::Relaxed)
+            .map_err(|_| SignalError::StackNotLoaded)?;
+        // 原栈指针被抛弃，恢复信号处理前原来的上下文
+        let scratch = self.scratch(0);
+        Ok((self.data, scratch))
     }
 }
 
-impl Default for SignalStackManager {
+impl Default for SignalFrame {
     fn default() -> Self {
         Self {
-            stacks: [None, None, None],
-            current: SignalStackType::Primary,
+            loaded: AtomicBool::new(false),
+            range: Default::default(),
+            scratch: Default::default(),
+            data: Default::default(),
         }
     }
 }
 
-impl SignalStackManager {
-    fn switch_to(&mut self, ty: SignalStackType) -> SignalResult<VirtAddrRange> {
-        let range = self.stacks[ty as usize].ok_or(SignalError::NoStack)?;
-        self.current = ty;
-        Ok(range)
+pub struct SignalFrameManager {
+    frames: [Option<SignalFrame>; 3],
+    current: SignalStackType,
+    /// For saving/restoring previous stack
+    scratch: AtomicUsize,
+}
+
+impl SignalFrameManager {
+    pub fn current_frame(&mut self) -> Option<&mut SignalFrame> {
+        self.frames[self.current as usize].as_mut()
+    }
+
+    pub fn set_stack(&mut self, ty: SignalStackType, range: VirtAddrRange) {
+        if let Some(stack) = self.frames[ty as usize].as_mut() {
+            stack.set_stack(range);
+        } else {
+            self.frames[ty as usize] = Some(SignalFrame {
+                range,
+                ..Default::default()
+            });
+        }
     }
 }
 
-pub fn handle_pending_signals(sigctx: &mut SignalContext) {
-    while sigctx.has_pending() {
+impl Default for SignalFrameManager {
+    fn default() -> Self {
+        Self {
+            frames: [const { None }; 3],
+            current: SignalStackType::Primary,
+            scratch: AtomicUsize::new(0),
+        }
+    }
+}
+
+impl SignalFrameManager {
+    fn switch_to(&mut self, ty: SignalStackType) -> Option<&mut SignalFrame> {
+        // TODO: 可以在栈被加载的时候切换吗？
+        // handle scratch?
+        self.current = ty;
+        self.frames[ty as usize].as_mut()
+    }
+}
+
+/// 处理信号，需要提前设置信号栈
+pub fn handle_pending_signals(
+    sigctx: &mut SignalContext,
+    thread_tf: &TrapFrame,
+    trampoline: VirtAddr,
+) -> SignalResult<Option<(UspaceContext, VirtAddr)>> {
+    while let Some(sig) = sigctx.pending.take_one() {
         // 找到最高优先级的待处理信号
-        let sig = sigctx.pending.get_one().unwrap();
+        error!("handle signal: {sig:?}");
+        let old_mask = (*sigctx).blocked;
+        let action = sigctx.get_action(sig);
         let SigAction {
             handler,
-            mask,
+            mask: act_mask,
             flags,
-        } = sigctx.actions[sig as usize];
+        } = action;
+        warn!("handler: {handler:?}, action_mask: {act_mask:?}, flags: {flags:?}");
 
         match handler {
             SigHandler::Default => handle_default_signal(sig, &mut *sigctx),
             SigHandler::Ignore => {} // 直接忽略
             SigHandler::Handler(handler) => {
                 // 设置信号处理栈帧
-                // WARN: 在syscall rt_sigreturn中清除信号。
-                unsafe {
-                    let mut uctx = UspaceContext::new(
-                        handler as usize,
-                        sigctx.current_stack().expect("Sig stack not set").start,
-                        sig as usize,
-                    );
-                    // 设置返回地址为信号返回trampoline
-                    uctx.0.set_ra(sigreturn_trampoline as usize);
+                let mask = old_mask.union(act_mask);
+                (*sigctx).blocked = mask;
+                // TODO: 储存tf
+                assert_eq!(
+                    sigctx.load(unsafe { axhal::arch::read_trap_frame() }, SignalFrameData {
+                        signal: sig,
+                        uc_sigmask: old_mask,
+                        sigmask: mask,
+                        flags: flags,
+                        orig_frame: *thread_tf,
+                    })?,
+                    0,
+                    "signal stack scratch is not empty"
+                );
+                let current_frame: &mut SignalFrame = sigctx.current_frame()?;
+                let kstack_top = current_frame.ptr();
+                // 在syscall rt_sigreturn中清除信号。
+                let mut uctx =
+                    UspaceContext::new(handler as usize, thread_tf.get_sp().into(), sig as usize);
+                uctx.0.regs.tp = thread_tf.regs.tp;
+                uctx.0.regs.gp = thread_tf.regs.gp;
+                // 设置返回地址为信号返回trampoline
+                uctx.0.set_ra(trampoline.as_usize());
 
-                    // 设置信号屏蔽字
-                    let old_mask = sigctx.blocked;
-                    sigctx.blocked |= mask;
-                    handler(sig as i32);
-                    //unsafe { uctx.enter_uspace(current_task.kernel_stack_top().unwrap()) };
-                };
+                return Ok(Some((uctx, kstack_top)));
             }
             SigHandler::Action(handler) => {
                 // 设置信号处理栈帧
-                // WARN: 在syscall rt_sigreturn中清除信号。
-                unsafe {
-                    let mut uctx = UspaceContext::new(
-                        handler as usize,
-                        sigctx.current_stack().expect("Sig stack not set").start,
-                        sig as usize,
-                    );
-                    // 设置返回地址为信号返回trampoline
-                    uctx.0.set_ra(sigreturn_trampoline as usize);
-                    // TODO: place siginfo_t in sig stack top
-                    //uctx.set_args([sig as usize, ]);
+                let mask = old_mask.union(act_mask);
+                (*sigctx).blocked = mask;
+                assert_eq!(
+                    sigctx.load(unsafe { axhal::arch::read_trap_frame() }, SignalFrameData {
+                        signal: sig,
+                        uc_sigmask: old_mask,
+                        sigmask: mask,
+                        flags: flags,
+                        orig_frame: *thread_tf,
+                    })?,
+                    0,
+                    "signal stack scratch is not empty"
+                );
+                let current_frame: &mut SignalFrame = sigctx.current_frame()?;
+                let kstack_top = current_frame.ptr();
+                // 在syscall rt_sigreturn中清除信号。
+                let mut uctx =
+                    UspaceContext::new(handler as usize, thread_tf.get_sp().into(), sig as usize);
+                uctx.0.regs.tp = thread_tf.regs.tp;
+                uctx.0.regs.gp = thread_tf.regs.gp;
+                // 设置返回地址为信号返回trampoline
+                uctx.0.set_ra(trampoline.as_usize());
 
-                    // 设置信号屏蔽字
-                    let old_mask = sigctx.blocked;
-                    sigctx.blocked |= mask;
-                    //TODO: handler();
-                    //unsafe { uctx.enter_uspace(current_task.kernel_stack_top().unwrap()) };
-                };
+                return Ok(Some((uctx, kstack_top)));
             }
-        }
+        };
 
+        sigctx.blocked = old_mask;
         // 清除已处理的信号
         sigctx.pending.remove(sig.into());
     }
+    Ok(None)
 }
 
 fn handle_default_signal(sig: Signal, ctx: &mut SignalContext) {

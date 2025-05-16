@@ -104,3 +104,13 @@ SECTIONS {
     axns_resource : { *(axns_resource) }
 }
 INSERT AFTER .tbss;
+
+SECTIONS {
+  .trampoline : ALIGN(4K) {
+          _strampoline = .;
+          *(.trampoline.*)
+          . = ALIGN(4K);
+          _etrampoline = .;
+    }:rodata
+}
+INSERT AFTER .rodata;

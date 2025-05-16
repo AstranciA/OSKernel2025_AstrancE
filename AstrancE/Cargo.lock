@@ -570,6 +570,7 @@ dependencies = [
  "page_table_entry",
  "page_table_multiarch",
  "percpu",
+ "riscv",
  "spin 0.10.0",
  "static_assertions",
  "syscalls",
@@ -654,6 +655,7 @@ dependencies = [
  "bitflags 2.9.0",
  "linux-raw-sys 0.9.4",
  "memory_addr",
+ "riscv",
  "syscalls",
 ]
 

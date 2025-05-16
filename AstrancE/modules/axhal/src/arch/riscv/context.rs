@@ -91,6 +91,10 @@ impl TrapFrame {
         self.regs.sp = user_sp;
     }
 
+    pub fn get_sp(&self) -> usize {
+        self.regs.sp
+    }
+
     pub fn get_ip(&self) -> usize {
         self.sepc
     }

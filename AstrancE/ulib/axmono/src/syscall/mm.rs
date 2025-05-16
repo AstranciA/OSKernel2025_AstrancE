@@ -10,5 +10,6 @@ pub(crate) fn sys_brk(new_heap_top: usize) -> LinuxResult<isize> {
         current_task.task_ext().set_heap_top(va!(new_heap_top));
     }
     // FIXME: return old_top or new_top????
-    Ok(old_top.as_usize() as isize)
+    //Ok(old_top.as_usize() as isize)
+    Ok(current_task.task_ext().heap_top().as_usize() as isize)
 }

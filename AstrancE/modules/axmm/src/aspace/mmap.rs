@@ -76,6 +76,7 @@ pub trait MmapIO: Send + Sync {
     fn flags(&self) -> MmapFlags;
 }
 
+/// TODO: 限制mmap大小
 impl AddrSpace {
     pub fn mmap(
         &mut self,
@@ -105,7 +106,7 @@ impl AddrSpace {
                     .unwrap_or(MMAP_END)
                     .into();
                 self.find_free_area(
-                    0x2000_0000.into(),
+                    0x10000.into(),
                     size,
                     addr_range!(self.base().as_usize()..heap_start),
                 )
@@ -114,7 +115,7 @@ impl AddrSpace {
             #[cfg(not(feature = "heap"))]
             {
                 self.find_free_area(
-                    0x2000_0000.into(),
+                    0x10000.into(),
                     size,
                     addr_range!(self.base().as_usize()..MMAP_END.into()),
                 )
@@ -163,7 +164,8 @@ impl AddrSpace {
         // MappingFlags::mark_cow(&mut flags);
 
         if let Some(frame) = alloc_frame(true) {
-            if let Err(_) = self.page_table()
+            if let Err(_) = self
+                .page_table()
                 // READ | WRITE for copying data from file later.
                 .map(
                     vaddr,

@@ -110,6 +110,40 @@ pub unsafe fn write_thread_pointer(tp: usize) {
     core::arch::asm!("mv tp, {}", in(reg) tp)
 }
 
+/// 交换当前栈指针(sp)和`sscratch`的值，返回旧的栈指针
+///
+/// # Safety
+/// - 调用者必须确保`sp`是有效且对齐的栈地址
+/// - 必须在正确的上下文（如中断/异常处理）中调用
+#[inline]
+pub unsafe fn exchange_trap_frame(sp: usize) -> usize {
+    let old_sp: usize;
+    core::arch::asm!(
+        "csrrw {old_sp}, sscratch, {new_sp}",  // 交换sscratch和new_sp
+        old_sp = out(reg) old_sp,
+        new_sp = in(reg) sp,
+        options(nostack, preserves_flags)
+    );
+    old_sp // 返回旧的栈指针
+}
+
+/// 读取 `sscratch` 寄存器的值（通常保存内核栈指针或用户态上下文）
+///
+/// # Safety
+/// - 必须在正确的上下文中调用（如中断处理期间）
+/// - 读取的值可能无效，调用者需确保其有效性
+#[inline(always)]  // 强制内联以减少开销
+pub unsafe fn read_trap_frame() -> usize {
+    let value: usize;
+    core::arch::asm!(
+        "csrr {}, sscratch",  // 读取 sscratch 到寄存器
+        out(reg) value,
+        options(nomem, nostack, preserves_flags)
+    );
+    value
+}
+
+
 /// Initializes CPU states on the current CPU.
 ///
 /// On RISC-V, it sets the trap vector base address.

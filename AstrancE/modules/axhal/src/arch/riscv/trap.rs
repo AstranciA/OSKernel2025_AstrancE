@@ -38,7 +38,7 @@ fn handle_page_fault(tf: &TrapFrame, mut access_flags: MappingFlags, is_user: bo
 #[unsafe(no_mangle)]
 fn riscv_trap_handler(tf: &mut TrapFrame, from_user: bool) {
     let scause = scause::read();
-    //pre_trap(tf);
+    pre_trap(tf, from_user);
     trace!("trap from {:x?}", tf.get_ip());
     if tf.get_ip() == 0x105330 {
         //unsafe { core::arch::asm!("ebreak") }; // 手动触发断点
@@ -77,5 +77,5 @@ fn riscv_trap_handler(tf: &mut TrapFrame, from_user: bool) {
             tf
         );
     }
-    //post_trap(tf);
+    post_trap(tf, from_user);
 }

@@ -135,6 +135,9 @@ syscall_handler_def!(
         rt_sigtimedwait => [set, info, timeout, ..] {
             task::signal::sys_sigtimedwait(set as _, info as _, timeout as _).map(|sig| sig as isize)
         }
+        rt_sigreturn => _ {
+            task::signal::sys_sigreturn()
+        }
         kill => [pid, sig, ..] {
             task::signal::sys_kill(pid as _, sig as _)
         }

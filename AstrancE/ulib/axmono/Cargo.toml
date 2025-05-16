@@ -56,3 +56,5 @@ spin = "0.10.0"
 percpu = "0.2.0"
 weak-map = { workspace = true }
 static_assertions = "1.1.0"
+[target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64"))'.dependencies]
+riscv = "0.12"

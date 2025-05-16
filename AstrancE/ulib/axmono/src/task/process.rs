@@ -1,7 +1,8 @@
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::{ctypes::TimeStat, task::add_thread_to_table};
+use crate::{ctypes::TimeStat, mm::map_trapoline, task::add_thread_to_table};
 use alloc::{
+    boxed::Box,
     string::{String, ToString},
     sync::Arc,
     vec::Vec,
@@ -51,6 +52,7 @@ pub struct ProcessData {
 
     /// The process signal manager
     pub signal: Arc<Mutex<SignalContext>>,
+    pub signal_stack: Box<[u8; 4096]>,
 }
 impl ProcessData {
     /// Create a new [`ProcessData`].
@@ -60,6 +62,15 @@ impl ProcessData {
         signal: Arc<Mutex<SignalContext>>,
         exit_signal: Option<Signal>,
     ) -> Self {
+        let signal_stack = Box::new([0u8; 4096]);
+        let signal__ = signal.clone();
+        let mut signal_ = signal__.lock();
+
+        signal_.set_current_stack(axsignal::SignalStackType::Primary);
+        signal_.set_stack(
+            axsignal::SignalStackType::Primary,
+            VirtAddrRange::from_start_size((signal_stack.as_ptr() as usize).into(), 4096),
+        );
         Self {
             exe_path: RwLock::new(exe_path),
             aspace,
@@ -67,6 +78,7 @@ impl ProcessData {
             child_exit_wq: WaitQueue::new(),
             exit_signal,
             signal,
+            signal_stack,
         }
     }
     /// Initialize the namespace for the new task.
@@ -272,7 +284,6 @@ pub fn clone_task(
             curr.task_ext().thread.process().clone()
         };
         let builder = parent.fork(tid);
-        error!("fork: parent: {:?}, child: {:?}", parent.pid(), tid);
         error!(
             "fork: parent: {:?}, children: {:?}",
             parent.pid(),

@@ -3,6 +3,7 @@ use alloc::{
     sync::{Arc, Weak},
     vec::Vec,
 };
+use signal::handle_pending_signals;
 use spin::{Once, RwLock};
 use weak_map::WeakMap;
 
@@ -13,7 +14,7 @@ use axhal::{
     trap::{POST_TRAP, PRE_TRAP, register_trap_handler},
 };
 use axprocess::{Pid, Process, ProcessGroup, Session, Thread, init_proc};
-use axsignal::SignalContext;
+use axsignal::{SignalContext, SignalSet, SignalStackType};
 use core::{
     alloc::Layout,
     cell::RefCell,
@@ -44,13 +45,6 @@ pub mod wait;
 pub use wait::sys_waitpid;
 pub mod exit;
 pub use exit::sys_exit;
-
-pub fn new_user_aspace_empty() -> AxResult<AddrSpace> {
-    AddrSpace::new_empty(
-        VirtAddr::from_usize(axconfig::plat::USER_SPACE_BASE),
-        axconfig::plat::USER_SPACE_SIZE,
-    )
-}
 
 /// Task extended data for the monolithic kernel.
 pub struct TaskExt {
@@ -174,14 +168,28 @@ pub fn spawn_user_task(
     task.ctx_mut()
         .set_page_table_root(aspace.lock().page_table_root());
     let tid = task.id().as_u64() as Pid;
-    let process_data = ProcessData {
-        exe_path: RwLock::new(exe_path.into()),
+
+    //let aspace_ = aspace.lock();
+    //aspace_.map_alloc(size, flags, populate);
+    //let sigctx = SignalContext::default();
+    //sigctx.set_stack(SignalStackType::Primary, range);
+
+    /*
+     *let process_data = ProcessData {
+     *    exe_path: RwLock::new(exe_path.into()),
+     *    aspace,
+     *    ns: AxNamespace::new_thread_local(),
+     *    child_exit_wq: WaitQueue::new(),
+     *    exit_signal: None,
+     *    signal: Arc::new(Mutex::new(SignalContext::default())),
+     *};
+     */
+    let process_data = ProcessData::new(
+        exe_path.into(),
         aspace,
-        ns: AxNamespace::new_thread_local(),
-        child_exit_wq: WaitQueue::new(),
-        exit_signal: None,
-        signal: Arc::new(Mutex::new(SignalContext::default())),
-    };
+        Arc::new(Mutex::new(SignalContext::default())),
+        None,
+    );
     let parent = if is_root {
         Process::new_init(tid).build()
     } else {
@@ -193,14 +201,14 @@ pub fn spawn_user_task(
         clear_child_tid: AtomicUsize::new(0),
     };
     let thread = process.new_thread(tid).data(thread_data).build();
+
     task.init_task_ext(TaskExt::new(thread));
 
     task.task_ext().process_data().ns_init_new();
     task.into_arc()
 }
 
-/// Unable to work for cloned task since task will overwrite trap_frame from uctx
-pub fn write_trapframe_to_kstack(kstack_top: usize, trap_frame: &TrapFrame) {
+pub unsafe fn write_trapframe_to_kstack(kstack_top: usize, trap_frame: &TrapFrame) {
     let trap_frame_size = core::mem::size_of::<TrapFrame>();
     let trap_frame_ptr = (kstack_top - trap_frame_size) as *mut TrapFrame;
     unsafe {
@@ -325,13 +333,18 @@ pub fn yield_with_time_stat() {
     time_stat_from_old_task();
 }
 #[register_trap_handler(PRE_TRAP)]
-fn pre_trap_handler(trap_frame: &TrapFrame) -> bool {
-    time_stat_from_user_to_kernel();
+fn pre_trap_handler(trap_frame: &TrapFrame, from_user: bool) -> bool {
+    if from_user {
+        time_stat_from_user_to_kernel();
+    }
     true
 }
 
 #[register_trap_handler(POST_TRAP)]
-fn post_trap_handler(trap_frame: &TrapFrame) -> bool {
-    time_stat_from_kernel_to_user();
+fn post_trap_handler(trap_frame: &TrapFrame, from_user: bool) -> bool {
+    if from_user {
+        time_stat_from_kernel_to_user();
+        handle_pending_signals(trap_frame);
+    }
     true
 }

@@ -2,30 +2,36 @@ use core::{ffi::c_int, time::Duration};
 
 //use arceos_posix_api::ctypes::{self, *};
 use axerrno::{LinuxError, LinuxResult, ax_err};
-use axhal::time::monotonic_time;
+use axhal::{arch::TrapFrame, time::monotonic_time};
 use axsignal::*;
-use axtask::{TaskExtRef, current, yield_now};
+use axtask::{TaskExtRef, current, exit, yield_now};
 use linux_raw_sys::general::*;
+use memory_addr::{VirtAddr, VirtAddrRange};
 
-use crate::ptr::{PtrWrapper, UserPtr};
+use crate::{
+    mm::trampoline_vaddr,
+    ptr::{PtrWrapper, UserPtr},
+};
 
 use super::{
     PROCESS_TABLE, ProcessData, THREAD_TABLE, time::TimeStat, time_stat_from_old_task,
-    time_stat_to_new_task, yield_with_time_stat,
+    time_stat_to_new_task, write_trapframe_to_kstack, yield_with_time_stat,
 };
+
 pub(crate) fn sys_sigaction(
     signum: c_int,
     act: *const sigaction,
     old_act: *mut sigaction,
 ) -> LinuxResult<isize> {
-    error!("sigacton");
+    error!("sigacton {signum:?}");
+    if !act.is_null() {
+        error!("{:x?}", unsafe { *act });
+    }
     let sig: Signal = signum.try_into()?;
     let curr = current();
     let mut sigctx = curr.task_ext().process_data().signal.lock();
     if !act.is_null() {
-        let act = SigAction::try_from(unsafe { *act }).inspect_err(|e| {
-            warn!("{e:?}");
-        })?;
+        let act = SigAction::try_from(unsafe { *act }).inspect_err(|e| {})?;
         let old = sigctx.set_action(sig, act);
 
         // 设置旧动作（如果有）
@@ -52,9 +58,9 @@ pub(crate) fn sys_sigprocmask(
     let mut sigctx = curr.task_ext().process_data().signal.lock();
 
     if !set.is_null() {
-        warn!("{:x?}", unsafe{*set});
+        warn!("{:x?}", unsafe { *set });
         let set: SignalSet = unsafe { *set }.into();
-        warn!("{set:?}");
+        warn!("{set:x?}");
 
         let old = match how as u32 {
             SIG_BLOCK => sigctx.block(set),
@@ -146,4 +152,31 @@ pub(crate) fn sys_sigtimedwait(
         // 让出CPU
         yield_with_time_stat();
     }
+}
+
+pub(crate) fn handle_pending_signals(current_tf: &TrapFrame) {
+    let curr = current();
+    let mut sigctx = curr.task_ext().process_data().signal.lock();
+    sigctx.set_current_stack(SignalStackType::Primary);
+    // unlock sigctx since handle_pending_signals might exit curr context
+    match axsignal::handle_pending_signals(&mut sigctx, current_tf, unsafe {
+        trampoline_vaddr(sigreturn_trampoline as usize).into()
+    }) {
+        Ok(Some((uctx, kstack_top))) => {
+            unsafe { write_trapframe_to_kstack(curr.get_kernel_stack_top().unwrap(), &uctx.0) };
+        }
+        Ok(None) => {}
+        Err(_) => {}
+    };
+}
+
+pub(crate) fn sys_sigreturn() -> LinuxResult<isize> {
+    let curr = current();
+    let mut sigctx = curr.task_ext().process_data().signal.lock();
+    // TODO: 交换回tf, 注意返回后sepc会+4, 可能被多加了一次。
+    let (sscratch, tf) = sigctx.unload().unwrap();
+    warn!("{sscratch:x?} {tf:x?}");
+    unsafe { write_trapframe_to_kstack(curr.get_kernel_stack_top().unwrap(), &tf) };
+    unsafe { axhal::arch::exchange_trap_frame(sscratch) };
+    Ok(0)
 }
