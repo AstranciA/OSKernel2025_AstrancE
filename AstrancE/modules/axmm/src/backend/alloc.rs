@@ -28,7 +28,6 @@ pub(crate) fn alloc_frame(zeroed: bool) -> Option<FrameTrackerRef> {
     if zeroed {
         unsafe { core::ptr::write_bytes(vaddr.as_mut_ptr(), 0, PAGE_SIZE_4K) };
     }
-    // pa ???
     let paddr = virt_to_phys(vaddr);
     Some(Arc::new(FrameTrackerImpl::new(paddr)))
 }

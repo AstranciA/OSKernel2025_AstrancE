@@ -35,7 +35,7 @@ impl Backend {
 
         let frame_map: FrameTrackerMap = PageIter4K::new(start, start + size)
             .unwrap()
-            .map(|vaddr| (vaddr, Arc::new(FrameTrackerImpl::new(va_to_pa(vaddr)))))
+            .map(|vaddr| (vaddr, Arc::new(FrameTrackerImpl::no_tracking(va_to_pa(vaddr)))))
             .collect();
 
         Ok(frame_map)
