@@ -1,16 +1,16 @@
 [submodule "crates/axmm_crates"]
 	path = crates/axmm_crates
-	url = https://github.com/AstranciA/axmm_crates.git
+	url = git@github.com:AstranciA/axmm_crates.git
 [submodule "crates/page_table_multiarch"]
 	path = crates/page_table_multiarch
-	url = https://github.com/AstranciA/page_table_multiarch.git
+	url = git@github.com:AstranciA/page_table_multiarch.git
 
 [submodule "crates/axfs_crates"]
 	path = crates/axfs_crates
-	url = https://github.com/AstranciA/axfs_crates.git
+	url = git@github.com:AstranciA/axfs_crates.git
 [submodule "crates/lwext4_rust"]
 	path = crates/lwext4_rust
-	url = https://github.com/MukioXun/lwext4_rust.git
+	url = git@github.com:MukioXun/lwext4_rust.git
 [submodule "crates/fast-trap"]
 	path = crates/fast-trap
-	url = https://github.com/AstranciA/fast-trap.git
+	url = git@github.com:AstranciA/fast-trap.git
