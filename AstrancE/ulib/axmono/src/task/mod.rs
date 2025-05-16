@@ -187,7 +187,7 @@ pub fn spawn_user_task(
     let process_data = ProcessData::new(
         exe_path.into(),
         aspace,
-        Arc::new(Mutex::new(SignalContext::default())),
+        spawn_signal_ctx(),
         None,
     );
     let parent = if is_root {

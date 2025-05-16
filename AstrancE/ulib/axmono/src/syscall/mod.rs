@@ -98,7 +98,6 @@ syscall_handler_def!(
             }
         }
         getpid => _ {
-            error!("my pid:{:?}", current().task_ext().thread.process().pid());
             Ok(current().task_ext().thread.process().pid() as _)
         }
         gettid => _ {
@@ -126,7 +125,6 @@ syscall_handler_def!(
             //unsafe { core::slice::from_raw_parts_mut(args[0] as *mut api::ctypes::tms, 1).copy_from_slice(tms); }
         }
         rt_sigaction => [signum, act, oldact, ..] {
-            error!("123");
             task::signal::sys_sigaction(signum.try_into().map_err(|_| LinuxError::EINVAL)?, act as _, oldact as _)
         }
         rt_sigprocmask => [how, set, oldset, ..] {

@@ -32,6 +32,13 @@ SECTIONS
     . = ALIGN(4K);
     _erodata = .;
 
+    .trampoline : ALIGN(4K) {
+            _strampoline = .;
+            *(.trampoline.*)
+            . = ALIGN(4K);
+            _etrampoline = .;
+      }
+
     .data : ALIGN(4K) {
         _sdata = .;
         *(.data.boot_page_table)
@@ -82,7 +89,6 @@ SECTIONS
         _ebss = .;
     }
 
-
     _ekernel = .;
 
 	/DISCARD/ : {
@@ -104,13 +110,3 @@ SECTIONS {
     axns_resource : { *(axns_resource) }
 }
 INSERT AFTER .tbss;
-
-SECTIONS {
-  .trampoline : ALIGN(4K) {
-          _strampoline = .;
-          *(.trampoline.*)
-          . = ALIGN(4K);
-          _etrampoline = .;
-    }:rodata
-}
-INSERT AFTER .rodata;

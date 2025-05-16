@@ -284,16 +284,6 @@ pub fn clone_task(
             curr.task_ext().thread.process().clone()
         };
         let builder = parent.fork(tid);
-        error!(
-            "fork: parent: {:?}, children: {:?}",
-            parent.pid(),
-            parent
-                .children()
-                .iter()
-                .map(|it| it.pid())
-                .collect::<Vec<_>>()
-        );
-
         let aspace = if flags.contains(CloneFlags::VM) {
             curr.task_ext().process_data().aspace.clone()
         } else {
@@ -309,7 +299,6 @@ pub fn clone_task(
             .set_page_table_root(aspace.lock().page_table_root());
 
         let signal = if flags.contains(CloneFlags::SIGHAND) {
-            // TODO: 检查信号clone
             parent
                 .data::<ProcessData>()
                 .map_or_else(Arc::default, |it| it.signal.clone())

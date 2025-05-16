@@ -214,6 +214,9 @@ pub fn global_init(start_vaddr: usize, size: usize) {
         start_vaddr,
         start_vaddr + size
     );
+    if start_vaddr <= 0xffffffc08027b000 && 0xffffffc08027b000 < start_vaddr + size {
+        panic!();
+    }
     GLOBAL_ALLOCATOR.init(start_vaddr, size);
 }
 
@@ -229,5 +232,8 @@ pub fn global_add_memory(start_vaddr: usize, size: usize) -> AllocResult {
         start_vaddr,
         start_vaddr + size
     );
+    if start_vaddr <= 0xffffffc08027b000 && 0xffffffc08027b000 < start_vaddr + size {
+        panic!();
+    }
     GLOBAL_ALLOCATOR.add_memory(start_vaddr, size)
 }

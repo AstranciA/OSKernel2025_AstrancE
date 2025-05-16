@@ -1,9 +1,11 @@
 use core::{ffi::c_int, time::Duration};
 
+use alloc::sync::Arc;
 //use arceos_posix_api::ctypes::{self, *};
 use axerrno::{LinuxError, LinuxResult, ax_err};
 use axhal::{arch::TrapFrame, time::monotonic_time};
 use axsignal::*;
+use axsync::Mutex;
 use axtask::{TaskExtRef, current, exit, yield_now};
 use linux_raw_sys::general::*;
 use memory_addr::{VirtAddr, VirtAddrRange};
@@ -17,6 +19,36 @@ use super::{
     PROCESS_TABLE, ProcessData, THREAD_TABLE, time::TimeStat, time_stat_from_old_task,
     time_stat_to_new_task, write_trapframe_to_kstack, yield_with_time_stat,
 };
+
+pub fn default_signal_handler(signal: Signal, ctx: &mut SignalContext) {
+    match signal {
+        Signal::SIGINT | Signal::SIGKILL => {
+            // 杀死进程
+            let curr = current();
+            exit(curr.task_ext().thread.process().exit_code());
+        }
+        _ => {
+            // 忽略信号
+            warn!("Ignoring signal: {:?}", signal)
+        }
+    }
+}
+
+pub fn spawn_signal_ctx() -> Arc<Mutex<SignalContext>> {
+    let mut ctx = SignalContext::default();
+    ctx.set_action(Signal::SIGKILL, SigAction {
+        handler: SigHandler::Default(default_signal_handler),
+        mask: SignalSet::SIGKILL,
+        flags: SigFlags::empty(),
+    });
+    ctx.set_action(Signal::SIGINT, SigAction {
+        handler: SigHandler::Default(default_signal_handler),
+        mask: SignalSet::SIGINT,
+        flags: SigFlags::empty(),
+    });
+
+    Arc::new(Mutex::new(ctx))
+}
 
 pub(crate) fn sys_sigaction(
     signum: c_int,
@@ -38,7 +70,7 @@ pub(crate) fn sys_sigaction(
             let old = sigctx.get_action(sig);
             old_act
                 .as_mut()
-                .map(|ptr| unsafe { *ptr = sigctx.get_action(sig).into() });
+                .map(|ptr| unsafe { *ptr = (*sigctx.get_action(sig)).into() });
         };
     }
 
@@ -154,7 +186,8 @@ pub(crate) fn handle_pending_signals(current_tf: &TrapFrame) {
     match axsignal::handle_pending_signals(&mut sigctx, current_tf, unsafe {
         trampoline_vaddr(sigreturn_trampoline as usize).into()
     }) {
-        Ok(Some((uctx, kstack_top))) => {
+        Ok(Some((mut uctx, kstack_top))) => {
+            // 交换tf
             unsafe { write_trapframe_to_kstack(curr.get_kernel_stack_top().unwrap(), &uctx.0) };
         }
         Ok(None) => {}
@@ -165,9 +198,10 @@ pub(crate) fn handle_pending_signals(current_tf: &TrapFrame) {
 pub(crate) fn sys_sigreturn() -> LinuxResult<isize> {
     let curr = current();
     let mut sigctx = curr.task_ext().process_data().signal.lock();
-    // TODO: 交换回tf, 注意返回后sepc会+4, 可能被多加了一次。
     let (sscratch, tf) = sigctx.unload().unwrap();
+    // 交换回tf, 返回a0以防止覆盖
     unsafe { write_trapframe_to_kstack(curr.get_kernel_stack_top().unwrap(), &tf) };
     unsafe { axhal::arch::exchange_trap_frame(sscratch) };
-    Ok(0)
+    debug!("sigreturn");
+    Ok(tf.arg0() as isize)
 }

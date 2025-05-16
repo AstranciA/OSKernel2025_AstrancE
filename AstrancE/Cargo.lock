@@ -652,6 +652,7 @@ dependencies = [
  "axerrno",
  "axhal",
  "axlog",
+ "axtask",
  "bitflags 2.9.0",
  "linux-raw-sys 0.9.4",
  "memory_addr",

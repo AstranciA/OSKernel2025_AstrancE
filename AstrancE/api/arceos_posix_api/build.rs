@@ -57,7 +57,9 @@ typedef struct {{
             "rlimit",
             "aibuf",
             "sigaction",
-            "pid_t"
+            "pid_t",
+            "pollfd",
+            "nfds_t",
         ];
         let allow_vars = [
             "CLOCK_.*",
@@ -74,6 +76,7 @@ typedef struct {{
             "RLIMIT_.*",
             "EAI_.*",
             "MAXADDRS",
+            "POLL.*"
         ];
 
         #[derive(Debug)]

@@ -10,19 +10,24 @@ repository.workspace = true
 keywords.workspace = true
 categories.workspace = true
 
+[features]
+default = ["default_handler"]
+default_handler = ["dep:axtask"]
+
 [dependencies]
 syscalls = { workspace = true }
 linux-raw-sys = { version = "0.9.4", default-features = false, features = [
-    "no_std",
-    "general",
-    "net",
-    "prctl",
-    "system",
+  "no_std",
+  "general",
+  "net",
+  "prctl",
+  "system",
 ] }
 memory_addr = "0.3.2"
 bitflags = "2.9.0"
 axlog = { workspace = true }
 axhal = { workspace = true }
+axtask = { workspace = true, optional = true }
 axerrno = "0.1"
 #linux-raw-sys = { workspace = true }
 [target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64"))'.dependencies]

@@ -4,15 +4,25 @@
 extern crate bitflags;
 #[macro_use]
 extern crate axlog;
+
+extern crate alloc;
+
+#[cfg(feature = "default_handler")]
+mod default;
+#[cfg(feature = "default_handler")]
+pub use default::*;
+
 use core::{
     arch::naked_asm,
     error,
     ffi::{c_int, c_void},
+    fmt,
     mem::MaybeUninit,
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     u64,
 };
 
+use alloc::boxed::Box;
 use axerrno::{LinuxError, LinuxResult};
 use axhal::arch::{TaskContext, TrapFrame, UspaceContext};
 use bitflags::*;
@@ -222,19 +232,51 @@ bitflags! {
 
 #[derive(Debug, Clone, Copy)]
 pub enum SigHandler {
-    Default,
     Ignore,
     Handler(unsafe extern "C" fn(c_int)),
     //actually Action(unsafe extern "C" fn(c_int, *mut siginfo_t, *mut c_void)),
     // this is for capabilites, since the fn won't be called directly
     Action(unsafe extern "C" fn(c_int)),
+    Default(fn(Signal, &mut SignalContext)),
 }
 
 impl Default for SigHandler {
     fn default() -> Self {
-        Self::Default
+        #[cfg(feature = "default_handler")]
+        {
+            Self::Default(handle_default_signal)
+        }
+        #[cfg(not(feature = "default_handler"))]
+        {
+            Self::Ignore
+        }
     }
 }
+
+/*
+ *impl fmt::Debug for SigHandler {
+ *    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+ *        match self {
+ *            SigHandler::Default(_) => write!(f, "SigHandler::Default(<closure>)"),
+ *            SigHandler::Ignore => write!(f, "SigHandler::Ignore"),
+ *            SigHandler::Handler(fn_) => write!(f, "SigHandler::Handler({:p})", fn_),
+ *            SigHandler::Action(fn_) => write!(f, "SigHandler::Action({:p})", fn_),
+ *        }
+ *    }
+ *}
+ *
+ *impl Clone for SigHandler {
+ *    fn clone(&self) -> Self {
+ *        match *self {
+ *            SigHandler::Default(fn_) => SigHandler::Default(fn_),
+ *            SigHandler::Ignore => SigHandler::Ignore,
+ *            SigHandler::Handler(h) => SigHandler::Handler(h),
+ *            SigHandler::Action(a) => SigHandler::Action(a),
+ *            SigHandler::Custom(_) => SigHandler::Custom(Box::new(|sig, ctx| { [> Default action <] })),
+ *        }
+ *    }
+ *}
+ */
 
 #[derive(Default, Clone, Copy, Debug)]
 /// 信号动作配置
@@ -289,8 +331,8 @@ impl Into<sigaction> for SigAction {
                 SigHandler::Action(f) => {
                     act.sa_handler = Some(f);
                 }
-                SigHandler::Default => {
-                    act.sa_handler = Some(tmp);
+                SigHandler::Default(_) => {
+                    act.sa_handler = None;
                 }
                 SigHandler::Ignore => {
                     act.sa_handler = Some(core::mem::transmute(SIG_IGN));
@@ -344,16 +386,10 @@ impl Default for SignalContext {
             blocked: Default::default(),
             pending: Default::default(),
         };
-        default.set_action(Signal::SIGINT, SigAction {
-            handler: SigHandler::Ignore,
-            mask: SignalSet::empty(),
-            flags: SigFlags::NO_DEFER,
-        });
-        default.set_action(Signal::SIGSEGV, SigAction {
-            handler: SigHandler::Default,
-            mask: SignalSet::empty(),
-            flags: SigFlags::NO_DEFER,
-        });
+        #[cfg(feature = "default_handler")]
+        {
+            set_default_handlers(&mut default);
+        }
         default
     }
 }
@@ -377,8 +413,8 @@ impl SignalContext {
     }
 
     /// 获取信号处理动作，返回之前的动作
-    pub fn get_action(&mut self, sig: Signal) -> SigAction {
-        self.actions[sig as usize]
+    pub fn get_action(&mut self, sig: Signal) -> &SigAction {
+        &self.actions[sig as usize]
     }
     /// 设置信号处理动作，返回之前的动作
     pub fn set_action(&mut self, sig: Signal, act: SigAction) -> SigAction {
@@ -527,7 +563,6 @@ impl SignalFrame {
 
     // 准备作为信号处理栈帧，返回之前的scratch, 一般是0
     fn load(&mut self, scratch: usize, data: SignalFrameData) -> SignalResult<usize> {
-        error!("loaded, {scratch:x?}");
         self.loaded
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Relaxed)
             .map_err(|_| SignalError::StackAlreadyLoaded)?;
@@ -537,7 +572,6 @@ impl SignalFrame {
 
     // 释放当前的信号处理帧，返回处理函数和原scratch(原陷入栈)，必须和load成对
     fn unload(&mut self) -> SignalResult<(SignalFrameData, usize)> {
-        error!("unloaded");
         self.loaded
             .compare_exchange(true, false, Ordering::AcqRel, Ordering::Relaxed)
             .map_err(|_| SignalError::StackNotLoaded)?;
@@ -609,9 +643,9 @@ pub fn handle_pending_signals(
 ) -> SignalResult<Option<(UspaceContext, VirtAddr)>> {
     while let Some(sig) = sigctx.pending.take_one() {
         // 找到最高优先级的待处理信号
-        error!("handle signal: {sig:?}");
+        debug!("handle signal: {sig:?}");
         let old_mask = (*sigctx).blocked;
-        let action = sigctx.get_action(sig);
+        let action = *sigctx.get_action(sig);
         let SigAction {
             handler,
             mask: act_mask,
@@ -620,7 +654,7 @@ pub fn handle_pending_signals(
         warn!("handler: {handler:?}, action_mask: {act_mask:?}, flags: {flags:?}");
 
         match handler {
-            SigHandler::Default => handle_default_signal(sig, &mut *sigctx),
+            SigHandler::Default(f) => f(sig, &mut *sigctx),
             SigHandler::Ignore => {} // 直接忽略
             SigHandler::Handler(handler) => {
                 // 设置信号处理栈帧
@@ -687,5 +721,12 @@ pub fn handle_pending_signals(
 }
 
 fn handle_default_signal(sig: Signal, ctx: &mut SignalContext) {
-    todo!()
+    #[cfg(feature = "default_handler")]
+    {
+        default_signal_handler(sig, ctx);
+    }
+    #[cfg(not(feature = "default_handler"))]
+    {
+        warn!("Unhandled default signal: {sig:?}")
+    }
 }
