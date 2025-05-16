@@ -23,10 +23,6 @@ pub(crate) fn sys_sigaction(
     act: *const sigaction,
     old_act: *mut sigaction,
 ) -> LinuxResult<isize> {
-    error!("sigacton {signum:?}");
-    if !act.is_null() {
-        error!("{:x?}", unsafe { *act });
-    }
     let sig: Signal = signum.try_into()?;
     let curr = current();
     let mut sigctx = curr.task_ext().process_data().signal.lock();
@@ -58,9 +54,7 @@ pub(crate) fn sys_sigprocmask(
     let mut sigctx = curr.task_ext().process_data().signal.lock();
 
     if !set.is_null() {
-        warn!("{:x?}", unsafe { *set });
         let set: SignalSet = unsafe { *set }.into();
-        warn!("{set:x?}");
 
         let old = match how as u32 {
             SIG_BLOCK => sigctx.block(set),
@@ -80,8 +74,6 @@ pub(crate) fn sys_sigprocmask(
 
 pub(crate) fn sys_kill(pid: c_int, sig: c_int) -> LinuxResult<isize> {
     let sig = Signal::from_u32(sig as _).ok_or(LinuxError::EINVAL)?;
-    warn!("{pid:?}, {sig:?}");
-    panic!();
     if pid > 0 {
         let process = PROCESS_TABLE
             .read()
@@ -175,7 +167,6 @@ pub(crate) fn sys_sigreturn() -> LinuxResult<isize> {
     let mut sigctx = curr.task_ext().process_data().signal.lock();
     // TODO: 交换回tf, 注意返回后sepc会+4, 可能被多加了一次。
     let (sscratch, tf) = sigctx.unload().unwrap();
-    warn!("{sscratch:x?} {tf:x?}");
     unsafe { write_trapframe_to_kstack(curr.get_kernel_stack_top().unwrap(), &tf) };
     unsafe { axhal::arch::exchange_trap_frame(sscratch) };
     Ok(0)
