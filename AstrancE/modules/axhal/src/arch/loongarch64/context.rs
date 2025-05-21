@@ -97,8 +97,30 @@ impl TrapFrame {
         self.regs.sp = user_sp;
     }
 
-    pub fn inc_sepc(&mut self) {
+    pub fn get_ip(&self) -> usize {
+        self.era
+    }
+
+    pub fn set_ip(&mut self, era: usize) {
+        self.era = era;
+    }
+
+    pub fn step_ip(&mut self) -> usize {
         self.era += 4;
+        self.era
+    }
+
+    pub fn set_ra(&mut self, ra:usize) {
+        self.regs.ra = ra
+    }
+
+    pub fn set_args(&mut self, args: [usize; 6]) {
+        self.0.regs.a0 = args[0];
+        self.0.regs.a1 = args[1];
+        self.0.regs.a2 = args[2];
+        self.0.regs.a3 = args[3];
+        self.0.regs.a4 = args[4];
+        self.0.regs.a5 = args[5];
     }
 }
 
@@ -154,6 +176,11 @@ impl UspaceContext {
     /// Sets the return value register.
     pub const fn set_retval(&mut self, a0: usize) {
         self.0.regs.a0 = a0;
+    }
+
+    /// Sets the thread pointer.
+    pub const fn set_tp(&mut self, tp: usize) {
+        self.0.regs.tp = tp;
     }
 
     /// Enters user space.

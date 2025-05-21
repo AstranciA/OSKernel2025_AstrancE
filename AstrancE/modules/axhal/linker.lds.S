@@ -32,6 +32,13 @@ SECTIONS
     . = ALIGN(4K);
     _erodata = .;
 
+    .trampoline : ALIGN(4K) {
+            _strampoline = .;
+            *(.trampoline.*)
+            . = ALIGN(4K);
+            _etrampoline = .;
+      }
+
     .data : ALIGN(4K) {
         _sdata = .;
         *(.data.boot_page_table)
@@ -81,7 +88,6 @@ SECTIONS
         . = ALIGN(4K);
         _ebss = .;
     }
-
 
     _ekernel = .;
 

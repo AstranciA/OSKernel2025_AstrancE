@@ -49,6 +49,7 @@ macro_rules! syscall_handler_def {
     };
 }
 
+#[macro_export]
 macro_rules! apply {
     ($fn:expr, $($arg:ident),* $(,)?) => {
         $fn($($arg as _),*)
@@ -164,6 +165,10 @@ syscall_handler_def!(
         fcntl => [fd, cmd, arg, ..] {
             apply!(syscall_imp::fd::sys_fcntl, fd, cmd, arg)
         }
+        #[cfg(all(feature = "fs", feature = "fd"))]
+        ppoll => [fds, nfds, timeout, sigmask, ..] {
+            apply!(syscall_imp::fd::sys_ppoll, fds, nfds, timeout, sigmask)
+        }
         #[cfg(feature = "pipe")]
         pipe2 => [fds, ..] {
             let fds = unsafe { core::slice::from_raw_parts_mut(fds as *mut c_int, 2) };
@@ -171,11 +176,15 @@ syscall_handler_def!(
         }
 
         // 进程控制相关系统调用
-        exit => [code,..] {
-            apply!(syscall_imp::task::sys_exit, code)
-        }
-        getpid => _ syscall_imp::task::sys_getpid()
-        gettid => _ syscall_imp::task::sys_gettid()
+        /*
+         *exit => [code,..] {
+         *    apply!(syscall_imp::task::sys_exit, code)
+         *}
+         */
+        /*
+         *getpid => _ syscall_imp::task::sys_getpid()
+         *gettid => _ syscall_imp::task::sys_gettid()
+         */
         sched_yield => _ syscall_imp::task::sys_yield()
         // 时间相关系统调用
         clock_gettime => args {

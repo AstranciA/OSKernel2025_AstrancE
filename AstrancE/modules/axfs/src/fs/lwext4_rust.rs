@@ -151,15 +151,33 @@ impl VfsNodeOps for FileWrapper {
         };
         let blocks = (size + (BLOCK_SIZE as u64 - 1)) / BLOCK_SIZE as u64;
 
+        let inode = file.get_inode().unwrap();
         info!(
             "get_attr of {:?} {:?}, size: {}, blocks: {}",
             vtype,
             file.get_path(),
             size,
-            blocks
+            blocks,
         );
 
-        Ok(VfsNodeAttr::new(perm, vtype, size, blocks))
+        Ok(VfsNodeAttr::new(
+            0,
+            perm,
+            vtype,
+            size,
+            blocks,
+            inode.st_ino(),
+            inode.nlink(),
+            inode.uid(),
+            inode.gid(),
+            inode.nblk_lo(),
+            inode.atime(),
+            inode.mtime(),
+            inode.ctime(),
+            inode.atime_ex(),
+            inode.mtime_ex(),
+            inode.ctime_ex(),
+        ))
     }
 
     fn create(&self, path: &str, ty: VfsNodeType) -> VfsResult {

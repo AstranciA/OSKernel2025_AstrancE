@@ -582,7 +582,7 @@ pub unsafe fn sys_getdents(
 
             // Copy name (including null terminator)
             let name_dst = (*dirent).d_name.as_mut_ptr();
-            core::ptr::copy_nonoverlapping(name.as_ptr(), name_dst, name_len);
+            core::ptr::copy_nonoverlapping(name.as_ptr(), name_dst as *mut u8, name_len);
             *name_dst.add(name_len) = 0;
 
             curr_ptr = curr_ptr.add(reclen);

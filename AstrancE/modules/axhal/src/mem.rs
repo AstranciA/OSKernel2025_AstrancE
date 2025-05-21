@@ -101,6 +101,12 @@ fn kernel_image_regions() -> impl Iterator<Item = MemRegion> {
             name: "boot stack",
         },
         MemRegion {
+            paddr: virt_to_phys((_strampoline as usize).into()),
+            size: _etrampoline as usize - _strampoline as usize,
+            flags: MemRegionFlags::RESERVED | MemRegionFlags::READ,
+            name: ".trampoline",
+        },
+        MemRegion {
             paddr: virt_to_phys((_sbss as usize).into()),
             size: _ebss as usize - _sbss as usize,
             flags: MemRegionFlags::RESERVED | MemRegionFlags::READ | MemRegionFlags::WRITE,
@@ -155,6 +161,8 @@ unsafe extern "C" {
     fn _edata();
     fn _sbss();
     fn _ebss();
+    fn _strampoline();
+    fn _etrampoline();
     fn _ekernel();
     fn boot_stack();
     fn boot_stack_top();

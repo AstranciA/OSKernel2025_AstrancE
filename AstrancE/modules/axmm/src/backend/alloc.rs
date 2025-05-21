@@ -2,6 +2,7 @@ use alloc::sync::Arc;
 use axalloc::global_allocator;
 use axhal::mem::{phys_to_virt, virt_to_phys};
 use axhal::paging::{MappingFlags, PageSize, PageTable};
+use bitflags::Flags;
 use memory_addr::{FrameTracker, MemoryAddr, PAGE_SIZE_4K, PageIter4K, PhysAddr, VirtAddr};
 
 use crate::{AddrSpace, MmapFlags};
@@ -27,7 +28,6 @@ pub(crate) fn alloc_frame(zeroed: bool) -> Option<FrameTrackerRef> {
     if zeroed {
         unsafe { core::ptr::write_bytes(vaddr.as_mut_ptr(), 0, PAGE_SIZE_4K) };
     }
-    // pa ???
     let paddr = virt_to_phys(vaddr);
     Some(Arc::new(FrameTrackerImpl::new(paddr)))
 }
@@ -120,25 +120,34 @@ impl Backend {
     pub(super) fn handle_page_fault_cow(
         vaddr: VirtAddr,
         orig_flags: MappingFlags,
-        //pt: &mut PageTable,
         aspace: &mut AddrSpace,
     ) -> bool {
-        debug_assert!(!orig_flags.contains(MappingFlags::WRITE));
-        debug_assert!(orig_flags.contains(MappingFlags::COW));
-        trace!("handle_page_fault_alloc: COW page fault at {:#x}", vaddr);
+        if !orig_flags.contains(MappingFlags::WRITE) {
+            debug!("Trying to COW but area not writable: {vaddr:x?}");
+            return false;
+        }
+
+        if let Ok((_, pte_flag, _)) = aspace.pt.query(vaddr) {
+            if !pte_flag.contains(MappingFlags::COW) {
+                debug!("Trying to COW but not marked as COW: {vaddr:x?}");
+                return false;
+            }
+        } else {
+            debug!("vaddr not found in page table: {vaddr:x?}");
+            return false;
+        }
+
+        trace!("handle_page_fault_cow: COW page fault at {:#x}", vaddr);
         let origin = aspace.find_frame(vaddr.align_down_4k()).unwrap();
         let count = Arc::strong_count(&origin) - 1; // exclude origin self
         let origin_pa = origin.pa;
 
         // if origin frame is only be hold in `aspace`, we can reuse it.
         if count == 1 {
+            trace!("COW reusing frame {:#x}", origin_pa);
             return aspace
                 .page_table()
-                .remap(
-                    vaddr,
-                    origin_pa,
-                    (orig_flags - MappingFlags::COW) | MappingFlags::WRITE,
-                )
+                .remap(vaddr, origin_pa, orig_flags)
                 .map(|(_, tlb)| tlb.flush())
                 .is_ok();
         }
@@ -167,7 +176,7 @@ impl Backend {
             return aspace.remap(
                 vaddr,
                 frame,
-                (orig_flags - MappingFlags::COW) | MappingFlags::WRITE,
+                orig_flags,
             );
 
             /*
@@ -233,6 +242,7 @@ impl Backend {
             }
             VmAreaType::Mmap(mmio) => {
                 let flags = orig_flags;
+
                 if !flags.contains(MappingFlags::DEVICE) {
                     return false;
                 };
@@ -251,13 +261,11 @@ impl Backend {
                             })
                             .is_ok();
                     }
-                    return false
+                    return false;
                 }
-                if !flags.contains(MappingFlags::READ) {
-                    return aspace
-                        .map_mmap(mmio, vaddr, PageSize::Size4K, flags)
-                        .is_ok();
-                }
+                return aspace
+                    .map_mmap(mmio, vaddr, PageSize::Size4K, flags)
+                    .is_ok();
 
                 /*
                  *if flags.contains(MappingFlags::COW) {
@@ -269,6 +277,5 @@ impl Backend {
             VmAreaType::Heap => todo!(),
             VmAreaType::Stack => todo!(),
         }
-        false
     }
 }

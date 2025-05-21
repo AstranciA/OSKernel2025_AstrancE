@@ -15,6 +15,8 @@ use crate::backend::alloc::dealloc_frame;
 #[derive(Clone)]
 pub struct FrameTrackerImpl {
     pub pa: PhysAddr,
+
+    tracking: bool,
 }
 
 /// Implement of FrameTracker.
@@ -24,7 +26,15 @@ impl FrameTracker for FrameTrackerImpl {
 
     fn new(pa: PhysAddr) -> Self {
         //debug!("FrameTrackerImpl::new({:#x})", pa);
-        Self { pa }
+        Self { pa, tracking: true }
+    }
+
+    fn no_tracking(pa: PhysAddr) -> Self {
+        //debug!("FrameTrackerImpl::new({:#x})", pa);
+        Self {
+            pa,
+            tracking: false,
+        }
     }
 
     /// Don't use this method. Frame should be allocated by Backend::map
@@ -38,9 +48,10 @@ impl FrameTracker for FrameTrackerImpl {
     }
 
     fn dealloc_frame(&mut self) {
-        trace!("Dealloc frame {:?} by FrameTrackerImpl::drop", self.pa);
-        dealloc_frame(self.pa);
-        //todo!()
+        if self.tracking {
+            trace!("Dealloc frame {:?} by FrameTrackerImpl::drop", self.pa);
+            dealloc_frame(self.pa);
+        }
     }
 }
 

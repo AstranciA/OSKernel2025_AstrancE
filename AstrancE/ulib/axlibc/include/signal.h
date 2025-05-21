@@ -147,7 +147,7 @@ typedef void (*sighandler_t)(int);
 #define SIG_IGN ((void (*)(int))1)
 
 typedef struct __sigset_t {
-    unsigned long __bits[128 / sizeof(long)];
+    unsigned long __bits[64 / 8 / sizeof(long)];
 } sigset_t;
 
 struct sigaction {

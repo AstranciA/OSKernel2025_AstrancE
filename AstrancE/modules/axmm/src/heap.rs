@@ -4,18 +4,19 @@ use axhal::paging::MappingFlags;
 use core::sync::atomic::{AtomicUsize, Ordering};
 use memory_addr::{MemoryAddr, VirtAddr};
 
+#[derive(Debug)]
 pub struct HeapSpace {
     max_heap_size: usize,
-    heap_base: AtomicUsize,
+    heap_base: usize,
     heap_top: AtomicUsize,
 }
 
 #[allow(unused)]
 impl HeapSpace {
-    fn new(heap_bottom: VirtAddr, max_size: usize) -> Self {
+    pub fn new(heap_bottom: VirtAddr, max_size: usize) -> Self {
         Self {
             max_heap_size: max_size,
-            heap_base: AtomicUsize::new(heap_bottom.as_usize()),
+            heap_base: heap_bottom.as_usize(),
             heap_top: AtomicUsize::new(heap_bottom.as_usize()),
         }
     }
@@ -28,7 +29,7 @@ impl HeapSpace {
     }
 
     pub fn base(&self) -> VirtAddr {
-        VirtAddr::from_usize(self.heap_base.load(Ordering::Acquire))
+        VirtAddr::from_usize(self.heap_base)
     }
 
     pub fn max_size(&self) -> usize {
@@ -43,13 +44,13 @@ impl HeapSpace {
         assert!(
             (top < self.base().offset(self.max_heap_size as isize)) && (top >= self.base()),
             "heap top must be in [{:x}, {:x}), but get {top:x}",
-            self.heap_base.load(Ordering::Acquire),
-            self.heap_base.load(Ordering::Acquire) + self.max_heap_size
+            self.heap_base,
+            self.heap_base + self.max_heap_size
         );
 
         self.heap_top.store(top.as_usize(), Ordering::Release);
 
-        VirtAddr::from_usize(self.heap_top.load(Ordering::Acquire))
+        VirtAddr::from_usize(self.heap_base)
     }
 
     pub fn set_heap_size(&self, size: usize) -> VirtAddr {
@@ -57,7 +58,7 @@ impl HeapSpace {
     }
 
     fn move_heap_top(&self, offset: isize) -> VirtAddr {
-        let new_top = VirtAddr::from_usize(self.heap_top.load(Ordering::Acquire)).offset(offset);
+        let new_top = VirtAddr::from_usize(self.heap_base).offset(offset);
         self.set_heap_top(new_top)
     }
 }

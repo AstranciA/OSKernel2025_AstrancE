@@ -1,194 +1,215 @@
-use arceos_posix_api::ctypes::*;
-use axhal::arch::{TrapFrame, UspaceContext};
-use axtask::{current, AxTaskRef, TaskExtMut, TaskExtRef};
-use bitflags::*;
-use syscalls::Sysno;
+use core::{ffi::c_int, time::Duration};
 
-const NSIG: i32 = 32;
-/// signals
-#[repr(i32)]
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Signal {
-    SIGBLOCK = SIG_BLOCK,
-    SIGUNBLOCK = SIG_UNBLOCK,
-    SIGSETMASK = SIG_SETMASK,
-    SIGHUP = SIGHUP,
-    SIGINT = SIGINT,
-    SIGQUIT = SIGQUIT,
-    SIGILL = SIGILL,
-    SIGTRAP = SIGTRAP,
-    SIGABRT = SIGABRT,
-    SIGIOT = SIGIOT,
-    SIGBUS = SIGBUS,
-    SIGFPE = SIGFPE,
-    SIGKILL = SIGKILL,
-    SIGUSR1 = SIGUSR1,
-    SIGSEGV = SIGSEGV,
-    SIGUSR2 = SIGUSR2,
-    SIGPIPE = SIGPIPE,
-    SIGALRM = SIGALRM,
-    SIGTERM = SIGTERM,
-    SIGSTKFLT = SIGSTKFLT,
-    SIGCHLD = SIGCHLD,
-    SIGCONT = SIGCONT,
-    SIGSTOP = SIGSTOP,
-    SIGTSTP = SIGTSTP,
-    SIGTTIN = SIGTTIN,
-    SIGTTOU = SIGTTOU,
-    SIGURG = SIGURG,
-    SIGXCPU = SIGXCPU,
-    SIGXFSZ = SIGXFSZ,
-    SIGVTALRM = SIGVTALRM,
-    SIGPROF = SIGPROF,
-    SIGWINCH = SIGWINCH,
-    SIGIO = SIGIO,
-    SIGPOLL = SIGPOLL,
-    SIGPWR = SIGPWR,
-    SIGSYS = SIGSYS,
-    SIGUNUSED = SIGUNUSED,
-}
+use alloc::sync::Arc;
+//use arceos_posix_api::ctypes::{self, *};
+use axerrno::{LinuxError, LinuxResult, ax_err};
+use axhal::{arch::TrapFrame, time::monotonic_time};
+use axsignal::*;
+use axsync::Mutex;
+use axtask::{TaskExtRef, current, exit, yield_now};
+use linux_raw_sys::general::*;
+use memory_addr::{VirtAddr, VirtAddrRange};
 
-impl Signal {
-    pub fn from_u32(n: u32) -> Option<Self> {
-        if n > NSIG {
-            None
-        } else {
-            Some(unsafe { core::mem::transmute(n) })
+use crate::{
+    mm::trampoline_vaddr,
+    ptr::{PtrWrapper, UserPtr},
+    task::PROCESS_GROUP_TABLE,
+};
+
+use super::{
+    PROCESS_TABLE, ProcessData, THREAD_TABLE, time::TimeStat, time_stat_from_old_task,
+    time_stat_to_new_task, write_trapframe_to_kstack, yield_with_time_stat,
+};
+
+pub fn default_signal_handler(signal: Signal, ctx: &mut SignalContext) {
+    match signal {
+        Signal::SIGINT | Signal::SIGKILL => {
+            // 杀死进程
+            let curr = current();
+            error!("kill myself");
+            exit(curr.task_ext().thread.process().exit_code());
+        }
+        _ => {
+            // 忽略信号
+            warn!("Ignoring signal: {:?}", signal)
         }
     }
 }
 
-bitflags! {
-    pub struct SignalSet :u32 {
-        const SIG_BLOCK = 1 << Signal::SIGBLOCK as usize;
+pub fn spawn_signal_ctx() -> Arc<Mutex<SignalContext>> {
+    let mut ctx = SignalContext::default();
+    ctx.set_action(Signal::SIGKILL, SigAction {
+        handler: SigHandler::Default(default_signal_handler),
+        mask: SignalSet::SIGKILL,
+        flags: SigFlags::empty(),
+    });
+    ctx.set_action(Signal::SIGINT, SigAction {
+        handler: SigHandler::Default(default_signal_handler),
+        mask: SignalSet::SIGINT,
+        flags: SigFlags::empty(),
+    });
+
+    Arc::new(Mutex::new(ctx))
+}
+
+pub(crate) fn sys_sigaction(
+    signum: c_int,
+    act: *const sigaction,
+    old_act: *mut sigaction,
+) -> LinuxResult<isize> {
+    let sig: Signal = signum.try_into()?;
+    let curr = current();
+    let mut sigctx = curr.task_ext().process_data().signal.lock();
+    if !act.is_null() {
+        let act = SigAction::try_from(unsafe { *act }).inspect_err(|e| {})?;
+        let old = sigctx.set_action(sig, act);
+
+        // 设置旧动作（如果有）
+        unsafe { old_act.as_mut().map(|ptr| unsafe { *ptr = old.into() }) };
+    } else {
+        // 只获取旧动作（如果有）
+        unsafe {
+            let old = sigctx.get_action(sig);
+            old_act
+                .as_mut()
+                .map(|ptr| unsafe { *ptr = (*sigctx.get_action(sig)).into() });
+        };
     }
+
+    Ok(0)
 }
 
-impl SignalSet {
-    pub fn get_one(&self) -> Option<Signal> {
-        let sig = self.bits().trailing_zeros();
-        Signal::from_u32(sig)
+pub(crate) fn sys_sigprocmask(
+    how: c_int,
+    set: *const sigset_t,
+    oldset: *mut sigset_t,
+) -> LinuxResult<isize> {
+    let curr = current();
+    let mut sigctx = curr.task_ext().process_data().signal.lock();
+
+    if !set.is_null() {
+        let set: SignalSet = unsafe { *set }.into();
+
+        let old = match how as u32 {
+            SIG_BLOCK => sigctx.block(set),
+            SIG_UNBLOCK => sigctx.unblock(set),
+            SIG_SETMASK => sigctx.set_mask(set),
+            _ => return Err(LinuxError::EINVAL),
+        };
+        unsafe {
+            oldset
+                .as_mut()
+                .map(|ptr| unsafe { *ptr }.sig[0] = old.bits())
+        };
     }
+
+    Ok(0)
 }
 
-impl From<Signal> for SignalSet {
-    fn from(sig: Signal) -> Self {
-        Self::from_bits_retain(1 << sig as usize)
+pub(crate) fn sys_kill(pid: c_int, sig: c_int) -> LinuxResult<isize> {
+    let sig = Signal::from_u32(sig as _).ok_or(LinuxError::EINVAL)?;
+    if pid > 0 {
+        let process = PROCESS_TABLE
+            .read()
+            .get(&(pid as _))
+            .ok_or(LinuxError::ESRCH)?;
+        let data: &ProcessData = process.data().ok_or_else(|| {
+            error!("Process {} has no data", pid);
+            LinuxError::EFAULT
+        })?;
+        data.send_signal(sig);
+    } else {
+        warn!("Not supported yet: pid: {:?}", pid);
+        return Err(LinuxError::EINVAL);
     }
+    Ok(0)
 }
 
-pub enum SigHandler {
-    Default,
-    Ignore,
-    Handler(unsafe extern "C" fn(i32)),
-}
+pub(crate) fn sys_sigtimedwait(
+    sigset: *const sigset_t,
+    info: *mut siginfo_t,
+    timeout: *const timespec,
+) -> LinuxResult<isize> {
+    warn!("sigset: {:?}", unsafe { *sigset });
+    let sigset: SignalSet = unsafe { *(sigset.as_ref().ok_or(LinuxError::EFAULT)?) }.into();
+    let curr = current();
+    let start_time = monotonic_time();
 
-// 信号动作配置
-pub struct SigAction {
-    pub handler: SigHandler,
-    pub mask: SignalSet,
-    pub flags: i32,
-}
-
-#[naked]
-#[no_mangle]
-unsafe extern "C" fn sigreturn_trampoline() {
-    // 内联汇编确保无函数前导/后导代码
-    asm!(
-        "li a7, {sysno}",
-        "ecall",
-        sysno = const Sysno::rt_sigreturn as usize,
-        options(noreturn)
-    );
-}
-
-/// 信号返回trampoline
-global_asm!(
-    r#"
-    .global sigreturn_trampoline
-    sigreturn_trampoline:
-        li a7, {sys_sigreturn}
-        ecall
-    "#,
-    sys_sigreturn = const Sysno::rt_sigreturn,
-);
-
-// 进程信号上下文
-#[derive(Default)]
-pub struct SignalContext {
-    pub handlers: [SigAction; NSIG as usize], // 信号处理表
-    pub blocked: SignalSet,                   // 被阻塞的信号
-    pub pending: SignalSet,                   // 待处理信号
-}
-
-impl SignalContext {
-    /// 向进程发送信号
-    pub fn send_signal(&mut self, sig: Signal) {
-        let mask = 1 << (sig as u8 - 1);
-
-        // 如果信号未被阻塞，则加入待处理队列
-        if !self.pending.contains(sig) {
-            self.pending = self.pending.union(sig);
+    // 检查是否有超时设置
+    let has_timeout = !timeout.is_null();
+    let timeout_duration = if has_timeout {
+        let ts = unsafe { timeout.as_ref().ok_or(LinuxError::EFAULT)? };
+        if ts.tv_sec == 0 && ts.tv_nsec == 0 {
+            // 立即返回的特殊情况
+            return curr
+                .task_ext()
+                .process_data()
+                .signal
+                .lock()
+                .take_pending_in(sigset)
+                .ok_or(LinuxError::EAGAIN)
+                .map(|sig| sig as isize);
         }
-    }
+        Some(Duration::new(ts.tv_sec as u64, ts.tv_nsec as u32))
+    } else {
+        None
+    };
 
-    /// 检查是否有待处理信号
-    pub fn has_pending(&self) -> bool {
-        self.pending == 0
-    }
-}
+    // 主等待循环
+    loop {
+        warn!("{:?} {:?}", sigset, curr.task_ext().process_data().signal().lock().has_pending());
+        // 检查是否有待处理的信号
+        if let Some(sig) = curr
+            .task_ext()
+            .process_data()
+            .signal
+            .lock()
+            .take_pending_in(sigset)
+        {
+            warn!("Received signal: {:?}", sig);
+            return Ok(sig as isize);
+        }
 
-pub fn handle_pending_signals() {
-    let current_task = current();
-    let tast_ext = current_task.task_ext_mut();
-    let mut ctx: SignalContext = tast_ext.sigctx;
-    let curr_sp = tast_ext.uctx.get_sp();
-
-    while ctx.has_pending() {
-        // 找到最高优先级的待处理信号
-        let sig = ctx.pending.get_one().unwrap();
-        let sig_action = &ctx.handlers[sig as usize];
-
-        match sig_action.handler {
-            SigHandler::Default => handle_default_signal(sig, regs),
-            SigHandler::Ignore => {} // 直接忽略
-            SigHandler::Handler(handler) => {
-                // 设置信号处理栈帧
-                // WARN: 在syscall rt_sigreturn中清除信号。
-                unsafe { enter_signal_handler(&mut ctx, curr_sp, handler, sig) };
+        // 检查超时
+        if let Some(duration) = timeout_duration {
+            let elapsed = monotonic_time() - start_time;
+            if elapsed >= duration {
+                return Err(LinuxError::EAGAIN);
             }
         }
 
-        // 清除已处理的信号
-        ctx.pending.remove(sig);
+        // 让出CPU
+        yield_with_time_stat();
     }
 }
 
-unsafe fn enter_signal_handler(
-    sigctx: &mut SignalContext,
-    ustack_top: usize,
-    sig_action: SigAction,
-    handler: unsafe extern "C" fn(i32),
-    sig: i32,
-) -> ! {
+pub(crate) fn handle_pending_signals(current_tf: &TrapFrame) {
     let curr = current();
-    let sigctx = curr.task_ext().sigctx;
-    // 设置用户处理函数上下文，栈接着原来的用户栈
-    // 信号编号作为第一个参数
-    let uctx = UspaceContext::new(handler as usize, ustack_top, sig as usize);
-
-    // 跳转到处理函数
-    uctx.set_ip(handler as usize);
-    uctx.sepc = handler as usize;
-
-    // 设置返回地址为信号返回trampoline
-    regs.ra = sigreturn_trampoline as usize;
-
-    // 设置信号屏蔽字
-    let old_mask = current_task().signal_ctx.blocked;
-    sigctx.blocked |= sig_action.mask;
-    frame.saved_mask = old_mask;
-    unsafe { uctx.enter_uspace(task.get_sig_stack_top()) };
+    let mut sigctx = curr.task_ext().process_data().signal.lock();
+    if !sigctx.has_pending() {
+        return;
+    }
+    sigctx.set_current_stack(SignalStackType::Primary);
+    // unlock sigctx since handle_pending_signals might exit curr context
+    match axsignal::handle_pending_signals(&mut sigctx, current_tf, unsafe {
+        trampoline_vaddr(sigreturn_trampoline as usize).into()
+    }) {
+        Ok(Some((mut uctx, kstack_top))) => {
+            // 交换tf
+            unsafe { write_trapframe_to_kstack(curr.get_kernel_stack_top().unwrap(), &uctx.0) };
+        }
+        Ok(None) => {}
+        Err(_) => {}
+    };
 }
 
-fn enter_signal_handler(tf: &mut TrapFrame) {}
+pub(crate) fn sys_sigreturn() -> LinuxResult<isize> {
+    let curr = current();
+    let mut sigctx = curr.task_ext().process_data().signal.lock();
+    let (sscratch, tf) = sigctx.unload().unwrap();
+    // 交换回tf, 返回a0以防止覆盖
+    unsafe { write_trapframe_to_kstack(curr.get_kernel_stack_top().unwrap(), &tf) };
+    unsafe { axhal::arch::exchange_trap_frame(sscratch) };
+    debug!("sigreturn");
+    Ok(tf.arg0() as isize)
+}

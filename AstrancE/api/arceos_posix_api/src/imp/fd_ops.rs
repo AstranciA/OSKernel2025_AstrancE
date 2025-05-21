@@ -1,5 +1,6 @@
 use alloc::sync::Arc;
-use core::ffi::c_int;
+use axtask::yield_now;
+use core::ffi::{c_int, c_short};
 
 use axerrno::{LinuxError, LinuxResult};
 use axio::PollState;
@@ -84,33 +85,6 @@ pub fn sys_dup(old_fd: c_int) -> c_int {
 }
 
 /// Duplicate a file descriptor, but it uses the file descriptor number specified in `new_fd`.
-///
-/// TODO: `dup2` should forcibly close new_fd if it is already opened.
-// pub fn sys_dup2(old_fd: c_int, new_fd: c_int) -> c_int {
-//     debug!("sys_dup2 <= old_fd: {}, new_fd: {}", old_fd, new_fd);
-//     syscall_body!(sys_dup2, {
-//         if old_fd == new_fd {
-//             let r = sys_fcntl(old_fd, ctypes::F_GETFD as _, 0);
-//             if r >= 0 {
-//                 return Ok(old_fd);
-//             } else {
-//                 return Ok(r);
-//             }
-//         }
-//         if new_fd as usize >= AX_FILE_LIMIT {
-//             return Err(LinuxError::EBADF);
-//         }
-// 
-//         let f = get_file_like(old_fd)?;
-//         let mut fd_table = FD_TABLE.write();
-//         FD_TABLE
-//             .write()
-//             .add_at(new_fd as usize, f)
-//             .map_err(|_| LinuxError::EMFILE)?;
-// 
-//         Ok(new_fd)
-//     })
-// }
 pub fn sys_dup2(old_fd: c_int, new_fd: c_int) -> c_int {
     debug!("sys_dup2 <= old_fd: {}, new_fd: {}", old_fd, new_fd);
     syscall_body!(sys_dup2, {
@@ -134,18 +108,14 @@ pub fn sys_dup2(old_fd: c_int, new_fd: c_int) -> c_int {
             fd_table.remove(new_fd as usize); // 移除旧资源
         }
         // 再绑定新资源
-        fd_table
-            .add_at(new_fd as usize, f)
-            .map_err(|e| {
-                debug!("FD_TABLE.add_at failed for new_fd={}", new_fd);
-                LinuxError::EMFILE
-            })?;
+        fd_table.add_at(new_fd as usize, f).map_err(|e| {
+            debug!("FD_TABLE.add_at failed for new_fd={}", new_fd);
+            LinuxError::EMFILE
+        })?;
 
         Ok(new_fd)
     })
 }
-
-
 /// Manipulate file descriptor.
 ///
 /// TODO: `SET/GET` command is ignored, hard-code stdin/stdout
@@ -170,6 +140,62 @@ pub fn sys_fcntl(fd: c_int, cmd: c_int, arg: usize) -> c_int {
                 Ok(0)
             }
         }
+    })
+}
+
+pub fn ps2event(ps: &PollState) -> c_short {
+    let mut events = 0;
+    if ps.readable {
+        events |= ctypes::POLLIN;
+    }
+    if ps.writable {
+        events |= ctypes::POLLOUT;
+    }
+    events as c_short
+}
+
+pub fn sys_ppoll(
+    fds: *mut ctypes::pollfd,
+    nfds: ctypes::nfds_t,
+    // TODO: timeout_ts
+    _timeout_ts: *const ctypes::timespec,
+    // TODO: sigmask
+    _sigmask: *const ctypes::sigset_t,
+) -> c_int {
+    syscall_body!(sys_ppoll, {
+        let fds = unsafe { core::slice::from_raw_parts_mut(fds, nfds as usize) };
+
+        let mut ready_count = 0;
+        loop {
+            for fd in &mut *fds {
+                match get_file_like(fd.fd) {
+                    Ok(file_like) => match file_like.poll() {
+                        Ok(poll_state) => {
+                            debug!("poll_state: {:?}, fd: {fd:?}", poll_state);
+                            fd.revents = ps2event(&poll_state);
+                            ready_count += 1;
+                        }
+                        Err(_) => {
+                            warn!("error polling file descriptor");
+                            // Here we might want to set an error flag in revents
+                            fd.revents = ctypes::POLLNVAL as c_short;
+                            ready_count += 1;
+                        }
+                    },
+                    Err(_) => {
+                        warn!("invalid file descriptor");
+                        fd.revents = ctypes::POLLNVAL as c_short;
+                        ready_count += 1;
+                    }
+                }
+            }
+            if ready_count == 0 {
+                yield_now();
+            } else {
+                break;
+            }
+        }
+        Ok(ready_count)
     })
 }
 
