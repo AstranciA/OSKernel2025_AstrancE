@@ -162,7 +162,7 @@ pub fn spawn_user_task(
     aspace: Arc<Mutex<AddrSpace>>,
     uctx: UspaceContext,
     pwd: String,
-    is_root: bool,
+    as_root_process: bool,
 ) -> AxTaskRef {
     let mut task = spawn_user_task_inner(exe_path, uctx, pwd);
     task.ctx_mut()
@@ -184,13 +184,8 @@ pub fn spawn_user_task(
      *    signal: Arc::new(Mutex::new(SignalContext::default())),
      *};
      */
-    let process_data = ProcessData::new(
-        exe_path.into(),
-        aspace,
-        spawn_signal_ctx(),
-        None,
-    );
-    let parent = if is_root {
+    let process_data = ProcessData::new(exe_path.into(), aspace, spawn_signal_ctx(), None);
+    let parent = if as_root_process {
         Process::new_init(tid).build()
     } else {
         init_proc()

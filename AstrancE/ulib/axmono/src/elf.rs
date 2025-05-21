@@ -55,7 +55,6 @@ impl ELFInfo {
 
                 let ph_flags = ph.flags();
                 let flags = ELFSegment::into_to_mapping_flag(ph_flags);
-                error!("{st_va:?} {ed_vaddr_align:?} {flags:?}");
 
                 let size = ed_vaddr_align.as_usize() - st_va_align.as_usize();
 

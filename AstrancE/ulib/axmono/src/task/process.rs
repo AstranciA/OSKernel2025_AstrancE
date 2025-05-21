@@ -353,6 +353,12 @@ pub fn clone_task(
     Ok(axtask::spawn_task(new_task))
 }
 
+enum ExecType {
+    Elf,
+    Shebang(&'static str),
+    Shell,
+}
+
 /// execve
 /// mainly from starry
 /// **Return**
@@ -371,24 +377,41 @@ pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxR
     } else {
         program_name.to_string()
     };
+    // try reading shebang
     let mut buffer: [u8; 64] = [0; 64];
     let mut file = axfs::api::File::open(program_path.as_str())?;
     file.read(&mut buffer)?;
+
     // FIXME: parse shebang
-    if buffer[..2] == [b'#', b'!'] {
-        debug!("execve:{:?} starts with shebang #!...", program_name);
+    let exec_type = if buffer.len() >= 4 && buffer[..4] == *b"\x7fELF" {
+        ExecType::Elf
+    } else if buffer[..2] == [b'#', b'!'] {
         // FIXME: read real shabang
-        let shebang = "/riscv/musl/busybox";
+        ExecType::Shell
+    } else {
+        ExecType::Shell
+    };
 
-        args_.push(shebang.into());
-        args_.push("ash".into());
+    let elf_file = match exec_type {
+        ExecType::Elf => load_elf_from_disk(&program_path)
+            .inspect_err(|err| debug!("load_elf_from_disk failed: {:?}", err))?,
+        ExecType::Shell => {
+            // try reading shebang
+            //debug!("execve:{:?} starts with shebang #!...", program_name);
+            program_path = "/riscv/musl/busybox".parse().unwrap(); // busybox
 
-        program_path = shebang.parse().unwrap(); // busybox
-    }
+            args_.push(program_path.clone().into());
+            args_.push("ash".into());
+
+            load_elf_from_disk(program_path.as_str()).unwrap()
+        }
+        _ => {
+            unimplemented!()
+        }
+    };
     args_.extend_from_slice(args);
-    let args_: &[String] = args_.as_slice();
 
-    let elf_file = load_elf_from_disk(&program_path)?;
+    let args_: &[String] = args_.as_slice();
     let current_task = current();
 
     if Arc::strong_count(&current_task.task_ext().process_data().aspace) != 1 {

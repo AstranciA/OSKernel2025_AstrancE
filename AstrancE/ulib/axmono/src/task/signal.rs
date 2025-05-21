@@ -13,6 +13,7 @@ use memory_addr::{VirtAddr, VirtAddrRange};
 use crate::{
     mm::trampoline_vaddr,
     ptr::{PtrWrapper, UserPtr},
+    task::PROCESS_GROUP_TABLE,
 };
 
 use super::{
@@ -25,6 +26,7 @@ pub fn default_signal_handler(signal: Signal, ctx: &mut SignalContext) {
         Signal::SIGINT | Signal::SIGKILL => {
             // 杀死进程
             let curr = current();
+            error!("kill myself");
             exit(curr.task_ext().thread.process().exit_code());
         }
         _ => {
@@ -128,6 +130,7 @@ pub(crate) fn sys_sigtimedwait(
     info: *mut siginfo_t,
     timeout: *const timespec,
 ) -> LinuxResult<isize> {
+    warn!("sigset: {:?}", unsafe { *sigset });
     let sigset: SignalSet = unsafe { *(sigset.as_ref().ok_or(LinuxError::EFAULT)?) }.into();
     let curr = current();
     let start_time = monotonic_time();
@@ -154,6 +157,7 @@ pub(crate) fn sys_sigtimedwait(
 
     // 主等待循环
     loop {
+        warn!("{:?} {:?}", sigset, curr.task_ext().process_data().signal().lock().has_pending());
         // 检查是否有待处理的信号
         if let Some(sig) = curr
             .task_ext()
@@ -162,6 +166,7 @@ pub(crate) fn sys_sigtimedwait(
             .lock()
             .take_pending_in(sigset)
         {
+            warn!("Received signal: {:?}", sig);
             return Ok(sig as isize);
         }
 
@@ -181,6 +186,9 @@ pub(crate) fn sys_sigtimedwait(
 pub(crate) fn handle_pending_signals(current_tf: &TrapFrame) {
     let curr = current();
     let mut sigctx = curr.task_ext().process_data().signal.lock();
+    if !sigctx.has_pending() {
+        return;
+    }
     sigctx.set_current_stack(SignalStackType::Primary);
     // unlock sigctx since handle_pending_signals might exit curr context
     match axsignal::handle_pending_signals(&mut sigctx, current_tf, unsafe {

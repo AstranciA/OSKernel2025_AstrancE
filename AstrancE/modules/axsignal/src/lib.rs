@@ -119,41 +119,40 @@ impl Default for Signal {
 bitflags! {
     #[derive(Clone, Copy, Default, Debug)]
     pub struct SignalSet :u64 {
-        const EMPTY = 0;
-        const SIGHUP     = 1 << SIGHUP;
-        const SIGINT     = 1 << SIGINT;
-        const SIGQUIT    = 1 << SIGQUIT;
-        const SIGILL     = 1 << SIGILL;
-        const SIGTRAP    = 1 << SIGTRAP;
-        const SIGABRT    = 1 << SIGABRT;
-        const SIGIOT     = 1 << SIGIOT;
-        const SIGBUS     = 1 << SIGBUS;
-        const SIGFPE     = 1 << SIGFPE;
-        const SIGKILL    = 1 << SIGKILL;
-        const SIGUSR1    = 1 << SIGUSR1;
-        const SIGSEGV    = 1 << SIGSEGV;
-        const SIGUSR2    = 1 << SIGUSR2;
-        const SIGPIPE    = 1 << SIGPIPE;
-        const SIGALRM    = 1 << SIGALRM;
-        const SIGTERM    = 1 << SIGTERM;
-        const SIGSTKFLT  = 1 << SIGSTKFLT;
-        const SIGCHLD    = 1 << SIGCHLD;
-        const SIGCONT    = 1 << SIGCONT;
-        const SIGSTOP    = 1 << SIGSTOP;
-        const SIGTSTP    = 1 << SIGTSTP;
-        const SIGTTIN    = 1 << SIGTTIN;
-        const SIGTTOU    = 1 << SIGTTOU;
-        const SIGURG     = 1 << SIGURG;
-        const SIGXCPU    = 1 << SIGXCPU;
-        const SIGXFSZ    = 1 << SIGXFSZ;
-        const SIGVTALRM  = 1 << SIGVTALRM;
-        const SIGPROF    = 1 << SIGPROF;
-        const SIGWINCH   = 1 << SIGWINCH;
-        const SIGIO      = 1 << SIGIO;
-        const SIGPOLL    = 1 << SIGPOLL;
-        const SIGPWR     = 1 << SIGPWR;
-        const SIGSYS     = 1 << SIGSYS;
-        const SIGUNUSED  = 1 << SIGUNUSED ;
+        const SIGHUP     = 1 << (SIGHUP - 1);
+        const SIGINT     = 1 << (SIGINT - 1);
+        const SIGQUIT    = 1 << (SIGQUIT - 1);
+        const SIGILL     = 1 << (SIGILL - 1);
+        const SIGTRAP    = 1 << (SIGTRAP - 1);
+        const SIGABRT    = 1 << (SIGABRT - 1);
+        const SIGIOT     = 1 << (SIGIOT - 1);
+        const SIGBUS     = 1 << (SIGBUS - 1);
+        const SIGFPE     = 1 << (SIGFPE - 1);
+        const SIGKILL    = 1 << (SIGKILL - 1);
+        const SIGUSR1    = 1 << (SIGUSR1 - 1);
+        const SIGSEGV    = 1 << (SIGSEGV - 1);
+        const SIGUSR2    = 1 << (SIGUSR2 - 1);
+        const SIGPIPE    = 1 << (SIGPIPE - 1);
+        const SIGALRM    = 1 << (SIGALRM - 1);
+        const SIGTERM    = 1 << (SIGTERM - 1);
+        const SIGSTKFLT  = 1 << (SIGSTKFLT - 1);
+        const SIGCHLD    = 1 << (SIGCHLD - 1);
+        const SIGCONT    = 1 << (SIGCONT - 1);
+        const SIGSTOP    = 1 << (SIGSTOP - 1);
+        const SIGTSTP    = 1 << (SIGTSTP - 1);
+        const SIGTTIN    = 1 << (SIGTTIN - 1);
+        const SIGTTOU    = 1 << (SIGTTOU - 1);
+        const SIGURG     = 1 << (SIGURG - 1);
+        const SIGXCPU    = 1 << (SIGXCPU - 1);
+        const SIGXFSZ    = 1 << (SIGXFSZ - 1);
+        const SIGVTALRM  = 1 << (SIGVTALRM - 1);
+        const SIGPROF    = 1 << (SIGPROF - 1);
+        const SIGWINCH   = 1 << (SIGWINCH - 1);
+        const SIGIO      = 1 << (SIGIO - 1);
+        const SIGPOLL    = 1 << (SIGPOLL - 1);
+        const SIGPWR     = 1 << (SIGPWR - 1);
+        const SIGSYS     = 1 << (SIGSYS - 1);
+        const SIGUNUSED  = 1 << (SIGUNUSED  - 1);
     }
 }
 
@@ -161,7 +160,7 @@ impl SignalSet {
     /// get lowest signal in the set
     /// will return None if the set is empty (trailing_zeros == NSIG)
     pub fn get_one(&self) -> Option<Signal> {
-        Signal::from_u32(self.bits().trailing_zeros())
+        Signal::from_u32(self.bits().trailing_zeros() + 1)
     }
 
     /// get lowest signal in the set that is in the filter set
@@ -193,8 +192,16 @@ impl SignalSet {
 
 impl From<Signal> for SignalSet {
     fn from(sig: Signal) -> Self {
-        Self::from_bits_retain(1 << sig as usize)
+        Self::from_bits_retain(1 << (sig as usize) - 1)
     }
+}
+
+impl TryFrom<SignalSet> for Signal {
+    fn try_from(value: SignalSet) -> SignalResult<Self> {
+        Signal::from_u32(value.bits().trailing_zeros() + 1).ok_or(SignalError::InvalidSignal)
+    }
+
+    type Error = SignalError;
 }
 
 #[cfg(any(target_arch = "riscv64", target_arch = "loongarch64"))]
@@ -409,7 +416,7 @@ impl SignalContext {
 
     /// 检查是否有待处理信号
     pub fn has_pending(&self) -> bool {
-        self.pending.is_empty()
+        !self.pending.is_empty()
     }
 
     /// 获取信号处理动作，返回之前的动作
@@ -441,6 +448,7 @@ impl SignalContext {
     }
 
     pub fn take_pending_in(&mut self, filter: SignalSet) -> Option<Signal> {
+        warn!("{:?}", self.pending);
         self.pending.take_one_in(filter)
     }
 
@@ -714,8 +722,6 @@ pub fn handle_pending_signals(
         };
 
         sigctx.blocked = old_mask;
-        // 清除已处理的信号
-        sigctx.pending.remove(sig.into());
     }
     Ok(None)
 }

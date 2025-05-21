@@ -62,12 +62,11 @@ pub fn map_elf_sections(
     envs: Option<&[String]>,
 ) -> Result<(VirtAddr, VirtAddr, Option<VirtAddr>), axerrno::AxError> {
     let mut tp: Option<VirtAddr> = None;
-    warn!("{:?}..{:?}", uspace.base(), uspace.end());
     for segement in elf_info.segments.iter() {
         match segement.type_ {
             xmas_elf::program::Type::Load => {
                 let segement_end = segement.start_va + segement.size;
-                debug!(
+                trace!(
                     "Mapping ELF segment: [{:#x?}, {:#x?}) -> [{:#x?}, {:#x?}), flags: {:#x?}",
                     segement.start_va + segement.offset,
                     segement_end + segement.offset,
@@ -83,7 +82,6 @@ pub fn map_elf_sections(
                 }
                 //uspace.populate_area(segement.start_va, segement.size);
 
-                warn!("data: len: {}", segement.data.len());
                 uspace.write(segement.start_va + segement.offset, segement.data)?;
                 uspace.fill_zero(
                     segement.start_va + segement.offset + segement.data.len(),
@@ -210,6 +208,6 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
     let current = current();
     let mut aspace = current.task_ext().process_data().aspace.lock();
     let result = aspace.handle_page_fault(vaddr, access_flags);
-    warn!("Page fault result: {result:?}");
+    debug!("Page fault result: {result:?}");
     result
 }
