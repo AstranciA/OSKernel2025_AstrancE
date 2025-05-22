@@ -117,14 +117,22 @@ impl FileLike for Pipe {
             let mut ring_buffer = self.buffer.lock();
             let loop_read = ring_buffer.available_read();
             if loop_read == 0 {
+                // 缓冲区为空，检查是否需要返回
                 if self.write_end_close() {
+                    // 写端关闭，返回已读取数据（可能是 0，表示 EOF）
                     return Ok(read_size);
                 }
+                if read_size > 0 {
+                    // 已读取部分数据，即使写端未关闭也返回
+                    return Ok(read_size);
+                }
+                // 缓冲区为空，写端未关闭，且未读取数据，等待
                 drop(ring_buffer);
-                // Data not ready, wait for write end
-                crate::sys_sched_yield(); // TODO: use synconize primitive
+                warn!("pipe waiting for data");
+                crate::sys_sched_yield(); // TODO: 替换为真正的阻塞机制
                 continue;
             }
+            // 读取数据
             for _ in 0..loop_read {
                 if read_size == max_len {
                     return Ok(read_size);
@@ -132,8 +140,47 @@ impl FileLike for Pipe {
                 buf[read_size] = ring_buffer.read_byte();
                 read_size += 1;
             }
+            // 如果缓冲区已空，检查是否需要返回
+            if ring_buffer.available_read() == 0 {
+                if read_size > 0 || self.write_end_close() {
+                    warn!("buffer empty, returning {read_size}");
+                    return Ok(read_size);
+                }
+            }
         }
     }
+
+    /*
+     *fn read(&self, buf: &mut [u8]) -> LinuxResult<usize> {
+     *    if !self.readable() {
+     *        return Err(LinuxError::EPERM);
+     *    }
+     *    let mut read_size = 0usize;
+     *    let max_len = buf.len();
+     *    loop {
+     *        let mut ring_buffer = self.buffer.lock();
+     *        let loop_read = ring_buffer.available_read();
+     *        if loop_read == 0 {
+     *            // 如果已读取部分数据或写端关闭，直接返回
+     *            if self.write_end_close() {
+     *                return Ok(read_size);
+     *            }
+     *            drop(ring_buffer);
+     *            // Data not ready, wait for write end
+     *            crate::sys_sched_yield(); // TODO: use synconize primitive
+     *            continue;
+     *        }
+     *        for _ in 0..loop_read {
+     *            if read_size == max_len {
+     *                return Ok(read_size);
+     *            }
+     *            buf[read_size] = ring_buffer.read_byte();
+     *            read_size += 1;
+     *            warn!("{loop_read:?}, {read_size:?}");
+     *        }
+     *    }
+     *}
+     */
 
     fn write(&self, buf: &[u8]) -> LinuxResult<usize> {
         if !self.writable() {
@@ -203,8 +250,21 @@ pub fn sys_pipe(fds: &mut [c_int]) -> c_int {
         let (read_end, write_end) = Pipe::new();
         let read_fd = add_file_like(Arc::new(read_end))?;
         let write_fd = add_file_like(Arc::new(write_end)).inspect_err(|_| {
-            close_file_like(read_fd).ok();
+            close_file_like(read_fd).unwrap();
         })?;
+        /*
+         *let write_fd = match add_file_like(Arc::new(write_end)) {
+         *    Ok(fd) => fd,
+         *    Err(e) => {
+         *        // 尝试清理 read_fd，若 close 也失败则优先返回其错误
+         *        if let Err(close_err) = close_file_like(read_fd) {
+         *            return Err(close_err); // 优先返回 close 的错误
+         *        }
+         *        return Err(e); // 若 close 成功，返回原始的 add 错误
+         *    }
+         *};
+         */
+        debug!("sys_pipe => {read_fd:#x}, {write_fd:#x}");
 
         fds[0] = read_fd as c_int;
         fds[1] = write_fd as c_int;
