@@ -1,0 +1,1182 @@
+Index: modules/axsyscall/src/lib.rs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>#![cfg_attr(not(test), no_std)]\n#![feature(stmt_expr_attributes)]\n// #![cfg(test)]\n\nmod test;\nextern crate axlog;\nuse axerrno::LinuxError;\nuse syscall_imp::{\n    fs::{sys_chdir, sys_getdents},\n    sys::sys_uname,\n};\nmod syscall_imp;\nuse arceos_posix_api::ctypes;\nuse core::ffi::*;\npub mod result;\npub use result::{SyscallResult, ToLinuxResult};\n\n#[macro_export]\nmacro_rules! syscall_handler_def {\n    ($($(#[$attr:meta])* $sys:ident => $args:tt $body:expr $(,)?)*) => {\n        #[axhal::trap::register_trap_handler(axhal::trap::SYSCALL)]\n        pub fn handle_syscall(tf: &axhal::arch::TrapFrame, syscall_num: usize) -> Option<isize> {\n            use syscalls::Sysno;\n            use $crate::result::{SyscallResult, LinuxResultToIsize};\n            let args = [tf.arg0(), tf.arg1(), tf.arg2(), tf.arg3(), tf.arg4(), tf.arg5()];\n            let sys_id = Sysno::from(syscall_num as u32);\n\n            let result:Option<SyscallResult> = match sys_id {\n                $(\n                    $(#[$attr])*\n                    Sysno::$sys => {\n                        axlog::debug!(\"handle syscall: {}({:x?})\", stringify!($sys), args);\n                        // TODO: remove #![feature(stmt_expr_attributes)]\n                        Some((\n                            #[inline(always)]\n                            || -> SyscallResult {\n                                let $args = args;\n                                $body\n                        })())\n                    }\n                ),*,\n                _ => {\n                        //axlog::debug!(\"handle syscall: {}({:?})\", stringify!(none), args);\n                        None\n                }\n            };\n            result.map(|r| r.as_isize())\n        }\n    };\n}\n\n#[macro_export]\nmacro_rules! apply {\n    ($fn:expr, $($arg:ident),* $(,)?) => {\n        $fn($($arg as _),*)\n    };\n}\n/*\n *macro_rules! get_args {\n *    ($($arg:ident),* $(,)?) => {\n *        let [$($arg),* ..] = args;\n *    };\n *}\n */\n\nsyscall_handler_def!(\n        write => [fd,buf_ptr,size,..] {\n            let buf = unsafe { core::slice::from_raw_parts(buf_ptr as _, size) };\n            syscall_imp::io::sys_write(fd, buf)\n        }\n\n        read => [fd, buf_ptr, size, ..] {\n            let buf = unsafe { core::slice::from_raw_parts_mut(buf_ptr as *mut u8, size) };\n            syscall_imp::io::sys_read(fd, buf)\n        }\n\n        writev => [fd, iov, iocnt, ..] {\n            apply!(syscall_imp::io::sys_writev, fd, iov, iocnt)\n        }\n        // 文件操作相关系统调用\n        #[cfg(all(feature = \"fs\", feature = \"fd\"))]\n        openat => [dirfd, fname, flags, mode, ..] {\n            apply!(syscall_imp::fs::sys_openat, dirfd, fname, flags, mode)\n        }\n\n        #[cfg(all(feature = \"fs\", feature = \"fd\"))]\n        close => [fd, ..] {\n            apply!(syscall_imp::fd::sys_close, fd)\n        }\n\n        #[cfg(all(feature = \"fs\", target_arch = \"x86_64\"))]\n        unlink => [path_name, ..] {\n             apply!(syscall_imp::fs::sys_unlink, path_name)\n        }\n\n        #[cfg(all(feature = \"fs\", feature = \"fd\"))]\n        unlinkat => [dirfd, path_name, ..] {\n             apply!(syscall_imp::fs::sys_unlinkat, dirfd, path_name)\n        }\n\n        #[cfg(all(feature = \"fs\", feature = \"fd\"))]\n        statfs => _args {\n            todo!()\n        }\n\n        #[cfg(all(feature = \"fs\", feature = \"fd\"))]\n        chdir => [path, ..] apply!(sys_chdir, path),\n        // TODO: handle dir_fd and prem\n        #[cfg(all(feature = \"fs\", feature = \"fd\"))]\n        mkdirat => [dir_fd, path, perm, ..] {\n            apply!(syscall_imp::fs::sys_mkdirat, dir_fd, path, perm)\n        }\n        #[cfg(all(feature = \"fs\", feature = \"fd\"))]\n        getdents64 => [fd, buf, count, ..] {\n            //apply!(sys_getdents, fd, buf, count)\n            let count:c_int = count.try_into().unwrap();\n            sys_getdents(fd as _, buf as _, count)\n        }\n\n        /*\n         *#[cfg(all(feature = \"fs\", feature = \"fd\"))]\n         *fstat => [fd, buf, ..] {\n         *    unsafe { apply!(syscall_imp::fs::sys_fstat, fd, buf) }\n         *}\n         */\n\n        #[cfg(all(feature = \"fs\", feature = \"fd\"))]\n        fstat => [fd, buf, ..] {\n            unsafe { apply!(syscall_imp::fs::sys_fstat, fd, buf) }\n        }\n\n        #[cfg(target_arch = \"riscv64\")]\n        #[cfg(all(feature = \"fs\", feature = \"fd\"))]\n        fstatat => [dir_fd, pathname, buf, flags, ..] {\n            unsafe { apply!(syscall_imp::fs::sys_fstatat, dir_fd, pathname, buf, flags) }\n        }\n\n\n        #[cfg(all(feature = \"fs\", feature = \"fd\"))]\n        lseek => [fd, offset, whence, ..] {\n            apply!(syscall_imp::fs::sys_lseek, fd, offset, whence)\n        }\n\n        #[cfg(all(feature = \"fs\", feature = \"fd\"))]\n        getcwd => [buf, size, ..] {\n            apply!(syscall_imp::fs::sys_getcwd, buf, size)\n        }\n\n        #[cfg(all(feature = \"fs\", feature = \"fd\"))]\n        renameat => [old, new, ..] {\n            apply!(syscall_imp::fs::sys_rename, old, new)\n        }\n\n        #[cfg(all(feature = \"fs\", feature = \"fd\"))]\n        dup => [old_fd, ..] {\n            apply!(syscall_imp::fd::sys_dup, old_fd)\n        }\n\n        #[cfg(all(feature = \"fs\", feature = \"fd\"))]\n        dup3 => [old_fd, new_fd, ..] {\n            apply!(syscall_imp::fd::sys_dup3, old_fd, new_fd)\n        }\n\n        #[cfg(all(feature = \"fs\", feature = \"fd\"))]\n        fcntl => [fd, cmd, arg, ..] {\n            apply!(syscall_imp::fd::sys_fcntl, fd, cmd, arg)\n        }\n        #[cfg(all(feature = \"fs\", feature = \"fd\"))]\n        ppoll => [fds, nfds, timeout, sigmask, ..] {\n            apply!(syscall_imp::fd::sys_ppoll, fds, nfds, timeout, sigmask)\n        }\n        #[cfg(feature = \"pipe\")]\n        pipe2 => [fds, ..] {\n            let fds = unsafe { core::slice::from_raw_parts_mut(fds as *mut c_int, 2) };\n            syscall_imp::pipe::sys_pipe(fds)\n        }\n\n        // 进程控制相关系统调用\n        /*\n         *exit => [code,..] {\n         *    apply!(syscall_imp::task::sys_exit, code)\n         *}\n         */\n        /*\n         *getpid => _ syscall_imp::task::sys_getpid()\n         *gettid => _ syscall_imp::task::sys_gettid()\n         */\n        sched_yield => _ syscall_imp::task::sys_yield()\n        // 时间相关系统调用\n        clock_gettime => args {\n            let cls = args[0];\n            let ts: *mut ctypes::timespec = args[1] as *mut ctypes::timespec;\n            syscall_imp::time::sys_clock_gettime(cls as ctypes::clockid_t, ts)\n        }\n        clock_gettime64 => args {\n            let cls = args[0];\n            let ts: *mut ctypes::timespec = args[1] as *mut ctypes::timespec;\n            syscall_imp::time::sys_clock_gettime(cls as ctypes::clockid_t, ts)\n        }\n        gettimeofday => args {\n            let ts: *mut ctypes::timeval = args[0] as *mut ctypes::timeval;\n            syscall_imp::time::sys_get_time_of_day(ts)\n        }\n        nanosleep => args {\n            let req: *const ctypes::timespec = args[0] as *const ctypes::timespec;\n            let rem: *mut ctypes::timespec = args[1] as *mut ctypes::timespec;\n            syscall_imp::time::sys_nanosleep(req, rem)\n        }\n        clock_nanosleep_time64 => args {\n            // TODO: handle clock_id and flags\n            let _clock_id = args[0];\n            let _flags = args[1];\n            let req: *const ctypes::timespec = args[2] as *const ctypes::timespec;\n            let rem: *mut ctypes::timespec = args[3] as *mut ctypes::timespec;\n            syscall_imp::time::sys_nanosleep(req, rem)\n        }\n        // 其他系统调用\n        uname => [buf, ..] apply!(sys_uname, buf),\n\n        //网络相关\n        #[cfg(feature = \"net\")]\n        socket => [domain, socktype, protocol, ..] {\n            apply!(syscall_imp::net::sys_socket, domain, socktype, protocol)\n        }\n        #[cfg(feature = \"net\")]\n        bind => [fd, addr, addrlen, ..] {\n            apply!(syscall_imp::net::sys_bind, fd, addr, addrlen)\n        }\n        #[cfg(feature = \"net\")]\n        // fd, addr, addrlen\n        connect => [fd, addr, addrlen, ..] {\n            apply!(syscall_imp::net::sys_connect, fd, addr, addrlen)\n        }\n        #[cfg(feature = \"net\")]\n        // fd, buf, len, flags, addr, addrlen\n        sendto => [fd, buf, len, flags, addr, addrlen, ..] {\n            apply!(syscall_imp::net::sys_sendto, fd, buf, len, flags, addr, addrlen)\n        }\n\n        #[cfg(feature = \"net\")]\n        // fd, buf, len, flags\n        sendmsg => [fd, buf, len, flags, ..] {\n            apply!(syscall_imp::net::sys_send, fd, buf, len, flags)\n        }\n\n        #[cfg(feature = \"net\")]\n        // fd, buf, len, flags, addr, addrlen\n        recvfrom => [fd, buf, len, flags, addr, addrlen, ..] {\n            unsafe { apply!(syscall_imp::net::sys_recvfrom, fd, buf, len, flags, addr, addrlen) }\n        }\n\n        #[cfg(feature = \"net\")]\n        // fd, buf, len, flags\n        recvmsg => [fd, buf, len, flags, ..] {\n            apply!(syscall_imp::net::sys_recv, fd, buf, len, flags)\n        }\n\n        #[cfg(feature = \"net\")]\n        // fd, backlog\n        listen => [fd, backlog, ..] {\n            apply!(syscall_imp::net::sys_listen, fd, backlog)\n        }\n\n        #[cfg(feature = \"net\")]\n        // fd, addr, addrlen\n        accept => [fd, addr, addrlen, ..] {\n            unsafe { apply!(syscall_imp::net::sys_accept, fd, addr, addrlen) }\n        }\n\n        #[cfg(feature = \"net\")]\n        // fd, how\n        shutdown => [fd, how, ..] {\n            apply!(syscall_imp::net::sys_shutdown, fd, how)\n        }\n\n        #[cfg(feature = \"net\")]\n        // fd, addr, addrlen\n        getsockname => [fd, addr, addrlen, ..] {\n            unsafe { apply!(syscall_imp::net::sys_getsockname, fd, addr, addrlen) }\n        }\n\n        #[cfg(feature = \"net\")]\n        // fd, addr, addrlen\n        getpeername => [fd, addr, addrlen, ..] {\n            unsafe { apply!(syscall_imp::net::sys_getpeername, fd, addr, addrlen) }\n        }\n\n);\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/modules/axsyscall/src/lib.rs b/modules/axsyscall/src/lib.rs
+--- a/modules/axsyscall/src/lib.rs	(revision 0f190e700d98f599bf0ee76682ad406a51a06215)
++++ b/modules/axsyscall/src/lib.rs	(date 1747755784522)
+@@ -214,6 +214,17 @@
+             let rem: *mut ctypes::timespec = args[3] as *mut ctypes::timespec;
+             syscall_imp::time::sys_nanosleep(req, rem)
+         }
++        //资源相关系统调用
++        getrlimit => args {
++            let resource = args[0] as c_int;
++            let rlimit = args[1] as *mut ctypes::rlimit;
++            syscall_imp::source::sys_getrlimit(resource, rlimit)
++        }
++        setrlimit => args {
++            let resource = args[0] as c_int;
++            let rlimit = args[1] as *mut ctypes::rlimit;
++            syscall_imp::source::sys_setrlimit(resource, rlimit)
++        }
+         // 其他系统调用
+         uname => [buf, ..] apply!(sys_uname, buf),
+ 
+Index: modules/axsyscall/src/syscall_imp/source.rs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>use arceos_posix_api::{self as api, ctypes};\nuse core::ffi::c_char;\nuse core::ffi::c_int;\nuse core::ffi::c_void;\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/modules/axsyscall/src/syscall_imp/source.rs b/modules/axsyscall/src/syscall_imp/source.rs
+--- a/modules/axsyscall/src/syscall_imp/source.rs	(revision 0f190e700d98f599bf0ee76682ad406a51a06215)
++++ b/modules/axsyscall/src/syscall_imp/source.rs	(date 1747755591194)
+@@ -1,4 +1,11 @@
+ use arceos_posix_api::{self as api, ctypes};
+-use core::ffi::c_char;
+ use core::ffi::c_int;
+-use core::ffi::c_void;
++use crate::{SyscallResult, ToLinuxResult};
++
++pub fn sys_getrlimit(resource: c_int, rlimits: *mut ctypes::rlimit) -> SyscallResult{
++    unsafe{api::sys_getrlimit(resource, rlimits).to_linux_result()}
++}
++
++pub fn sys_setrlimit(resource: c_int, rlimits: *mut ctypes::rlimit) -> SyscallResult{
++    unsafe {api::sys_setrlimit(resource, rlimits).to_linux_result()}
++}
+Index: modules/axfs/src/blkdev.rs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/modules/axfs/src/blkdev.rs b/modules/axfs/src/blkdev.rs
+new file mode 100644
+--- /dev/null	(date 1747546760475)
++++ b/modules/axfs/src/blkdev.rs	(date 1747546760475)
+@@ -0,0 +1,46 @@
++// use core::any::Any;
++// use axfs_vfs::{VfsDirEntry, VfsNodeAttr, VfsNodeOps, VfsNodeRef, VfsNodeType};
++// use axfs_vfs::{VfsError, VfsResult};
++// use alloc::sync::{Arc, Weak};
++// use spin::Mutex;
++// use axdriver::prelude::*;
++// 
++// pub struct Blkdev {
++//     dev: AxBlockDevice,
++//     dev_t: (u32, u32),
++//     mount_n: usize,
++// }
++// 
++// impl Blkdev {
++//     pub fn new(dev: AxBlockDevice, major: u32, minor: u32) -> Self {
++//         Self{
++//             dev: dev,
++//             dev_t: (major, minor),
++//             mount_n: 0,
++//         }
++//     }
++//     pub fn inc_mount_n(&mut self) {
++//         self.mount_n += 1;
++//     }
++//     pub fn get_dev(self) -> AxBlockDevice {
++//        self.dev.clone()
++//     }
++//     pub fn dev_t(&self) -> (u32, u32) {self.dev_t}
++//     pub fn mount_n(&self) ->usize {self.mount_n}
++// 
++// }
++// 
++// impl VfsNodeOps for Blkdev {
++//     fn get_attr(&self) -> VfsResult<VfsNodeAttr> {
++//         //TODO:dev num
++//         Ok(VfsNodeAttr::new_file(4096, 1))
++//     }
++// 
++//     fn remove(&self, _path: &str) -> VfsResult {
++//         todo!()
++//     }
++// 
++//     fn as_any(&self) -> &dyn Any {
++//         todo!()
++//     }
++// }
+Index: ulib/axmono/src/ctypes.rs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>//! clone 任务时指定的参数。\n\nuse arceos_posix_api::ctypes::*;\nuse bitflags::*;\nuse linux_raw_sys::general::*;\n\nbitflags! {\n    /// Options for use with [`sys_clone`].\n    #[derive(Debug, Clone, Copy, Default)]\n    pub struct CloneFlags: u32 {\n        /// The calling process and the child process run in the same\n        /// memory space.\n        const VM = CLONE_VM;\n        /// The caller and the child process share the same  filesystem\n        /// information.\n        const FS = CLONE_FS;\n        /// The calling process and the child process share the same file\n        /// descriptor table.\n        const FILES = CLONE_FILES;\n        /// The calling process and the child process share the same table\n        /// of signal handlers.\n        const SIGHAND = CLONE_SIGHAND;\n        /// If the calling process is being traced, then trace the child\n        /// also.\n        const PTRACE = CLONE_PTRACE;\n        /// The execution of the calling process is suspended until the\n        /// child releases its virtual memory resources via a call to\n        /// execve(2) or _exit(2) (as with vfork(2)).\n        const VFORK = CLONE_VFORK;\n        /// The parent of the new child  (as returned by getppid(2))\n        /// will be the same as that of the calling process.\n        const PARENT = CLONE_PARENT;\n        /// The child is placed in the same thread group as the calling\n        /// process.\n        const THREAD = CLONE_THREAD;\n        /// The cloned child is started in a new mount namespace.\n        const NEWNS = CLONE_NEWNS;\n        /// The child and the calling process share a single list of System\n        /// V semaphore adjustment values\n        const SYSVSEM = CLONE_SYSVSEM;\n        /// The TLS (Thread Local Storage) descriptor is set to tls.\n        const SETTLS = CLONE_SETTLS;\n        /// Store the child thread ID in the parent's memory.\n        const PARENT_SETTID = CLONE_PARENT_SETTID;\n        /// Clear (zero) the child thread ID in child memory when the child\n        /// exits, and do a wakeup on the futex at that address.\n        const CHILD_CLEARTID = CLONE_CHILD_CLEARTID;\n        /// A tracing process cannot force `CLONE_PTRACE` on this child\n        /// process.\n        const UNTRACED = CLONE_UNTRACED;\n        /// Store the child thread ID in the child's memory.\n        const CHILD_SETTID = CLONE_CHILD_SETTID;\n        /// Create the process in a new cgroup namespace.\n        const NEWCGROUP = CLONE_NEWCGROUP;\n        /// Create the process in a new UTS namespace.\n        const NEWUTS = CLONE_NEWUTS;\n        /// Create the process in a new IPC namespace.\n        const NEWIPC = CLONE_NEWIPC;\n        /// Create the process in a new user namespace.\n        const NEWUSER = CLONE_NEWUSER;\n        /// Create the process in a new PID namespace.\n        const NEWPID = CLONE_NEWPID;\n        /// Create the process in a new network namespace.\n        const NEWNET = CLONE_NEWNET;\n        /// The new process shares an I/O context with the calling process.\n        const IO = CLONE_IO;\n    }\n\n    pub struct WaitFlags: u32 {\n        /// 不挂起当前进程，直接返回\n        const WNOHANG = 1 << 0;\n        /// 报告已执行结束的用户进程的状态\n        const WIMTRACED = 1 << 1;\n        /// 报告还未结束的用户进程的状态\n        const WCONTINUED = 1 << 3;\n        /// Wait for any child\n        const WALL = 1 << 30;\n        /// Wait for cloned process\n        const WCLONE = 1 << 31;\n    }\n\n}\n/// sys_wait4 的返回值\n#[derive(Debug, Clone, Copy, PartialEq, Eq)]\npub enum WaitStatus {\n    /// 子任务正常退出\n    Exited,\n    /// 子任务正在运行\n    Running,\n    /// 找不到对应的子任务\n    NotExist,\n}\n#[repr(C)]\npub struct Tms {\n    /// 进程用户态执行时间，单位为us\n    pub tms_utime: usize,\n    /// 进程内核态执行时间，单位为us\n    pub tms_stime: usize,\n    /// 子进程用户态执行时间和，单位为us\n    pub tms_cutime: usize,\n    /// 子进程内核态执行时间和，单位为us\n    pub tms_cstime: usize,\n}\n\nnumeric_enum_macro::numeric_enum! {\n    #[repr(i32)]\n    #[allow(non_camel_case_types)]\n    #[derive(Eq, PartialEq, Debug, Clone, Copy)]\n    pub enum TimerType {\n    /// 表示目前没有任何计时器(不在linux规范中，是os自己规定的)\n    NONE = -1,\n    /// 统计系统实际运行时间\n    REAL = 0,\n    /// 统计用户态运行时间\n    VIRTUAL = 1,\n    /// 统计进程的所有用户态/内核态运行时间\n    PROF = 2,\n    }\n}\n\nimpl From<usize> for TimerType {\n    fn from(num: usize) -> Self {\n        Self::try_from(num as i32).unwrap_or_else(|_| Self::NONE)\n    }\n}\npub struct TimeStat {\n    utime_ns: usize,\n    stime_ns: usize,\n    user_timestamp: usize,\n    kernel_timestamp: usize,\n    timer_type: TimerType,\n    timer_interval_ns: usize,\n    timer_remained_ns: usize,\n}\n\nimpl Default for TimeStat {\n    fn default() -> Self {\n        Self::new()\n    }\n}\n\nimpl TimeStat {\n    pub fn new() -> Self {\n        Self {\n            utime_ns: 0,\n            stime_ns: 0,\n            user_timestamp: 0,\n            kernel_timestamp: 0,\n            timer_type: TimerType::NONE,\n            timer_interval_ns: 0,\n            timer_remained_ns: 0,\n        }\n    }\n\n    pub fn output(&self) -> (usize, usize) {\n        (self.utime_ns, self.stime_ns)\n    }\n\n    pub fn reset(&mut self, current_timestamp: usize) {\n        self.utime_ns = 0;\n        self.stime_ns = 0;\n        self.user_timestamp = 0;\n        self.kernel_timestamp = current_timestamp;\n    }\n\n    pub fn switch_into_kernel_mode(&mut self, current_timestamp: usize) {\n        let now_time_ns = current_timestamp;\n        let delta = now_time_ns - self.kernel_timestamp;\n        self.utime_ns += delta;\n        self.kernel_timestamp = now_time_ns;\n        if self.timer_type != TimerType::NONE {\n            self.update_timer(delta);\n        };\n    }\n\n    pub fn switch_into_user_mode(&mut self, current_timestamp: usize) {\n        let now_time_ns = current_timestamp;\n        let delta = now_time_ns - self.kernel_timestamp;\n        self.stime_ns += delta;\n        self.user_timestamp = now_time_ns;\n        if self.timer_type == TimerType::REAL || self.timer_type == TimerType::PROF {\n            self.update_timer(delta);\n        }\n    }\n\n    pub fn switch_from_old_task(&mut self, current_timestamp: usize) {\n        let now_time_ns = current_timestamp;\n        let delta = now_time_ns - self.kernel_timestamp;\n        self.stime_ns += delta;\n        self.kernel_timestamp = now_time_ns;\n        if self.timer_type == TimerType::REAL || self.timer_type == TimerType::PROF {\n            self.update_timer(delta);\n        }\n    }\n\n    pub fn switch_to_new_task(&mut self, current_timestamp: usize) {\n        let now_time_ns = current_timestamp;\n        let delta = now_time_ns - self.kernel_timestamp;\n        self.kernel_timestamp = now_time_ns;\n        if self.timer_type == TimerType::REAL {\n            self.update_timer(delta);\n        }\n    }\n\n    pub fn set_timer(\n        &mut self,\n        timer_interval_ns: usize,\n        timer_remained_ns: usize,\n        timer_type: usize,\n    ) -> bool {\n        self.timer_type = timer_type.into();\n        self.timer_interval_ns = timer_interval_ns;\n        self.timer_remained_ns = timer_remained_ns;\n        self.timer_type != TimerType::NONE\n    }\n\n    pub fn update_timer(&mut self, delta: usize) {\n        if self.timer_remained_ns == 0 {\n            return;\n        }\n        if self.timer_remained_ns > delta {\n            self.timer_remained_ns -= delta;\n        }\n    }\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/ulib/axmono/src/ctypes.rs b/ulib/axmono/src/ctypes.rs
+--- a/ulib/axmono/src/ctypes.rs	(revision 0f190e700d98f599bf0ee76682ad406a51a06215)
++++ b/ulib/axmono/src/ctypes.rs	(date 1747546673166)
+@@ -1,5 +1,4 @@
+ //! clone 任务时指定的参数。
+-
+ use arceos_posix_api::ctypes::*;
+ use bitflags::*;
+ use linux_raw_sys::general::*;
+Index: modules/axsyscall/Cargo.toml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>[package]\nname = \"axsyscall\"\nversion.workspace = true\nedition.workspace = true\nauthors.workspace = true\nlicense.workspace = true\nhomepage.workspace = true\ndocumentation.workspace = true\nrepository.workspace = true\nkeywords.workspace = true\ncategories.workspace = true\n[features]\ndefault = [\"basic_impl\"]\nbasic_impl = []\nfs = [\"arceos_posix_api/fs\", \"dep:axfs\"]\nfd = [\"arceos_posix_api/fd\"]\nnet = [\"arceos_posix_api/net\"]\npipe = [\"arceos_posix_api/pipe\"]\nmultitask = [\"arceos_posix_api/multitask\"]\n[dependencies]\nsyscalls = { workspace = true }\narceos_posix_api = { workspace = true }\naxerrno = \"0.1\"\naxhal = { workspace = true }\naxtask = { workspace = true }\naxfs = { workspace = true, optional = true }\naxmm = { workspace = true }\naxconfig = { workspace = true }\naxlog = { workspace = true }\n\nlinkme = { workspace = true }\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/modules/axsyscall/Cargo.toml b/modules/axsyscall/Cargo.toml
+--- a/modules/axsyscall/Cargo.toml	(revision 0f190e700d98f599bf0ee76682ad406a51a06215)
++++ b/modules/axsyscall/Cargo.toml	(date 1747546693457)
+@@ -28,4 +28,5 @@
+ axconfig = { workspace = true }
+ axlog = { workspace = true }
+ 
++
+ linkme = { workspace = true }
+Index: .idea/workspace.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<project version=\"4\">\n  <component name=\"AutoImportSettings\">\n    <option name=\"autoReloadType\" value=\"ALL\" />\n  </component>\n  <component name=\"CargoProjects\">\n    <cargoProject FILE=\"$PROJECT_DIR$/Cargo.toml\">\n      <package file=\"$PROJECT_DIR$/examples/helloworld\">\n        <enabledFeature name=\"default\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/examples/httpclient\">\n        <enabledFeature name=\"default\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/examples/httpserver\">\n        <enabledFeature name=\"default\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/examples/shell\">\n        <enabledFeature name=\"default\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/api/arceos_api\">\n        <enabledFeature name=\"default\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/api/arceos_posix_api\">\n        <enabledFeature name=\"default\" />\n        <enabledFeature name=\"pipe\" />\n        <enabledFeature name=\"alloc\" />\n        <enabledFeature name=\"net\" />\n        <enabledFeature name=\"fs\" />\n        <enabledFeature name=\"fd\" />\n        <enabledFeature name=\"axfs_devfs\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/modules/axalloc\">\n        <enabledFeature name=\"tlsf\" />\n        <enabledFeature name=\"default\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/modules/axconfig\">\n        <enabledFeature name=\"default\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/modules/axdisplay\">\n        <enabledFeature name=\"default\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/modules/axdma\">\n        <enabledFeature name=\"default\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/modules/axdriver\">\n        <enabledFeature name=\"ramdisk\" />\n        <enabledFeature name=\"axdriver_virtio\" />\n        <enabledFeature name=\"axdriver_block\" />\n        <enabledFeature name=\"default\" />\n        <enabledFeature name=\"virtio\" />\n        <enabledFeature name=\"virtio-net\" />\n        <enabledFeature name=\"axdriver_net\" />\n        <enabledFeature name=\"block\" />\n        <enabledFeature name=\"virtio-blk\" />\n        <enabledFeature name=\"net\" />\n        <enabledFeature name=\"bus-pci\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/api/axfeat\">\n        <enabledFeature name=\"default\" />\n        <enabledFeature name=\"multitask\" />\n        <enabledFeature name=\"axalloc\" />\n        <enabledFeature name=\"axdriver\" />\n        <enabledFeature name=\"axsync\" />\n        <enabledFeature name=\"irq\" />\n        <enabledFeature name=\"paging\" />\n        <enabledFeature name=\"axtask\" />\n        <enabledFeature name=\"alloc\" />\n        <enabledFeature name=\"net\" />\n        <enabledFeature name=\"fs\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/modules/axfs\">\n        <enabledFeature name=\"default\" />\n        <enabledFeature name=\"devfs\" />\n        <enabledFeature name=\"lwext4_rs\" />\n        <enabledFeature name=\"sysfs\" />\n        <enabledFeature name=\"procfs\" />\n        <enabledFeature name=\"fatfs\" />\n        <enabledFeature name=\"ramfs\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/modules/axhal\">\n        <enabledFeature name=\"fp_simd\" />\n        <enabledFeature name=\"irq\" />\n        <enabledFeature name=\"default\" />\n        <enabledFeature name=\"paging\" />\n        <enabledFeature name=\"page_table_multiarch\" />\n        <enabledFeature name=\"axalloc\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/ulib/axlibc\">\n        <enabledFeature name=\"default\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/modules/axlog\">\n        <enabledFeature name=\"default\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/modules/axmm\">\n        <enabledFeature name=\"default\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/ulib/axmono\">\n        <enabledFeature name=\"mm\" />\n        <enabledFeature name=\"axns\" />\n        <enabledFeature name=\"default\" />\n        <enabledFeature name=\"process\" />\n        <enabledFeature name=\"irq\" />\n        <enabledFeature name=\"axmm\" />\n        <enabledFeature name=\"axtask\" />\n        <enabledFeature name=\"syscalls\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/modules/axnet\">\n        <enabledFeature name=\"smoltcp\" />\n        <enabledFeature name=\"default\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/modules/axns\">\n        <enabledFeature name=\"default\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/modules/axruntime\">\n        <enabledFeature name=\"multitask\" />\n        <enabledFeature name=\"axdriver\" />\n        <enabledFeature name=\"percpu\" />\n        <enabledFeature name=\"axfs\" />\n        <enabledFeature name=\"axnet\" />\n        <enabledFeature name=\"irq\" />\n        <enabledFeature name=\"paging\" />\n        <enabledFeature name=\"axtask\" />\n        <enabledFeature name=\"fs\" />\n        <enabledFeature name=\"kernel_guard\" />\n        <enabledFeature name=\"default\" />\n        <enabledFeature name=\"axalloc\" />\n        <enabledFeature name=\"axmm\" />\n        <enabledFeature name=\"alloc\" />\n        <enabledFeature name=\"net\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/ulib/axstd\">\n        <enabledFeature name=\"default\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/modules/axsync\">\n        <enabledFeature name=\"default\" />\n        <enabledFeature name=\"multitask\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/modules/axsyscall\">\n        <enabledFeature name=\"default\" />\n        <enabledFeature name=\"pipe\" />\n        <enabledFeature name=\"fs\" />\n        <enabledFeature name=\"fd\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/modules/axtask\">\n        <enabledFeature name=\"default\" />\n        <enabledFeature name=\"multitask\" />\n        <enabledFeature name=\"test\" />\n        <enabledFeature name=\"irq\" />\n        <enabledFeature name=\"sched_rr\" />\n        <enabledFeature name=\"preempt\" />\n        <enabledFeature name=\"kernel_guard\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/crates/axmm_crates/memory_addr\">\n        <enabledFeature name=\"RAII\" />\n        <enabledFeature name=\"default\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/crates/axmm_crates/memory_set\">\n        <enabledFeature name=\"RAII\" />\n        <enabledFeature name=\"default\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/crates/page_table_multiarch/page_table_entry\">\n        <enabledFeature name=\"default\" />\n        <enabledFeature name=\"COW\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/crates/page_table_multiarch/page_table_multiarch\">\n        <enabledFeature name=\"default\" />\n      </package>\n    </cargoProject>\n    <cargoProject FILE=\"$PROJECT_DIR$/crates/axfs_crates/Cargo.toml\">\n      <package file=\"$PROJECT_DIR$/crates/axfs_crates/axfs_devfs\">\n        <enabledFeature name=\"default\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/crates/axfs_crates/axfs_ramfs\">\n        <enabledFeature name=\"default\" />\n      </package>\n      <package file=\"$PROJECT_DIR$/crates/axfs_crates/axfs_vfs\">\n        <enabledFeature name=\"default\" />\n      </package>\n    </cargoProject>\n    <cargoProject FILE=\"$PROJECT_DIR$/crates/lwext4_rust/Cargo.toml\" />\n  </component>\n  <component name=\"ChangeListManager\">\n    <list default=\"true\" id=\"7c2d0aa3-ed80-457d-a6b3-f7e100db3c2a\" name=\"Changes\" comment=\"mmap first\">\n      <change afterPath=\"$PROJECT_DIR$/crates/axfs_crates\" afterDir=\"false\" />\n      <change afterPath=\"$PROJECT_DIR$/crates/lwext4_rust\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/.gitmodules\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/.gitmodules\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/.idea/vcs.xml\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/.idea/vcs.xml\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/.idea/workspace.xml\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/.idea/workspace.xml\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/Cargo.lock\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/Cargo.lock\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/Cargo.toml\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/Cargo.toml\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/null.rs\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/null.rs\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/zero.rs\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/zero.rs\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/crates/axfs_crates/axfs_vfs/src/structs.rs\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/crates/axfs_crates/axfs_vfs/src/structs.rs\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/crates/axmm_crates\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/crates/axmm_crates\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/crates/lwext4_rust/Cargo.toml\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/crates/lwext4_rust/Cargo.toml\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/crates/lwext4_rust/src/file.rs\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/crates/lwext4_rust/src/file.rs\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/crates/page_table_multiarch\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/crates/page_table_multiarch\" afterDir=\"false\" />\n      <change beforePath=\"$PROJECT_DIR$/modules/axfs/src/fs/lwext4_rust.rs\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/modules/axfs/src/fs/lwext4_rust.rs\" afterDir=\"false\" />\n    </list>\n    <option name=\"SHOW_DIALOG\" value=\"false\" />\n    <option name=\"HIGHLIGHT_CONFLICTS\" value=\"true\" />\n    <option name=\"HIGHLIGHT_NON_ACTIVE_CHANGELIST\" value=\"false\" />\n    <option name=\"LAST_RESOLUTION\" value=\"IGNORE\" />\n  </component>\n  <component name=\"ExecutionTargetManager\" SELECTED_TARGET=\"RsBuildProfile:test\" />\n  <component name=\"FileTemplateManagerImpl\">\n    <option name=\"RECENT_TEMPLATES\">\n      <list>\n        <option value=\"Rust File\" />\n      </list>\n    </option>\n  </component>\n  <component name=\"Git.Settings\">\n    <option name=\"RECENT_GIT_ROOT_PATH\" value=\"$PROJECT_DIR$\" />\n    <option name=\"RESET_MODE\" value=\"HARD\" />\n    <option name=\"ROOT_SYNC\" value=\"DONT_SYNC\" />\n  </component>\n  <component name=\"GitHubPullRequestSearchHistory\">{\n  &quot;lastFilter&quot;: {\n    &quot;state&quot;: &quot;OPEN&quot;,\n    &quot;assignee&quot;: &quot;MukioXun&quot;\n  }\n}</component>\n  <component name=\"GithubPullRequestsUISettings\">{\n  &quot;selectedUrlAndAccountId&quot;: {\n    &quot;url&quot;: &quot;https://github.com/LEOibyug/AstrancE.git&quot;,\n    &quot;accountId&quot;: &quot;b8310bd9-d15b-4168-9f82-542a2e619b11&quot;\n  }\n}</component>\n  <component name=\"MacroExpansionManager\">\n    <option name=\"directoryName\" value=\"DajqZso8\" />\n  </component>\n  <component name=\"ProblemsViewState\">\n    <option name=\"selectedTabId\" value=\"ProjectErrors\" />\n  </component>\n  <component name=\"ProjectColorInfo\">{\n  &quot;associatedIndex&quot;: 2\n}</component>\n  <component name=\"ProjectId\" id=\"2uLzxLJBHEfUP17HllVl1xXPOD3\" />\n  <component name=\"ProjectViewState\">\n    <option name=\"hideEmptyMiddlePackages\" value=\"true\" />\n    <option name=\"showLibraryContents\" value=\"true\" />\n  </component>\n  <component name=\"PropertiesComponent\"><![CDATA[{\n  \"keyToString\": {\n    \"Cargo.Test test::write (2).executor\": \"Run\",\n    \"Cargo.Test test::write (3).executor\": \"Run\",\n    \"Cargo.Test test::write.executor\": \"Run\",\n    \"ModuleVcsDetector.initialDetectionPerformed\": \"true\",\n    \"RunOnceActivity.ShowReadmeOnStart\": \"true\",\n    \"RunOnceActivity.git.unshallow\": \"true\",\n    \"RunOnceActivity.rust.reset.selective.auto.import\": \"true\",\n    \"Shell Script.RUN.executor\": \"Run\",\n    \"Shell Script.TRACE.executor\": \"Run\",\n    \"deletionFromPopupRequiresConfirmation\": \"false\",\n    \"git-widget-placeholder\": \"main\",\n    \"last_opened_file_path\": \"/root/App_oscomp\",\n    \"node.js.detected.package.eslint\": \"true\",\n    \"node.js.detected.package.tslint\": \"true\",\n    \"node.js.selected.package.eslint\": \"(autodetect)\",\n    \"node.js.selected.package.tslint\": \"(autodetect)\",\n    \"nodejs_package_manager_path\": \"npm\",\n    \"org.rust.cargo.project.model.PROJECT_DISCOVERY\": \"true\",\n    \"org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon\": \"\",\n    \"org.rust.disableDetachedFileInspection/root/AstrancE/modules/axsyscall/src/mod.rs\": \"true\",\n    \"org.rust.first.attach.projects\": \"true\",\n    \"org.rust.hideNoCargoProjectNotifications/root/AstrancE/crates/axfs_vfs/src/structs.rs\": \"true\",\n    \"run.code.analysis.last.selected.profile\": \"pProject Default\",\n    \"settings.editor.selected.configurable\": \"project.propVCSSupport.DirectoryMappings\",\n    \"vue.rearranger.settings.migration\": \"true\"\n  }\n}]]></component>\n  <component name=\"RdControllerToolWindowsLayoutState\" isNewUi=\"true\">\n    <layout>\n      <window_info id=\"Bookmarks\" side_tool=\"true\" />\n      <window_info id=\"Merge Requests\" />\n      <window_info id=\"Commit_Guest\" show_stripe_button=\"false\" />\n      <window_info content_ui=\"combo\" id=\"Project\" order=\"0\" sideWeight=\"0.8772831\" weight=\"0.21133502\" />\n      <window_info id=\"Commit\" order=\"1\" weight=\"0.16425215\" />\n      <window_info id=\"Structure\" order=\"2\" sideWeight=\"0.122716896\" side_tool=\"true\" weight=\"0.16386719\" />\n      <window_info id=\"Pull Requests\" order=\"3\" weight=\"0.16425215\" />\n      <window_info anchor=\"bottom\" id=\"Database Changes\" />\n      <window_info anchor=\"bottom\" id=\"TypeScript\" />\n      <window_info anchor=\"bottom\" id=\"Debug\" />\n      <window_info anchor=\"bottom\" id=\"File Transfer\" />\n      <window_info anchor=\"bottom\" id=\"Services\" order=\"0\" weight=\"0.28315586\" />\n      <window_info anchor=\"bottom\" id=\"Version Control\" order=\"1\" weight=\"0.43234444\" />\n      <window_info anchor=\"bottom\" id=\"Problems\" order=\"2\" />\n      <window_info anchor=\"bottom\" id=\"Problems View\" order=\"3\" weight=\"0.7528143\" />\n      <window_info active=\"true\" anchor=\"bottom\" id=\"Terminal\" order=\"4\" visible=\"true\" weight=\"0.34962407\" />\n      <window_info anchor=\"bottom\" id=\"Find\" order=\"5\" weight=\"0.32962245\" />\n      <window_info anchor=\"bottom\" id=\"Build\" order=\"6\" weight=\"0.4801013\" />\n      <window_info anchor=\"bottom\" id=\"Run\" order=\"7\" weight=\"0.47975707\" />\n      <window_info anchor=\"bottom\" id=\"Messages\" order=\"8\" weight=\"0.33113274\" />\n      <window_info anchor=\"bottom\" id=\"TODO\" order=\"9\" weight=\"0.33113274\" />\n      <window_info anchor=\"right\" id=\"Notifications\" order=\"0\" weight=\"0.32977617\" />\n      <window_info anchor=\"right\" id=\"AIAssistant\" order=\"1\" weight=\"0.32977617\" />\n      <window_info anchor=\"right\" id=\"Database\" order=\"2\" weight=\"0.32977617\" />\n      <window_info anchor=\"right\" id=\"Gradle\" order=\"3\" weight=\"0.25\" />\n      <window_info anchor=\"right\" id=\"Maven\" order=\"4\" weight=\"0.25\" />\n      <window_info anchor=\"right\" id=\"Cargo\" order=\"5\" weight=\"0.2\" />\n      <window_info anchor=\"right\" id=\"RustCargo\" order=\"6\" weight=\"0.26191407\" />\n      <window_info anchor=\"right\" id=\"Coverage\" order=\"7\" side_tool=\"true\" weight=\"0.32977617\" />\n      <window_info anchor=\"right\" id=\"Hierarchy\" order=\"8\" weight=\"0.32977617\" />\n      <window_info anchor=\"right\" id=\"documentation.v2\" order=\"9\" side_tool=\"true\" weight=\"0.32977617\" />\n    </layout>\n  </component>\n  <component name=\"RecentsManager\">\n    <key name=\"MoveFile.RECENT_KEYS\">\n      <recent name=\"$PROJECT_DIR$\" />\n      <recent name=\"$PROJECT_DIR$/modules/axsyscall\" />\n      <recent name=\"$PROJECT_DIR$/modules\" />\n    </key>\n  </component>\n  <component name=\"RunManager\" selected=\"Shell Script.RUN\">\n    <configuration name=\"RUN\" type=\"ShConfigurationType\">\n      <option name=\"SCRIPT_TEXT\" value=\"make build ARCH=riscv64 FEATURES=lwext4_rs,fs BLK=y BUS=mmio &amp;&amp; qemu-system-riscv64 -m 128M -smp 1 -machine virt -bios default -kernel ./App_oscomp_riscv64-qemu-virt.bin -device virtio-blk-device,drive=disk0 -drive id=disk0,if=none,format=raw,file=./testfolder/disk.img -nographic\" />\n      <option name=\"INDEPENDENT_SCRIPT_PATH\" value=\"true\" />\n      <option name=\"SCRIPT_PATH\" value=\"\" />\n      <option name=\"SCRIPT_OPTIONS\" value=\"\" />\n      <option name=\"INDEPENDENT_SCRIPT_WORKING_DIRECTORY\" value=\"true\" />\n      <option name=\"SCRIPT_WORKING_DIRECTORY\" value=\"$PROJECT_DIR$/../App_oscomp\" />\n      <option name=\"INDEPENDENT_INTERPRETER_PATH\" value=\"true\" />\n      <option name=\"INTERPRETER_PATH\" value=\"/bin/bash\" />\n      <option name=\"INTERPRETER_OPTIONS\" value=\"\" />\n      <option name=\"EXECUTE_IN_TERMINAL\" value=\"true\" />\n      <option name=\"EXECUTE_SCRIPT_FILE\" value=\"false\" />\n      <envs />\n      <method v=\"2\" />\n    </configuration>\n    <configuration name=\"TRACE\" type=\"ShConfigurationType\">\n      <option name=\"SCRIPT_TEXT\" value=\"make build ARCH=riscv64 FEATURES=lwext4_rs,fs BLK=y BUS=mmio LOG=trace &amp;&amp; qemu-system-riscv64 -m 128M -smp 1 -machine virt -bios default -kernel ./App_oscomp_riscv64-qemu-virt.bin -device virtio-blk-device,drive=disk0 -drive id=disk0,if=none,format=raw,file=./testfolder/disk.img -nographic\" />\n      <option name=\"INDEPENDENT_SCRIPT_PATH\" value=\"true\" />\n      <option name=\"SCRIPT_PATH\" value=\"\" />\n      <option name=\"SCRIPT_OPTIONS\" value=\"\" />\n      <option name=\"INDEPENDENT_SCRIPT_WORKING_DIRECTORY\" value=\"true\" />\n      <option name=\"SCRIPT_WORKING_DIRECTORY\" value=\"$PROJECT_DIR$/../App_oscomp\" />\n      <option name=\"INDEPENDENT_INTERPRETER_PATH\" value=\"true\" />\n      <option name=\"INTERPRETER_PATH\" value=\"/bin/bash\" />\n      <option name=\"INTERPRETER_OPTIONS\" value=\"\" />\n      <option name=\"EXECUTE_IN_TERMINAL\" value=\"true\" />\n      <option name=\"EXECUTE_SCRIPT_FILE\" value=\"false\" />\n      <envs />\n      <method v=\"2\" />\n    </configuration>\n    <list>\n      <item itemvalue=\"Shell Script.TRACE\" />\n      <item itemvalue=\"Shell Script.RUN\" />\n    </list>\n  </component>\n  <component name=\"RustProjectSettings\">\n    <option name=\"rustcTarget\" value=\"riscv64gc-unknown-linux-gnu\" />\n    <option name=\"toolchainHomeDirectory\" value=\"$PROJECT_DIR$/../.cargo/bin\" />\n  </component>\n  <component name=\"TaskManager\">\n    <task active=\"true\" id=\"Default\" summary=\"Default task\">\n      <changelist id=\"7c2d0aa3-ed80-457d-a6b3-f7e100db3c2a\" name=\"Changes\" comment=\"\" />\n      <created>1742042889401</created>\n      <option name=\"number\" value=\"Default\" />\n      <option name=\"presentableId\" value=\"Default\" />\n      <updated>1742042889401</updated>\n      <workItem from=\"1742042891665\" duration=\"514000\" />\n      <workItem from=\"1742043474402\" duration=\"4469000\" />\n      <workItem from=\"1742136684927\" duration=\"5048000\" />\n      <workItem from=\"1742296527407\" duration=\"6622000\" />\n      <workItem from=\"1742310360980\" duration=\"2209000\" />\n      <workItem from=\"1742388100039\" duration=\"8031000\" />\n      <workItem from=\"1742472028007\" duration=\"1054000\" />\n      <workItem from=\"1742473550669\" duration=\"35000\" />\n      <workItem from=\"1742473606290\" duration=\"7233000\" />\n      <workItem from=\"1742536863696\" duration=\"59000\" />\n      <workItem from=\"1742622660475\" duration=\"476000\" />\n      <workItem from=\"1742629217270\" duration=\"372000\" />\n      <workItem from=\"1742654550182\" duration=\"3906000\" />\n      <workItem from=\"1742658489719\" duration=\"6429000\" />\n      <workItem from=\"1742706603379\" duration=\"12513000\" />\n      <workItem from=\"1742862824537\" duration=\"3489000\" />\n      <workItem from=\"1742889737826\" duration=\"4725000\" />\n      <workItem from=\"1742897634587\" duration=\"3267000\" />\n      <workItem from=\"1742921052388\" duration=\"2386000\" />\n      <workItem from=\"1743248599572\" duration=\"703000\" />\n      <workItem from=\"1743506175200\" duration=\"2701000\" />\n      <workItem from=\"1743603346208\" duration=\"159000\" />\n      <workItem from=\"1743603881055\" duration=\"72000\" />\n      <workItem from=\"1743604224227\" duration=\"1207000\" />\n      <workItem from=\"1743660010972\" duration=\"4972000\" />\n      <workItem from=\"1744282757997\" duration=\"3020000\" />\n      <workItem from=\"1744286534750\" duration=\"79000\" />\n      <workItem from=\"1744433966283\" duration=\"14793000\" />\n      <workItem from=\"1744457142784\" duration=\"7906000\" />\n      <workItem from=\"1744606930065\" duration=\"14444000\" />\n      <workItem from=\"1744648060740\" duration=\"909000\" />\n      <workItem from=\"1744717969881\" duration=\"3946000\" />\n      <workItem from=\"1744721964591\" duration=\"6517000\" />\n      <workItem from=\"1744773530505\" duration=\"1938000\" />\n      <workItem from=\"1744775783944\" duration=\"1871000\" />\n      <workItem from=\"1744816417516\" duration=\"215000\" />\n      <workItem from=\"1744816982644\" duration=\"4921000\" />\n      <workItem from=\"1744866329946\" duration=\"3523000\" />\n      <workItem from=\"1745133474584\" duration=\"928000\" />\n      <workItem from=\"1745165234651\" duration=\"656000\" />\n      <workItem from=\"1745394975032\" duration=\"9068000\" />\n    </task>\n    <task id=\"LOCAL-00001\" summary=\"Changes\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1742046140049</created>\n      <option name=\"number\" value=\"00001\" />\n      <option name=\"presentableId\" value=\"LOCAL-00001\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1742046140049</updated>\n    </task>\n    <task id=\"LOCAL-00002\" summary=\"将handler的返回类型改为Result便于错误处理与返回\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1742047892333</created>\n      <option name=\"number\" value=\"00002\" />\n      <option name=\"presentableId\" value=\"LOCAL-00002\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1742047892333</updated>\n    </task>\n    <task id=\"LOCAL-00003\" summary=\"change\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1742048069017</created>\n      <option name=\"number\" value=\"00003\" />\n      <option name=\"presentableId\" value=\"LOCAL-00003\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1742048069017</updated>\n    </task>\n    <task id=\"LOCAL-00004\" summary=\"time相关添加\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1742142951501</created>\n      <option name=\"number\" value=\"00004\" />\n      <option name=\"presentableId\" value=\"LOCAL-00004\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1742142951502</updated>\n    </task>\n    <task id=\"LOCAL-00005\" summary=\"优化目录结构\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1742298843331</created>\n      <option name=\"number\" value=\"00005\" />\n      <option name=\"presentableId\" value=\"LOCAL-00005\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1742298843331</updated>\n    </task>\n    <task id=\"LOCAL-00006\" summary=\"优化目录结构\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1742301211648</created>\n      <option name=\"number\" value=\"00006\" />\n      <option name=\"presentableId\" value=\"LOCAL-00006\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1742301211648</updated>\n    </task>\n    <task id=\"LOCAL-00007\" summary=\"完善net部分\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1742302124594</created>\n      <option name=\"number\" value=\"00007\" />\n      <option name=\"presentableId\" value=\"LOCAL-00007\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1742302124594</updated>\n    </task>\n    <task id=\"LOCAL-00008\" summary=\"完善\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1742302207629</created>\n      <option name=\"number\" value=\"00008\" />\n      <option name=\"presentableId\" value=\"LOCAL-00008\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1742302207629</updated>\n    </task>\n    <task id=\"LOCAL-00009\" summary=\"完善\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1742395544505</created>\n      <option name=\"number\" value=\"00009\" />\n      <option name=\"presentableId\" value=\"LOCAL-00009\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1742395544505</updated>\n    </task>\n    <task id=\"LOCAL-00010\" summary=\"完善feature控制\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1742483177322</created>\n      <option name=\"number\" value=\"00010\" />\n      <option name=\"presentableId\" value=\"LOCAL-00010\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1742483177322</updated>\n    </task>\n    <task id=\"LOCAL-00011\" summary=\"消除了syscall部分对于std的依赖，增添syscall_func的feature控制\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1742655700944</created>\n      <option name=\"number\" value=\"00011\" />\n      <option name=\"presentableId\" value=\"LOCAL-00011\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1742655700944</updated>\n    </task>\n    <task id=\"LOCAL-00012\" summary=\"完善错误反馈机制\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1742660836210</created>\n      <option name=\"number\" value=\"00012\" />\n      <option name=\"presentableId\" value=\"LOCAL-00012\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1742660836210</updated>\n    </task>\n    <task id=\"LOCAL-00013\" summary=\"完善了feature控制，使得syscall中的feature能控制zpi中的feature，完善了文件相关的系统调用\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1742713890476</created>\n      <option name=\"number\" value=\"00013\" />\n      <option name=\"presentableId\" value=\"LOCAL-00013\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1742713890476</updated>\n    </task>\n    <task id=\"LOCAL-00014\" summary=\"修改了函数名，完善系统调用\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1742866288263</created>\n      <option name=\"number\" value=\"00014\" />\n      <option name=\"presentableId\" value=\"LOCAL-00014\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1742866288263</updated>\n    </task>\n    <task id=\"LOCAL-00015\" summary=\"mmap first\">\n      <option name=\"closed\" value=\"true\" />\n      <created>1744284521845</created>\n      <option name=\"number\" value=\"00015\" />\n      <option name=\"presentableId\" value=\"LOCAL-00015\" />\n      <option name=\"project\" value=\"LOCAL\" />\n      <updated>1744284521845</updated>\n    </task>\n    <option name=\"localTasksCounter\" value=\"16\" />\n    <servers />\n  </component>\n  <component name=\"TypeScriptGeneratedFilesManager\">\n    <option name=\"version\" value=\"3\" />\n  </component>\n  <component name=\"UnknownFeatures\">\n    <option featureType=\"com.intellij.fileTypeFactory\" implementationName=\".bashrc\" />\n  </component>\n  <component name=\"Vcs.Log.Tabs.Properties\">\n    <option name=\"RECENT_FILTERS\">\n      <map>\n        <entry key=\"Branch\">\n          <value>\n            <list>\n              <RecentGroup>\n                <option name=\"FILTER_VALUES\">\n                  <option value=\"dev_ycy\" />\n                </option>\n              </RecentGroup>\n              <RecentGroup>\n                <option name=\"FILTER_VALUES\">\n                  <option value=\"main\" />\n                </option>\n              </RecentGroup>\n              <RecentGroup>\n                <option name=\"FILTER_VALUES\">\n                  <option value=\"origin/main\" />\n                </option>\n              </RecentGroup>\n            </list>\n          </value>\n        </entry>\n      </map>\n    </option>\n    <option name=\"TAB_STATES\">\n      <map>\n        <entry key=\"MAIN\">\n          <value>\n            <State>\n              <option name=\"FILTERS\">\n                <map>\n                  <entry key=\"branch\">\n                    <value>\n                      <list>\n                        <option value=\"main\" />\n                      </list>\n                    </value>\n                  </entry>\n                </map>\n              </option>\n            </State>\n          </value>\n        </entry>\n      </map>\n    </option>\n  </component>\n  <component name=\"VcsManagerConfiguration\">\n    <MESSAGE value=\"Changes\" />\n    <MESSAGE value=\"将handler的返回类型改为Result便于错误处理与返回\" />\n    <MESSAGE value=\"change\" />\n    <MESSAGE value=\"time相关添加\" />\n    <MESSAGE value=\"优化目录结构\" />\n    <MESSAGE value=\"完善net部分\" />\n    <MESSAGE value=\"完善\" />\n    <MESSAGE value=\"完善feature控制\" />\n    <MESSAGE value=\"消除了syscall部分对于std的依赖，增添syscall_func的feature控制\" />\n    <MESSAGE value=\"完善错误反馈机制\" />\n    <MESSAGE value=\"完善了feature控制，使得syscall中的feature能控制zpi中的feature，完善了文件相关的系统调用\" />\n    <MESSAGE value=\"修改了函数名，完善系统调用\" />\n    <MESSAGE value=\"mmap first\" />\n    <option name=\"LAST_COMMIT_MESSAGE\" value=\"mmap first\" />\n  </component>\n  <component name=\"XSLT-Support.FileAssociations.UIState\">\n    <expand />\n    <select />\n  </component>\n</project>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/workspace.xml b/.idea/workspace.xml
+--- a/.idea/workspace.xml	(revision 0f190e700d98f599bf0ee76682ad406a51a06215)
++++ b/.idea/workspace.xml	(date 1747802959691)
+@@ -17,6 +17,9 @@
+       <package file="$PROJECT_DIR$/examples/shell">
+         <enabledFeature name="default" />
+       </package>
++      <package file="$PROJECT_DIR$/examples/TCP_test">
++        <enabledFeature name="default" />
++      </package>
+       <package file="$PROJECT_DIR$/api/arceos_api">
+         <enabledFeature name="default" />
+       </package>
+@@ -28,6 +31,7 @@
+         <enabledFeature name="fs" />
+         <enabledFeature name="fd" />
+         <enabledFeature name="axfs_devfs" />
++        <enabledFeature name="uspace" />
+       </package>
+       <package file="$PROJECT_DIR$/modules/axalloc">
+         <enabledFeature name="tlsf" />
+@@ -63,6 +67,7 @@
+         <enabledFeature name="axsync" />
+         <enabledFeature name="irq" />
+         <enabledFeature name="paging" />
++        <enabledFeature name="tls" />
+         <enabledFeature name="axtask" />
+         <enabledFeature name="alloc" />
+         <enabledFeature name="net" />
+@@ -76,14 +81,24 @@
+         <enabledFeature name="procfs" />
+         <enabledFeature name="fatfs" />
+         <enabledFeature name="ramfs" />
++      </package>
++      <package file="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs">
++        <enabledFeature name="default" />
++      </package>
++      <package file="$PROJECT_DIR$/crates/axfs_crates/axfs_ramfs">
++        <enabledFeature name="default" />
++      </package>
++      <package file="$PROJECT_DIR$/crates/axfs_crates/axfs_vfs">
++        <enabledFeature name="default" />
+       </package>
+       <package file="$PROJECT_DIR$/modules/axhal">
++        <enabledFeature name="default" />
++        <enabledFeature name="axalloc" />
+         <enabledFeature name="fp_simd" />
+         <enabledFeature name="irq" />
+-        <enabledFeature name="default" />
+         <enabledFeature name="paging" />
+         <enabledFeature name="page_table_multiarch" />
+-        <enabledFeature name="axalloc" />
++        <enabledFeature name="uspace" />
+       </package>
+       <package file="$PROJECT_DIR$/ulib/axlibc">
+         <enabledFeature name="default" />
+@@ -96,6 +111,7 @@
+       </package>
+       <package file="$PROJECT_DIR$/ulib/axmono">
+         <enabledFeature name="mm" />
++        <enabledFeature name="sig" />
+         <enabledFeature name="axns" />
+         <enabledFeature name="default" />
+         <enabledFeature name="process" />
+@@ -127,6 +143,9 @@
+         <enabledFeature name="axmm" />
+         <enabledFeature name="alloc" />
+         <enabledFeature name="net" />
++      </package>
++      <package file="$PROJECT_DIR$/modules/axsignal">
++        <enabledFeature name="default" />
+       </package>
+       <package file="$PROJECT_DIR$/ulib/axstd">
+         <enabledFeature name="default" />
+@@ -138,6 +157,7 @@
+       <package file="$PROJECT_DIR$/modules/axsyscall">
+         <enabledFeature name="default" />
+         <enabledFeature name="pipe" />
++        <enabledFeature name="multitask" />
+         <enabledFeature name="fs" />
+         <enabledFeature name="fd" />
+       </package>
+@@ -150,6 +170,9 @@
+         <enabledFeature name="preempt" />
+         <enabledFeature name="kernel_guard" />
+       </package>
++      <package file="$PROJECT_DIR$/crates/lwext4_rust">
++        <enabledFeature name="default" />
++      </package>
+       <package file="$PROJECT_DIR$/crates/axmm_crates/memory_addr">
+         <enabledFeature name="RAII" />
+         <enabledFeature name="default" />
+@@ -177,25 +200,69 @@
+         <enabledFeature name="default" />
+       </package>
+     </cargoProject>
+-    <cargoProject FILE="$PROJECT_DIR$/crates/lwext4_rust/Cargo.toml" />
++    <cargoProject FILE="$PROJECT_DIR$/crates/page_table_multiarch/Cargo.toml">
++      <package file="$PROJECT_DIR$/crates/page_table_multiarch/page_table_entry">
++        <enabledFeature name="default" />
++      </package>
++      <package file="$PROJECT_DIR$/crates/page_table_multiarch/page_table_multiarch">
++        <enabledFeature name="default" />
++      </package>
++    </cargoProject>
++    <cargoProject FILE="$PROJECT_DIR$/crates/axdriver_crates/Cargo.toml">
++      <package file="$PROJECT_DIR$/crates/axdriver_crates/axdriver_base">
++        <enabledFeature name="default" />
++      </package>
++      <package file="$PROJECT_DIR$/crates/axdriver_crates/axdriver_block">
++        <enabledFeature name="default" />
++      </package>
++      <package file="$PROJECT_DIR$/crates/axdriver_crates/axdriver_display">
++        <enabledFeature name="default" />
++      </package>
++      <package file="$PROJECT_DIR$/crates/axdriver_crates/axdriver_net">
++        <enabledFeature name="default" />
++      </package>
++      <package file="$PROJECT_DIR$/crates/axdriver_crates/axdriver_pci">
++        <enabledFeature name="default" />
++      </package>
++      <package file="$PROJECT_DIR$/crates/axdriver_crates/axdriver_virtio">
++        <enabledFeature name="default" />
++      </package>
++    </cargoProject>
+   </component>
+   <component name="ChangeListManager">
+     <list default="true" id="7c2d0aa3-ed80-457d-a6b3-f7e100db3c2a" name="Changes" comment="mmap first">
+-      <change afterPath="$PROJECT_DIR$/crates/axfs_crates" afterDir="false" />
+-      <change afterPath="$PROJECT_DIR$/crates/lwext4_rust" afterDir="false" />
++      <change afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/chrdev.rs" afterDir="false" />
++      <change afterPath="$PROJECT_DIR$/modules/axfs/src/blkdev.rs" afterDir="false" />
+       <change beforePath="$PROJECT_DIR$/.gitmodules" beforeDir="false" afterPath="$PROJECT_DIR$/.gitmodules" afterDir="false" />
+       <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
+       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
+       <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/null.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/null.rs" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/zero.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/zero.rs" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/api/arceos_posix_api/src/imp/fs.rs" beforeDir="false" afterPath="$PROJECT_DIR$/api/arceos_posix_api/src/imp/fs.rs" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/crates/axdriver_crates/axdriver_base/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axdriver_crates/axdriver_base/Cargo.toml" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/crates/axdriver_crates/axdriver_block/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axdriver_crates/axdriver_block/src/lib.rs" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/crates/axdriver_crates/axdriver_block/src/ramdisk.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axdriver_crates/axdriver_block/src/ramdisk.rs" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/crates/axdriver_crates/axdriver_virtio/src/blk.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axdriver_crates/axdriver_virtio/src/blk.rs" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/crates/axfs_crates" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/dir.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/dir.rs" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/lib.rs" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/crates/axfs_crates/axfs_vfs/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_vfs/src/lib.rs" afterDir="false" />
+       <change beforePath="$PROJECT_DIR$/crates/axfs_crates/axfs_vfs/src/structs.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_vfs/src/structs.rs" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/crates/axmm_crates" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axmm_crates" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/crates/lwext4_rust/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust/Cargo.toml" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/crates/lwext4_rust/src/file.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust/src/file.rs" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/crates/page_table_multiarch" beforeDir="false" afterPath="$PROJECT_DIR$/crates/page_table_multiarch" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/modules/axfs/src/fs/lwext4_rust.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axfs/src/fs/lwext4_rust.rs" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/crates/lwext4_rust" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4/CMakeLists.txt" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4/Makefile" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4/src/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4/src/CMakeLists.txt" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/modules/axdriver/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axdriver/Cargo.toml" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/modules/axfs/src/dev.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axfs/src/dev.rs" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/modules/axfs/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axfs/src/lib.rs" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/modules/axfs/src/mounts.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axfs/src/mounts.rs" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/modules/axfs/src/root.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axfs/src/root.rs" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/modules/axsyscall/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axsyscall/Cargo.toml" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/modules/axsyscall/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axsyscall/src/lib.rs" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/modules/axsyscall/src/syscall_imp/fs.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axsyscall/src/syscall_imp/fs.rs" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/modules/axsyscall/src/syscall_imp/source.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axsyscall/src/syscall_imp/source.rs" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/ulib/axmono/src/ctypes.rs" beforeDir="false" afterPath="$PROJECT_DIR$/ulib/axmono/src/ctypes.rs" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/ulib/axmono/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/ulib/axmono/src/lib.rs" afterDir="false" />
+     </list>
+     <option name="SHOW_DIALOG" value="false" />
+     <option name="HIGHLIGHT_CONFLICTS" value="true" />
+@@ -241,41 +308,44 @@
+     <option name="hideEmptyMiddlePackages" value="true" />
+     <option name="showLibraryContents" value="true" />
+   </component>
+-  <component name="PropertiesComponent"><![CDATA[{
+-  "keyToString": {
+-    "Cargo.Test test::write (2).executor": "Run",
+-    "Cargo.Test test::write (3).executor": "Run",
+-    "Cargo.Test test::write.executor": "Run",
+-    "ModuleVcsDetector.initialDetectionPerformed": "true",
+-    "RunOnceActivity.ShowReadmeOnStart": "true",
+-    "RunOnceActivity.git.unshallow": "true",
+-    "RunOnceActivity.rust.reset.selective.auto.import": "true",
+-    "Shell Script.RUN.executor": "Run",
+-    "Shell Script.TRACE.executor": "Run",
+-    "deletionFromPopupRequiresConfirmation": "false",
+-    "git-widget-placeholder": "main",
+-    "last_opened_file_path": "/root/App_oscomp",
+-    "node.js.detected.package.eslint": "true",
+-    "node.js.detected.package.tslint": "true",
+-    "node.js.selected.package.eslint": "(autodetect)",
+-    "node.js.selected.package.tslint": "(autodetect)",
+-    "nodejs_package_manager_path": "npm",
+-    "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
+-    "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
+-    "org.rust.disableDetachedFileInspection/root/AstrancE/modules/axsyscall/src/mod.rs": "true",
+-    "org.rust.first.attach.projects": "true",
+-    "org.rust.hideNoCargoProjectNotifications/root/AstrancE/crates/axfs_vfs/src/structs.rs": "true",
+-    "run.code.analysis.last.selected.profile": "pProject Default",
+-    "settings.editor.selected.configurable": "project.propVCSSupport.DirectoryMappings",
+-    "vue.rearranger.settings.migration": "true"
++  <component name="PropertiesComponent">{
++  &quot;keyToString&quot;: {
++    &quot;Cargo.Test test::write (2).executor&quot;: &quot;Run&quot;,
++    &quot;Cargo.Test test::write (3).executor&quot;: &quot;Run&quot;,
++    &quot;Cargo.Test test::write.executor&quot;: &quot;Run&quot;,
++    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
++    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
++    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
++    &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
++    &quot;Shell Script.RUN.executor&quot;: &quot;Run&quot;,
++    &quot;Shell Script.TRACE.executor&quot;: &quot;Run&quot;,
++    &quot;deletionFromPopupRequiresConfirmation&quot;: &quot;false&quot;,
++    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
++    &quot;last_opened_file_path&quot;: &quot;/root/App_oscomp&quot;,
++    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
++    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
++    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
++    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
++    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
++    &quot;org.rust.cargo.project.model.PROJECT_DISCOVERY&quot;: &quot;true&quot;,
++    &quot;org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon&quot;: &quot;&quot;,
++    &quot;org.rust.disableDetachedFileInspection/root/AstrancE/modules/axdevice/src/disk.rs&quot;: &quot;true&quot;,
++    &quot;org.rust.disableDetachedFileInspection/root/AstrancE/modules/axdevice/src/mod.rs&quot;: &quot;true&quot;,
++    &quot;org.rust.disableDetachedFileInspection/root/AstrancE/modules/axsyscall/src/mod.rs&quot;: &quot;true&quot;,
++    &quot;org.rust.first.attach.projects&quot;: &quot;true&quot;,
++    &quot;org.rust.hideNoCargoProjectNotifications/root/AstrancE/crates/axfs_vfs/src/structs.rs&quot;: &quot;true&quot;,
++    &quot;run.code.analysis.last.selected.profile&quot;: &quot;pProject Default&quot;,
++    &quot;settings.editor.selected.configurable&quot;: &quot;project.propVCSSupport.DirectoryMappings&quot;,
++    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
+   }
+-}]]></component>
++}</component>
+   <component name="RdControllerToolWindowsLayoutState" isNewUi="true">
+     <layout>
+       <window_info id="Bookmarks" side_tool="true" />
+       <window_info id="Merge Requests" />
++      <window_info id="Backup and Sync History" />
+       <window_info id="Commit_Guest" show_stripe_button="false" />
+-      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.8772831" weight="0.21133502" />
++      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.8772831" weight="0.306338" />
+       <window_info id="Commit" order="1" weight="0.16425215" />
+       <window_info id="Structure" order="2" sideWeight="0.122716896" side_tool="true" weight="0.16386719" />
+       <window_info id="Pull Requests" order="3" weight="0.16425215" />
+@@ -283,14 +353,14 @@
+       <window_info anchor="bottom" id="TypeScript" />
+       <window_info anchor="bottom" id="Debug" />
+       <window_info anchor="bottom" id="File Transfer" />
+-      <window_info anchor="bottom" id="Services" order="0" weight="0.28315586" />
+-      <window_info anchor="bottom" id="Version Control" order="1" weight="0.43234444" />
++      <window_info anchor="bottom" id="Services" order="0" weight="0.1914524" />
++      <window_info anchor="bottom" id="Version Control" order="1" weight="0.5721983" />
+       <window_info anchor="bottom" id="Problems" order="2" />
+-      <window_info anchor="bottom" id="Problems View" order="3" weight="0.7528143" />
+-      <window_info active="true" anchor="bottom" id="Terminal" order="4" visible="true" weight="0.34962407" />
+-      <window_info anchor="bottom" id="Find" order="5" weight="0.32962245" />
+-      <window_info anchor="bottom" id="Build" order="6" weight="0.4801013" />
+-      <window_info anchor="bottom" id="Run" order="7" weight="0.47975707" />
++      <window_info anchor="bottom" id="Problems View" order="3" weight="0.38522887" />
++      <window_info anchor="bottom" id="Terminal" order="4" />
++      <window_info anchor="bottom" id="Find" order="5" weight="0.63685346" />
++      <window_info anchor="bottom" id="Build" order="6" weight="0.14474976" />
++      <window_info anchor="bottom" id="Run" order="7" weight="0.6487051" />
+       <window_info anchor="bottom" id="Messages" order="8" weight="0.33113274" />
+       <window_info anchor="bottom" id="TODO" order="9" weight="0.33113274" />
+       <window_info anchor="right" id="Notifications" order="0" weight="0.32977617" />
+@@ -299,20 +369,37 @@
+       <window_info anchor="right" id="Gradle" order="3" weight="0.25" />
+       <window_info anchor="right" id="Maven" order="4" weight="0.25" />
+       <window_info anchor="right" id="Cargo" order="5" weight="0.2" />
+-      <window_info anchor="right" id="RustCargo" order="6" weight="0.26191407" />
++      <window_info anchor="right" id="RustCargo" order="6" weight="0.33011132" />
+       <window_info anchor="right" id="Coverage" order="7" side_tool="true" weight="0.32977617" />
+       <window_info anchor="right" id="Hierarchy" order="8" weight="0.32977617" />
+-      <window_info anchor="right" id="documentation.v2" order="9" side_tool="true" weight="0.32977617" />
++      <window_info anchor="right" id="documentation.v2" order="9" side_tool="true" weight="0.3298828" />
+     </layout>
+   </component>
+   <component name="RecentsManager">
+     <key name="MoveFile.RECENT_KEYS">
++      <recent name="$PROJECT_DIR$/modules/axfs/src" />
++      <recent name="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src" />
++      <recent name="$PROJECT_DIR$/api/arceos_posix_api/src" />
+       <recent name="$PROJECT_DIR$" />
+       <recent name="$PROJECT_DIR$/modules/axsyscall" />
+-      <recent name="$PROJECT_DIR$/modules" />
+     </key>
+   </component>
+   <component name="RunManager" selected="Shell Script.RUN">
++    <configuration name="RUN" type="ShConfigurationType">
++      <option name="SCRIPT_TEXT" value="make build ARCH=riscv64 FEATURES=lwext4_rs,fs BLK=y BUS=mmio &amp;&amp; qemu-system-riscv64 -m 128M -smp 1 -machine virt -bios default -kernel ./App_oscomp_riscv64-qemu-virt.bin -device virtio-blk-device,drive=disk0 -drive id=disk0,if=none,format=raw,file=./testfolder/disk.img -nographic" />
++      <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
++      <option name="SCRIPT_PATH" value="" />
++      <option name="SCRIPT_OPTIONS" value="" />
++      <option name="INDEPENDENT_SCRIPT_WORKING_DIRECTORY" value="true" />
++      <option name="SCRIPT_WORKING_DIRECTORY" value="$PROJECT_DIR$/../App_oscomp" />
++      <option name="INDEPENDENT_INTERPRETER_PATH" value="true" />
++      <option name="INTERPRETER_PATH" value="/bin/bash" />
++      <option name="INTERPRETER_OPTIONS" value="" />
++      <option name="EXECUTE_IN_TERMINAL" value="true" />
++      <option name="EXECUTE_SCRIPT_FILE" value="false" />
++      <envs />
++      <method v="2" />
++    </configuration>
+     <configuration name="RUN" type="ShConfigurationType">
+       <option name="SCRIPT_TEXT" value="make build ARCH=riscv64 FEATURES=lwext4_rs,fs BLK=y BUS=mmio &amp;&amp; qemu-system-riscv64 -m 128M -smp 1 -machine virt -bios default -kernel ./App_oscomp_riscv64-qemu-virt.bin -device virtio-blk-device,drive=disk0 -drive id=disk0,if=none,format=raw,file=./testfolder/disk.img -nographic" />
+       <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
+@@ -343,6 +430,21 @@
+       <envs />
+       <method v="2" />
+     </configuration>
++    <configuration name="TRACE" type="ShConfigurationType">
++      <option name="SCRIPT_TEXT" value="make build ARCH=riscv64 FEATURES=lwext4_rs,fs BLK=y BUS=mmio LOG=trace &amp;&amp; qemu-system-riscv64 -m 128M -smp 1 -machine virt -bios default -kernel ./App_oscomp_riscv64-qemu-virt.bin -device virtio-blk-device,drive=disk0 -drive id=disk0,if=none,format=raw,file=./testfolder/disk.img -nographic" />
++      <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
++      <option name="SCRIPT_PATH" value="" />
++      <option name="SCRIPT_OPTIONS" value="" />
++      <option name="INDEPENDENT_SCRIPT_WORKING_DIRECTORY" value="true" />
++      <option name="SCRIPT_WORKING_DIRECTORY" value="$PROJECT_DIR$/../App_oscomp" />
++      <option name="INDEPENDENT_INTERPRETER_PATH" value="true" />
++      <option name="INTERPRETER_PATH" value="/bin/bash" />
++      <option name="INTERPRETER_OPTIONS" value="" />
++      <option name="EXECUTE_IN_TERMINAL" value="true" />
++      <option name="EXECUTE_SCRIPT_FILE" value="false" />
++      <envs />
++      <method v="2" />
++    </configuration>
+     <list>
+       <item itemvalue="Shell Script.TRACE" />
+       <item itemvalue="Shell Script.RUN" />
+@@ -399,7 +501,29 @@
+       <workItem from="1744866329946" duration="3523000" />
+       <workItem from="1745133474584" duration="928000" />
+       <workItem from="1745165234651" duration="656000" />
+-      <workItem from="1745394975032" duration="9068000" />
++      <workItem from="1745394975032" duration="15419000" />
++      <workItem from="1745586725831" duration="8079000" />
++      <workItem from="1745595080321" duration="2501000" />
++      <workItem from="1745637522470" duration="12769000" />
++      <workItem from="1745852279644" duration="1546000" />
++      <workItem from="1745893986348" duration="37858000" />
++      <workItem from="1746618868692" duration="19170000" />
++      <workItem from="1746801754504" duration="550000" />
++      <workItem from="1746869176385" duration="12882000" />
++      <workItem from="1746937842847" duration="9580000" />
++      <workItem from="1746979302210" duration="7032000" />
++      <workItem from="1747019771770" duration="2879000" />
++      <workItem from="1747030262407" duration="14152000" />
++      <workItem from="1747124648681" duration="20899000" />
++      <workItem from="1747191044704" duration="5981000" />
++      <workItem from="1747219936598" duration="15391000" />
++      <workItem from="1747320391882" duration="8951000" />
++      <workItem from="1747407541046" duration="2370000" />
++      <workItem from="1747545113964" duration="4569000" />
++      <workItem from="1747552125861" duration="1737000" />
++      <workItem from="1747578813972" duration="1177000" />
++      <workItem from="1747752206284" duration="6295000" />
++      <workItem from="1747795041422" duration="1372000" />
+     </task>
+     <task id="LOCAL-00001" summary="Changes">
+       <option name="closed" value="true" />
+@@ -531,6 +655,11 @@
+     <option featureType="com.intellij.fileTypeFactory" implementationName=".bashrc" />
+   </component>
+   <component name="Vcs.Log.Tabs.Properties">
++    <option name="OPEN_GENERIC_TABS">
++      <map>
++        <entry key="cf93c5cc-c414-48b7-8f92-b1d72b8352a5" value="TOOL_WINDOW" />
++      </map>
++    </option>
+     <option name="RECENT_FILTERS">
+       <map>
+         <entry key="Branch">
+@@ -566,13 +695,18 @@
+                   <entry key="branch">
+                     <value>
+                       <list>
+-                        <option value="main" />
++                        <option value="Qix/HEAD" />
+                       </list>
+                     </value>
+                   </entry>
+                 </map>
+               </option>
+             </State>
++          </value>
++        </entry>
++        <entry key="cf93c5cc-c414-48b7-8f92-b1d72b8352a5">
++          <value>
++            <State />
+           </value>
+         </entry>
+       </map>
+Index: modules/axdriver/Cargo.toml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>[package]\nname = \"axdriver\"\nversion.workspace = true\nedition.workspace = true\nauthors = [\"Yuekai Jia <equation618@gmail.com>\", \"ChengXiang Qi <kuangjux@outlook.com>\"]\ndescription = \"ArceOS device drivers\"\nlicense.workspace = true\nhomepage.workspace = true\nrepository = \"https://github.com/arceos-org/arceos/tree/main/modules/axdriver\"\ndocumentation = \"https://arceos-org.github.io/arceos/axdriver/index.html\"\n\n[features]\ndyn = []\nbus-mmio = []\nbus-pci = [\"dep:axdriver_pci\", \"dep:axhal\", \"dep:axconfig\"]\nnet = [\"axdriver_net\"]\nblock = [\"axdriver_block\"]\ndisplay = [\"axdriver_display\"]\n\n# Enabled by features `virtio-*`\nvirtio = [\"axdriver_virtio\", \"dep:axalloc\", \"dep:axhal\", \"dep:axconfig\"]\n\n# various types of drivers\nvirtio-blk = [\"block\", \"virtio\", \"axdriver_virtio/block\"]\nvirtio-net = [\"net\", \"virtio\", \"axdriver_virtio/net\"]\nvirtio-gpu = [\"display\", \"virtio\", \"axdriver_virtio/gpu\"]\nramdisk = [\"block\", \"axdriver_block/ramdisk\"]\nbcm2835-sdhci = [\"block\", \"axdriver_block/bcm2835-sdhci\"]\nixgbe = [\"net\", \"axdriver_net/ixgbe\", \"dep:axalloc\", \"dep:axhal\", \"dep:axdma\"]\nfxmac = [\"net\", \"axdriver_net/fxmac\", \"dep:axalloc\", \"dep:axhal\", \"dep:axdma\"]\n# more devices example: e1000 = [\"net\", \"axdriver_net/e1000\"]\n\ndefault = [\"bus-pci\"]\n\n[dependencies]\nlog = \"=0.4.21\"\ncfg-if = \"1.0\"\ncrate_interface = \"0.1.4\"\naxdriver_base = { git = \"https://github.com/arceos-org/axdriver_crates.git\", tag = \"v0.1.2\" }\naxdriver_block = { git = \"https://github.com/arceos-org/axdriver_crates.git\", tag = \"v0.1.2\", optional = true }\naxdriver_net = { git = \"https://github.com/arceos-org/axdriver_crates.git\", tag = \"v0.1.2\", optional = true }\naxdriver_display = { git = \"https://github.com/arceos-org/axdriver_crates.git\", tag = \"v0.1.2\", optional = true }\naxdriver_pci = { git = \"https://github.com/arceos-org/axdriver_crates.git\", tag = \"v0.1.2\", optional = true }\naxdriver_virtio = { git = \"https://github.com/arceos-org/axdriver_crates.git\", tag = \"v0.1.2\", optional = true }\naxalloc = { workspace = true, optional = true }\naxhal = { workspace = true, optional = true }\naxconfig = { workspace = true, optional = true }\naxdma = { workspace = true, optional = true }\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/modules/axdriver/Cargo.toml b/modules/axdriver/Cargo.toml
+--- a/modules/axdriver/Cargo.toml	(revision 0f190e700d98f599bf0ee76682ad406a51a06215)
++++ b/modules/axdriver/Cargo.toml	(date 1747547945000)
+@@ -42,6 +42,12 @@
+ axdriver_display = { git = "https://github.com/arceos-org/axdriver_crates.git", tag = "v0.1.2", optional = true }
+ axdriver_pci = { git = "https://github.com/arceos-org/axdriver_crates.git", tag = "v0.1.2", optional = true }
+ axdriver_virtio = { git = "https://github.com/arceos-org/axdriver_crates.git", tag = "v0.1.2", optional = true }
++#axdriver_base = { workspace = true, tag = "v0.1.2" }
++#axdriver_block = { workspace = true, tag = "v0.1.2", optional = true }
++#axdriver_net = { workspace = true, tag = "v0.1.2", optional = true }
++#axdriver_display = { workspace = true, tag = "v0.1.2", optional = true }
++#axdriver_pci = { workspace = true, tag = "v0.1.2", optional = true }
++#axdriver_virtio = { workspace = true, tag = "v0.1.2", optional = true }
+ axalloc = { workspace = true, optional = true }
+ axhal = { workspace = true, optional = true }
+ axconfig = { workspace = true, optional = true }
+Index: .idea/vcs.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<project version=\"4\">\n  <component name=\"VcsDirectoryMappings\">\n    <mapping directory=\"$PROJECT_DIR$\" vcs=\"Git\" />\n    <mapping directory=\"$PROJECT_DIR$/crates/axfs_crates\" vcs=\"Git\" />\n    <mapping directory=\"$PROJECT_DIR$/crates/axfs_vfs\" vcs=\"Git\" />\n    <mapping directory=\"$PROJECT_DIR$/crates/axmm_crates\" vcs=\"Git\" />\n    <mapping directory=\"$PROJECT_DIR$/crates/lwext4_rust\" vcs=\"Git\" />\n    <mapping directory=\"$PROJECT_DIR$/crates/lwext4_rust/c/lwext4\" vcs=\"Git\" />\n    <mapping directory=\"$PROJECT_DIR$/crates/page_table_multiarch\" vcs=\"Git\" />\n  </component>\n</project>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/vcs.xml b/.idea/vcs.xml
+--- a/.idea/vcs.xml	(revision 0f190e700d98f599bf0ee76682ad406a51a06215)
++++ b/.idea/vcs.xml	(date 1747579183032)
+@@ -2,8 +2,8 @@
+ <project version="4">
+   <component name="VcsDirectoryMappings">
+     <mapping directory="$PROJECT_DIR$" vcs="Git" />
++    <mapping directory="$PROJECT_DIR$/crates/axdriver_crates" vcs="Git" />
+     <mapping directory="$PROJECT_DIR$/crates/axfs_crates" vcs="Git" />
+-    <mapping directory="$PROJECT_DIR$/crates/axfs_vfs" vcs="Git" />
+     <mapping directory="$PROJECT_DIR$/crates/axmm_crates" vcs="Git" />
+     <mapping directory="$PROJECT_DIR$/crates/lwext4_rust" vcs="Git" />
+     <mapping directory="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4" vcs="Git" />
+Index: modules/axfs/src/dev.rs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>use axdriver::prelude::*;\n\nconst BLOCK_SIZE: usize = 512;\n\n/// A disk device with a cursor.\npub struct Disk {\n    block_id: u64,\n    offset: usize,\n    dev: AxBlockDevice,\n}\n\nimpl Disk {\n    /// Create a new disk.\n    pub fn new(dev: AxBlockDevice) -> Self {\n        assert_eq!(BLOCK_SIZE, dev.block_size());\n        Self {\n            block_id: 0,\n            offset: 0,\n            dev,\n        }\n    }\n\n    /// Get the size of the disk.\n    pub fn size(&self) -> u64 {\n        self.dev.num_blocks() * BLOCK_SIZE as u64\n    }\n\n    /// Get the position of the cursor.\n    pub fn position(&self) -> u64 {\n        self.block_id * BLOCK_SIZE as u64 + self.offset as u64\n    }\n\n    /// Set the position of the cursor.\n    pub fn set_position(&mut self, pos: u64) {\n        self.block_id = pos / BLOCK_SIZE as u64;\n        self.offset = pos as usize % BLOCK_SIZE;\n    }\n\n    /// Read within one block, returns the number of bytes read.\n    pub fn read_one(&mut self, buf: &mut [u8]) -> DevResult<usize> {\n        let read_size = if self.offset == 0 && buf.len() >= BLOCK_SIZE {\n            // whole block\n            let mut data = [0u8; BLOCK_SIZE];\n            self.dev.read_block(self.block_id, &mut data)?;\n            buf[0..BLOCK_SIZE].copy_from_slice(&data);\n            // self.dev\n            //     .read_block(self.block_id, &mut buf[0..BLOCK_SIZE])?;\n            self.block_id += 1;\n            BLOCK_SIZE\n        } else {\n            // partial block\n            let mut data = [0u8; BLOCK_SIZE];\n            let start = self.offset;\n            let count = buf.len().min(BLOCK_SIZE - self.offset);\n\n            self.dev.read_block(self.block_id, &mut data)?;\n            buf[..count].copy_from_slice(&data[start..start + count]);\n\n            self.offset += count;\n            if self.offset >= BLOCK_SIZE {\n                self.block_id += 1;\n                self.offset -= BLOCK_SIZE;\n            }\n            count\n        };\n        Ok(read_size)\n    }\n\n    /// Write within one block, returns the number of bytes written.\n    pub fn write_one(&mut self, buf: &[u8]) -> DevResult<usize> {\n        let write_size = if self.offset == 0 && buf.len() >= BLOCK_SIZE {\n            // whole block\n            self.dev.write_block(self.block_id, &buf[0..BLOCK_SIZE])?;\n            self.block_id += 1;\n            BLOCK_SIZE\n        } else {\n            // partial block\n            let mut data = [0u8; BLOCK_SIZE];\n            let start = self.offset;\n            let count = buf.len().min(BLOCK_SIZE - self.offset);\n\n            self.dev.read_block(self.block_id, &mut data)?;\n            data[start..start + count].copy_from_slice(&buf[..count]);\n            self.dev.write_block(self.block_id, &data)?;\n\n            self.offset += count;\n            if self.offset >= BLOCK_SIZE {\n                self.block_id += 1;\n                self.offset -= BLOCK_SIZE;\n            }\n            count\n        };\n        Ok(write_size)\n    }\n\n    /// Read a single block starting from the specified offset.\n    #[allow(unused)]\n    pub fn read_offset(&mut self, offset: usize) -> [u8; BLOCK_SIZE] {\n        let block_id = offset / BLOCK_SIZE;\n        let mut block_data = [0u8; BLOCK_SIZE];\n        self.dev\n            .read_block(block_id as u64, &mut block_data)\n            .unwrap();\n        block_data\n    }\n\n    /// Write single block starting from the specified offset.\n    #[allow(unused)]\n    pub fn write_offset(&mut self, offset: usize, buf: &[u8]) -> DevResult<usize> {\n        assert!(\n            buf.len() == BLOCK_SIZE,\n            \"Buffer length must be equal to BLOCK_SIZE\"\n        );\n        assert!(offset % BLOCK_SIZE == 0);\n        let block_id = offset / BLOCK_SIZE;\n        self.dev.write_block(block_id as u64, buf).unwrap();\n        Ok(buf.len())\n    }\n}\n\nunsafe impl Send for Disk {}\nunsafe impl Sync for Disk {}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/modules/axfs/src/dev.rs b/modules/axfs/src/dev.rs
+--- a/modules/axfs/src/dev.rs	(revision 0f190e700d98f599bf0ee76682ad406a51a06215)
++++ b/modules/axfs/src/dev.rs	(date 1747548213260)
+@@ -1,22 +1,23 @@
+ use axdriver::prelude::*;
+-
++use axfs_vfs::{VfsNodeAttr, VfsNodeOps, VfsResult};
+ const BLOCK_SIZE: usize = 512;
+-
+ /// A disk device with a cursor.
+ pub struct Disk {
+     block_id: u64,
+     offset: usize,
+-    dev: AxBlockDevice,
++    dev: AxBlockDevice, //Ramdisk
++    dev_t: (u8, u8),
+ }
+ 
+ impl Disk {
+     /// Create a new disk.
+-    pub fn new(dev: AxBlockDevice) -> Self {
++    pub fn new(dev:AxBlockDevice, major: u8, minor: u8) -> Self {
+         assert_eq!(BLOCK_SIZE, dev.block_size());
+         Self {
+             block_id: 0,
+             offset: 0,
+             dev,
++            dev_t: (major, minor),
+         }
+     }
+ 
+@@ -24,6 +25,19 @@
+     pub fn size(&self) -> u64 {
+         self.dev.num_blocks() * BLOCK_SIZE as u64
+     }
++    
++    // ///Clone disk for filesystem
++    // pub fn get_dev(&self) -> AxBlockDevice {
++    //     let dev = self.dev.deep_clone().expect("Clone failed");
++    // 
++    //     // 尝试从 trait object 恢复为具体类型
++    //     dev.as_any()
++    //         .downcast_ref::<AxBlockDevice>()
++    //         .expect("Not a RamDisk")
++    //         .clone()
++    // }
++    ///Get dev index
++    pub fn dev_t(&self) -> (u8, u8) {self.dev_t}
+ 
+     /// Get the position of the cursor.
+     pub fn position(&self) -> u64 {
+@@ -118,5 +132,27 @@
+     }
+ }
+ 
++// impl VfsNodeOps for Disk{
++//     fn get_attr(&self) -> VfsResult<VfsNodeAttr> {
++//         //TODO:dev num
++//         Ok(VfsNodeAttr::new_file(4096, 1))
++//     }
++//     fn remove(&self, _path: &str) -> VfsResult {
++//         todo!()
++//     }
++// 
++// }
++// 
++// impl Clone for Disk {
++//     fn clone(&self) -> Self {
++//         Disk {
++//             block_id: self.block_id,
++//             offset: self.offset,
++//             dev: self.get_dev(), // 确保 dev 实现了 Clone
++//             dev_t: self.dev_t,
++//         }
++//     }
++// }
++
+ unsafe impl Send for Disk {}
+ unsafe impl Sync for Disk {}
+Index: modules/axfs/src/root.rs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>//! Root directory of the filesystem\n//!\n//! TODO: it doesn't work very well if the mount points have containment relationships.\n\nuse alloc::{string::String, sync::Arc, vec::Vec};\nuse axerrno::{AxError, AxResult, ax_err};\nuse axfs_vfs::{VfsNodeAttr, VfsNodeOps, VfsNodeRef, VfsNodeType, VfsOps, VfsResult};\nuse axio::Read;\nuse axns::{ResArc, def_resource};\nuse axsync::Mutex;\nuse lazyinit::LazyInit;\nuse spin::RwLock;\n\nuse crate::{\n    api::{self, FileType},\n    dev::Disk,\n    fs::{self},\n    mounts,\n};\n\ndef_resource! {\n    pub static CURRENT_DIR_PATH: ResArc<Mutex<String>> = ResArc::new();\n    pub static CURRENT_DIR: ResArc<Mutex<VfsNodeRef>> = ResArc::new();\n}\n\nimpl CURRENT_DIR_PATH {\n    /// Return a copy of the inner path.\n    pub fn copy_inner(&self) -> Mutex<String> {\n        Mutex::new(self.lock().clone())\n    }\n}\n\nimpl CURRENT_DIR {\n    /// Return a copy of the CURRENT_DIR_NODE.\n    pub fn copy_inner(&self) -> Mutex<VfsNodeRef> {\n        Mutex::new(self.lock().clone())\n    }\n}\n\nstruct MountPoint {\n    path: &'static str,\n    fs: Arc<dyn VfsOps>,\n}\n\nstruct RootDirectory {\n    main_fs: Arc<dyn VfsOps>,\n    mounts: RwLock<Vec<MountPoint>>,\n}\n\npub static ROOT_DIR: LazyInit<Arc<RootDirectory>> = LazyInit::new();\n\nimpl MountPoint {\n    pub fn new(path: &'static str, fs: Arc<dyn VfsOps>) -> Self {\n        Self { path, fs }\n    }\n}\n\nimpl Drop for MountPoint {\n    fn drop(&mut self) {\n        self.fs.umount().ok();\n    }\n}\n\nimpl RootDirectory {\n    pub const fn new(main_fs: Arc<dyn VfsOps>) -> Self {\n        Self {\n            main_fs,\n            mounts: RwLock::new(Vec::new()),\n        }\n    }\n\n    pub fn mount(&self, path: &'static str, fs: Arc<dyn VfsOps>) -> AxResult {\n        if path == \"/\" {\n            return ax_err!(InvalidInput, \"cannot mount root filesystem\");\n        }\n        if !path.starts_with('/') {\n            return ax_err!(InvalidInput, \"mount path must start with '/'\");\n        }\n        if self.mounts.read().iter().any(|mp| mp.path == path) {\n            return ax_err!(InvalidInput, \"mount point already exists\");\n        }\n        // create the mount point in the main filesystem if it does not exist\n        self.main_fs.root_dir().create(path, FileType::Dir)?;\n        fs.mount(path, self.main_fs.root_dir().lookup(path)?)?;\n        self.mounts.write().push(MountPoint::new(path, fs));\n        Ok(())\n    }\n\n    pub fn _umount(&self, path: &str) {\n        self.mounts.write().retain(|mp| mp.path != path);\n    }\n\n    pub fn contains(&self, path: &str) -> bool {\n        self.mounts.read().iter().any(|mp| mp.path == path)\n    }\n\n    fn lookup_mounted_fs<F, T>(&self, path: &str, f: F) -> AxResult<T>\n    where\n        F: FnOnce(Arc<dyn VfsOps>, &str) -> AxResult<T>,\n    {\n        debug!(\"lookup at root: {}\", path);\n        let path = path.trim_matches('/');\n        if let Some(rest) = path.strip_prefix(\"./\") {\n            return self.lookup_mounted_fs(rest, f);\n        }\n\n        let mut idx = 0;\n        let mut max_len = 0;\n\n        // Find the filesystem that has the longest mounted path match\n        // TODO: more efficient, e.g. trie\n        for (i, mp) in self.mounts.read().iter().enumerate() {\n            // skip the first '/'\n            if path.starts_with(&mp.path[1..]) && mp.path.len() - 1 > max_len {\n                max_len = mp.path.len() - 1;\n                idx = i;\n            }\n        }\n\n        if max_len == 0 {\n            f(self.main_fs.clone(), path) // not matched any mount point\n        } else {\n            f(self.mounts.read()[idx].fs.clone(), &path[max_len..]) // matched at `idx`\n        }\n    }\n}\n\nimpl VfsNodeOps for RootDirectory {\n    axfs_vfs::impl_vfs_dir_default! {}\n\n    fn get_attr(&self) -> VfsResult<VfsNodeAttr> {\n        self.main_fs.root_dir().get_attr()\n    }\n\n    fn lookup(self: Arc<Self>, path: &str) -> VfsResult<VfsNodeRef> {\n        self.lookup_mounted_fs(path, |fs, rest_path| fs.root_dir().lookup(rest_path))\n    }\n\n    fn create(&self, path: &str, ty: VfsNodeType) -> VfsResult {\n        self.lookup_mounted_fs(path, |fs, rest_path| {\n            if rest_path.is_empty() {\n                Ok(()) // already exists\n            } else {\n                fs.root_dir().create(rest_path, ty)\n            }\n        })\n    }\n\n    fn remove(&self, path: &str) -> VfsResult {\n        self.lookup_mounted_fs(path, |fs, rest_path| {\n            if rest_path.is_empty() {\n                ax_err!(PermissionDenied) // cannot remove mount points\n            } else {\n                fs.root_dir().remove(rest_path)\n            }\n        })\n    }\n\n    fn rename(&self, src_path: &str, dst_path: &str) -> VfsResult {\n        self.lookup_mounted_fs(src_path, |fs, rest_path| {\n            if rest_path.is_empty() {\n                ax_err!(PermissionDenied) // cannot rename mount points\n            } else {\n                fs.root_dir().rename(rest_path, dst_path)\n            }\n        })\n    }\n}\n\npub(crate) fn init_rootfs(disk: crate::dev::Disk) {\n    cfg_if::cfg_if! {\n        if #[cfg(feature = \"myfs\")] { // override the default filesystem\n            let main_fs = fs::myfs::new_myfs(disk);\n        } else if #[cfg(feature = \"lwext4_rs\")] {\n            static EXT4_FS: LazyInit<Arc<fs::lwext4_rust::Ext4FileSystem<Disk>>> = LazyInit::new();\n            EXT4_FS.init_once(Arc::new(fs::lwext4_rust::Ext4FileSystem::new(disk)));\n            let main_fs = EXT4_FS.clone();\n        } else if #[cfg(feature = \"fatfs\")] {\n            static FAT_FS: LazyInit<Arc<fs::fatfs::FatFileSystem>> = LazyInit::new();\n            FAT_FS.init_once(Arc::new(fs::fatfs::FatFileSystem::new(disk)));\n            FAT_FS.init();\n            let main_fs = FAT_FS.clone();\n        }\n    }\n\n    let root_dir = RootDirectory::new(main_fs);\n\n    #[cfg(feature = \"devfs\")]\n    root_dir\n        .mount(\"/dev\", mounts::devfs())\n        .expect(\"failed to mount devfs at /dev\");\n\n    #[cfg(feature = \"ramfs\")]\n    root_dir\n        .mount(\"/tmp\", mounts::ramfs())\n        .expect(\"failed to mount ramfs at /tmp\");\n\n    // Mount another ramfs as procfs\n    #[cfg(feature = \"procfs\")]\n    root_dir // should not fail\n        .mount(\"/proc\", mounts::procfs().unwrap())\n        .expect(\"fail to mount procfs at /proc\");\n\n    // Mount another ramfs as sysfs\n    #[cfg(feature = \"sysfs\")]\n    root_dir // should not fail\n        .mount(\"/sys\", mounts::sysfs().unwrap())\n        .expect(\"fail to mount sysfs at /sys\");\n\n    ROOT_DIR.init_once(Arc::new(root_dir));\n    info!(\"rootfs initialized\");\n    CURRENT_DIR.init_new(Mutex::new(ROOT_DIR.clone()));\n    info!(\"test\");\n    CURRENT_DIR_PATH.init_new(Mutex::new(\"/\".into()));\n}\n\nfn parent_node_of(dir: Option<&VfsNodeRef>, path: &str) -> VfsNodeRef {\n    if path.starts_with('/') {\n        ROOT_DIR.clone()\n    } else {\n        dir.cloned().unwrap_or_else(|| CURRENT_DIR.lock().clone())\n    }\n}\n\npub(crate) fn absolute_path(path: &str) -> AxResult<String> {\n    if path.starts_with('/') {\n        Ok(axfs_vfs::path::canonicalize(path))\n    } else {\n        let path = CURRENT_DIR_PATH.lock().clone() + path;\n        Ok(axfs_vfs::path::canonicalize(&path))\n    }\n}\n\npub(crate) fn lookup(dir: Option<&VfsNodeRef>, path: &str) -> AxResult<VfsNodeRef> {\n    if path.is_empty() {\n        return ax_err!(NotFound);\n    }\n    let node = parent_node_of(dir, path).lookup(path)?;\n    if path.ends_with('/') && !node.get_attr()?.is_dir() {\n        ax_err!(NotADirectory)\n    } else {\n        Ok(node)\n    }\n}\n\npub(crate) fn create_file(dir: Option<&VfsNodeRef>, path: &str) -> AxResult<VfsNodeRef> {\n    if path.is_empty() {\n        return ax_err!(NotFound);\n    } else if path.ends_with('/') {\n        return ax_err!(NotADirectory);\n    }\n    let parent = parent_node_of(dir, path);\n    parent.create(path, VfsNodeType::File)?;\n    parent.lookup(path)\n}\n\npub(crate) fn create_dir(dir: Option<&VfsNodeRef>, path: &str) -> AxResult {\n    match lookup(dir, path) {\n        Ok(_) => ax_err!(AlreadyExists),\n        Err(AxError::NotFound) => parent_node_of(dir, path).create(path, VfsNodeType::Dir),\n        Err(e) => Err(e),\n    }\n}\n\npub(crate) fn remove_file(dir: Option<&VfsNodeRef>, path: &str) -> AxResult {\n    let node = lookup(dir, path)?;\n    let attr = node.get_attr()?;\n    if attr.is_dir() {\n        ax_err!(IsADirectory)\n    } else if !attr.perm().owner_writable() {\n        ax_err!(PermissionDenied)\n    } else {\n        parent_node_of(dir, path).remove(path)\n    }\n}\n\npub(crate) fn remove_dir(dir: Option<&VfsNodeRef>, path: &str) -> AxResult {\n    if path.is_empty() {\n        return ax_err!(NotFound);\n    }\n    let path_check = path.trim_matches('/');\n    if path_check.is_empty() {\n        return ax_err!(DirectoryNotEmpty); // rm -d '/'\n    } else if path_check == \".\"\n        || path_check == \"..\"\n        || path_check.ends_with(\"/.\")\n        || path_check.ends_with(\"/..\")\n    {\n        return ax_err!(InvalidInput);\n    }\n    if ROOT_DIR.contains(&absolute_path(path)?) {\n        return ax_err!(PermissionDenied);\n    }\n\n    let node = lookup(dir, path)?;\n    let attr = node.get_attr()?;\n    if !attr.is_dir() {\n        ax_err!(NotADirectory)\n    } else if !attr.perm().owner_writable() {\n        ax_err!(PermissionDenied)\n    } else {\n        parent_node_of(dir, path).remove(path)\n    }\n}\n\npub(crate) fn current_dir() -> AxResult<String> {\n    Ok(CURRENT_DIR_PATH.lock().clone())\n}\n\npub(crate) fn set_current_dir(path: &str) -> AxResult {\n    let mut abs_path = absolute_path(path)?;\n    if !abs_path.ends_with('/') {\n        abs_path += \"/\";\n    }\n    if abs_path == \"/\" {\n        *CURRENT_DIR.lock() = ROOT_DIR.clone();\n        *CURRENT_DIR_PATH.lock() = \"/\".into();\n        return Ok(());\n    }\n\n    let node = lookup(None, &abs_path)?;\n    let attr = node.get_attr()?;\n    if !attr.is_dir() {\n        ax_err!(NotADirectory)\n    } else if !attr.perm().owner_executable() {\n        ax_err!(PermissionDenied)\n    } else {\n        *CURRENT_DIR.lock() = node;\n        *CURRENT_DIR_PATH.lock() = abs_path;\n        Ok(())\n    }\n}\n\npub(crate) fn rename(old: &str, new: &str) -> AxResult {\n    if parent_node_of(None, new).lookup(new).is_ok() {\n        warn!(\"dst file already exist, now remove it\");\n        remove_file(None, new)?;\n    }\n    parent_node_of(None, old).rename(old, new)\n}\n\npub fn mount(source: &'static str, target: &'static str, flags: usize) -> AxResult {\n    let img = crate::api::File::open(source)?;\n    warn!(\"mounting {} to {}\", source, target);\n    let fs = fs::lwext4_rust::Ext4FileSystem::new(img);\n\n    ROOT_DIR.mount(&target, Arc::new(fs));\n    Ok(())\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/modules/axfs/src/root.rs b/modules/axfs/src/root.rs
+--- a/modules/axfs/src/root.rs	(revision 0f190e700d98f599bf0ee76682ad406a51a06215)
++++ b/modules/axfs/src/root.rs	(date 1747546459887)
+@@ -10,13 +10,18 @@
+ use axsync::Mutex;
+ use lazyinit::LazyInit;
+ use spin::RwLock;
+-
++use axdriver::AxBlockDevice;
++use axfs_devfs::DeviceFileSystem;
+ use crate::{
+     api::{self, FileType},
+     dev::Disk,
+     fs::{self},
+     mounts,
+ };
++use crate::fs::fatfs::FatFileSystem;
++use crate::fs::lwext4_rust::Ext4FileSystem;
++// use crate::devfile::DeviceNode;
++use crate::mounts::devfs;
+ 
+ def_resource! {
+     pub static CURRENT_DIR_PATH: ResArc<Mutex<String>> = ResArc::new();
+@@ -42,7 +47,7 @@
+     fs: Arc<dyn VfsOps>,
+ }
+ 
+-struct RootDirectory {
++struct RootDirectory { 
+     main_fs: Arc<dyn VfsOps>,
+     mounts: RwLock<Vec<MountPoint>>,
+ }
+@@ -123,6 +128,12 @@
+             f(self.mounts.read()[idx].fs.clone(), &path[max_len..]) // matched at `idx`
+         }
+     }
++
++    fn root_dir() -> Arc<RootDirectory> {
++        ROOT_DIR.get()
++            .expect("ROOT_DIR not initialized")
++            .clone()
++    }
+ }
+ 
+ impl VfsNodeOps for RootDirectory {
+@@ -166,8 +177,10 @@
+         })
+     }
+ }
+-
+-pub(crate) fn init_rootfs(disk: crate::dev::Disk) {
++//disk: crate::dev::Disk
++pub(crate) fn init_rootfs(disk: crate::dev::Disk){
++    // let demo = axfs_devfs::blkdev::Blkdev::new(dev,8,0);
++    // disk = Disk::new(demo.get_dev());
+     cfg_if::cfg_if! {
+         if #[cfg(feature = "myfs")] { // override the default filesystem
+             let main_fs = fs::myfs::new_myfs(disk);
+@@ -175,6 +188,7 @@
+             static EXT4_FS: LazyInit<Arc<fs::lwext4_rust::Ext4FileSystem<Disk>>> = LazyInit::new();
+             EXT4_FS.init_once(Arc::new(fs::lwext4_rust::Ext4FileSystem::new(disk)));
+             let main_fs = EXT4_FS.clone();
++            // let dev_fs =  EXT4_FS.clone();
+         } else if #[cfg(feature = "fatfs")] {
+             static FAT_FS: LazyInit<Arc<fs::fatfs::FatFileSystem>> = LazyInit::new();
+             FAT_FS.init_once(Arc::new(fs::fatfs::FatFileSystem::new(disk)));
+@@ -189,7 +203,6 @@
+     root_dir
+         .mount("/dev", mounts::devfs())
+         .expect("failed to mount devfs at /dev");
+-
+     #[cfg(feature = "ramfs")]
+     root_dir
+         .mount("/tmp", mounts::ramfs())
+@@ -206,7 +219,7 @@
+     root_dir // should not fail
+         .mount("/sys", mounts::sysfs().unwrap())
+         .expect("fail to mount sysfs at /sys");
+-
++    
+     ROOT_DIR.init_once(Arc::new(root_dir));
+     info!("rootfs initialized");
+     CURRENT_DIR.init_new(Mutex::new(ROOT_DIR.clone()));
+@@ -339,11 +352,62 @@
+     parent_node_of(None, old).rename(old, new)
+ }
+ 
+-pub fn mount(source: &'static str, target: &'static str, flags: usize) -> AxResult {
+-    let img = crate::api::File::open(source)?;
+-    warn!("mounting {} to {}", source, target);
+-    let fs = fs::lwext4_rust::Ext4FileSystem::new(img);
++// pub fn mount(source: &'static str, target: &'static str, flags: usize) -> AxResult {
++//     let img = crate::api::File::open(source)?;
++//     warn!("mounting {} to {}", source, target);
++//     let fs = fs::lwext4_rust::Ext4FileSystem::new(img);
++// 
++//     ROOT_DIR.mount(&target, Arc::new(fs));
++//     Ok(())
++// }
++
++// pub fn mount_dev(_path: &str, mnt: &str, fstype: &str) -> AxResult
++// {
++//     //TODO:cheack _path availble
++//     if _path.is_empty() || !_path.starts_with("/dev/") {
++//         return ax_err!(NotFound);
++//     }
++// 
++//     if !mnt.starts_with('/') || mnt.len() < 2 {
++//         return ax_err!(InvalidInput);
++//     }
++//     //TODO:fix lookup the mounted fs
++//     let root = ROOT_DIR.clone();
++//     let devfs = lookup_mounted_fs(root,"/dev");
++//     let dev_path = _path.strip_prefix("/dev/").ok_or(AxError::NotFound)?;
++//     let dev = devfs.root_dir().lookup(dev_path)?;
++//     let disk = Disk::new(dev.get_dev());
++// 
++//     let fs:Arc<dyn VfsOps>=match fstype {
++//         "ext4" => Arc::new(Ext4FileSystem::new(disk)),
++//         "vfat" => Arc::new(FatFileSystem::new(disk)),
++//         _ => return ax_err!(UnsupportedFs),
++//     };
++//     //TODO:cheack mnt availble
++//     ROOT_DIR.mount(mnt, fs)?;
++//     Ok(())
++// }
++// pub fn umount_dev(_path: &str) -> AxResult
++// {
++//     //TODO:check _path and drop the mounted fs
++//     ROOT_DIR._umount(_path);
++//     Ok(())
++// }
+ 
+-    ROOT_DIR.mount(&target, Arc::new(fs));
+-    Ok(())
+-}
++// fn mount_device(dev_path: &str, mount_path: &str, fstype: &str) -> Result<()> {
++//     let root  = ROOT_DIR.clone();
++//     let dev_node = root.lookup(dev_path)?;
++//     let dev_file = dev_node.clone();
++// 
++//     let disk = dev_file.inner.lock().clone(); // 需要 Disk 实现 Clone，或重新构造
++// 
++//     let fs: Arc<dyn VfsOps> = match fstype {
++//         "ext4" => Arc::new(Ext4FileSystem::new(disk)),
++//         // 其他文件系统……
++//         _ => return Err(err_invalid()),
++//     };
++//     
++//     ROOT_DIR.mount(mount_path, fs)?;
++//     Ok(())
++// }
++
+Index: modules/axfs/src/lib.rs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>//! [ArceOS](https://github.com/arceos-org/arceos) filesystem module.\n//!\n//! It provides unified filesystem operations for various filesystems.\n//!\n//! # Cargo Features\n//!\n//! - `fatfs`: Use [FAT] as the main filesystem and mount it on `/`. This feature\n//!    is **enabled** by default.\n//! - `devfs`: Mount [`axfs_devfs::DeviceFileSystem`] on `/dev`. This feature is\n//!    **enabled** by default.\n//! - `ramfs`: Mount [`axfs_ramfs::RamFileSystem`] on `/tmp`. This feature is\n//!    **enabled** by default.\n//! - `myfs`: Allow users to define their custom filesystems to override the\n//!    default. In this case, [`MyFileSystemIf`] is required to be implemented\n//!    to create and initialize other filesystems. This feature is **disabled** by\n//!    by default, but it will override other filesystem selection features if\n//!    both are enabled.\n//!\n//! [FAT]: https://en.wikipedia.org/wiki/File_Allocation_Table\n//! [`MyFileSystemIf`]: fops::MyFileSystemIf\n\n#![cfg_attr(all(not(test), not(doc)), no_std)]\n#![feature(doc_auto_cfg)]\n\n#[macro_use]\nextern crate log;\nextern crate alloc;\n\nmod dev;\nmod fs;\nmod mounts;\nmod root;\n\npub mod api;\npub mod fops;\npub use root::{CURRENT_DIR, CURRENT_DIR_PATH, mount};\n\nuse axdriver::{AxDeviceContainer, prelude::*};\n\n/// Initializes filesystems by block devices.\npub fn init_filesystems(mut blk_devs: AxDeviceContainer<AxBlockDevice>) {\n    info!(\"Initialize filesystems...\");\n\n    let dev = blk_devs.take_one().expect(\"No block device found!\");\n    info!(\"  use block device 0: {:?}\", dev.device_name());\n    self::root::init_rootfs(self::dev::Disk::new(dev));\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/modules/axfs/src/lib.rs b/modules/axfs/src/lib.rs
+--- a/modules/axfs/src/lib.rs	(revision 0f190e700d98f599bf0ee76682ad406a51a06215)
++++ b/modules/axfs/src/lib.rs	(date 1747546459892)
+@@ -25,23 +25,31 @@
+ #[macro_use]
+ extern crate log;
+ extern crate alloc;
+-
++use alloc::sync::Arc;
+ mod dev;
+ mod fs;
+ mod mounts;
+ mod root;
+-
++mod blkdev;
+ pub mod api;
+ pub mod fops;
+-pub use root::{CURRENT_DIR, CURRENT_DIR_PATH, mount};
++pub use root::{CURRENT_DIR, CURRENT_DIR_PATH};
+ 
+ use axdriver::{AxDeviceContainer, prelude::*};
++use axfs_vfs::{VfsNodeOps, VfsOps};
++use crate::dev::Disk;
+ 
+ /// Initializes filesystems by block devices.
+ pub fn init_filesystems(mut blk_devs: AxDeviceContainer<AxBlockDevice>) {
+     info!("Initialize filesystems...");
+-
+     let dev = blk_devs.take_one().expect("No block device found!");
+     info!("  use block device 0: {:?}", dev.device_name());
+-    self::root::init_rootfs(self::dev::Disk::new(dev));
++    // root::init_rootfs(self::dev::Disk::new(dev));
++    // let disk = Disk::new(dev,1,0);
++    // let devfs = mounts::devfs();
++    // devfs.add("ram1",Arc::new(disk.clone()));
++    // let node = devfs.root_dir().lookup("ram1").unwrap();
++    //let disk = Disk::new(node.get_dev(),1,0);
++    root::init_rootfs(Disk::new(dev,1,0));
++    info!("Initialize device filesystems...");
+ }
+Index: modules/axsyscall/src/syscall_imp/fs.rs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>use crate::{SyscallResult, ToLinuxResult};\nuse arceos_posix_api::{self as api, char_ptr_to_str, ctypes};\nuse axfs::api::set_current_dir;\nuse core::ffi::{c_char, c_int};\n\n#[inline]\npub fn sys_openat(\n    dirfd: c_int,\n    filename: *const c_char,\n    flags: c_int,\n    mode: ctypes::mode_t,\n) -> SyscallResult {\n    api::sys_openat(dirfd, filename, flags, mode).to_linux_result()\n}\n\n#[inline]\npub fn sys_lseek(fd: c_int, offset: ctypes::off_t, whence: c_int) -> SyscallResult {\n    (api::sys_lseek(fd, offset, whence) as isize).to_linux_result()\n}\n\n#[inline]\npub unsafe fn sys_stat(path: *const c_char, buf: *mut ctypes::stat) -> SyscallResult {\n    api::sys_stat(path, buf).to_linux_result()\n}\n\n#[inline]\npub unsafe fn sys_fstat(fd: c_int, buf: *mut ctypes::stat) -> SyscallResult {\n    unsafe { api::sys_fstat(fd, buf) }.to_linux_result()\n}\n\n#[inline]\npub unsafe fn sys_fstatat(\n    dir_fd: c_int,\n    filename: *const c_char,\n    buf: *mut ctypes::stat,\n    flags: c_int,\n) -> SyscallResult {\n    unsafe { api::sys_fstatat(dir_fd, filename, buf, flags).map(|r| r as isize) }\n}\n\n#[inline]\npub unsafe fn sys_lstat(path: *const c_char, buf: *mut ctypes::stat) -> SyscallResult {\n    api::sys_lstat(path, buf).to_linux_result()\n}\n\n#[inline]\npub fn sys_getcwd(buf: *mut c_char, size: usize) -> SyscallResult {\n    (api::sys_getcwd(buf, size) as isize).to_linux_result()\n}\n\n#[inline]\npub fn sys_rename(old: *const c_char, new: *const c_char) -> SyscallResult {\n    api::sys_rename(old, new).to_linux_result()\n}\n\n#[inline]\npub fn sys_mkdirat(dir_fd: usize, dir_path: *const c_char, mode: usize) -> SyscallResult {\n    arceos_posix_api::sys_mkdirat(\n        dir_fd as c_int,\n        dir_path,\n        mode.try_into().unwrap(),\n    )\n    .to_linux_result()\n}\n\n#[inline]\npub fn sys_chdir(path: *const c_char) -> SyscallResult {\n    let ret = char_ptr_to_str(path).map(|chdir_path| set_current_dir(&chdir_path));\n    match ret {\n        Ok(_) => SyscallResult::Ok(0),\n        Err(e) => SyscallResult::Err(e.into()),\n    }\n}\n\n#[inline]\npub fn sys_getdents(fd: c_int, dirp: *mut ctypes::dirent, count: c_int) -> SyscallResult {\n    unsafe { api::sys_getdents(fd, dirp, count) }\n}\n\n#[inline]\npub fn sys_unlink(path: *const c_char) -> SyscallResult {\n    api::sys_unlink(path)\n}\n\n#[inline]\npub fn sys_unlinkat(dir_fd: c_int, path: *const c_char) -> SyscallResult {\n    api::sys_unlinkat(dir_fd, path)\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/modules/axsyscall/src/syscall_imp/fs.rs b/modules/axsyscall/src/syscall_imp/fs.rs
+--- a/modules/axsyscall/src/syscall_imp/fs.rs	(revision 0f190e700d98f599bf0ee76682ad406a51a06215)
++++ b/modules/axsyscall/src/syscall_imp/fs.rs	(date 1747546760484)
+@@ -1,7 +1,55 @@
+-use crate::{SyscallResult, ToLinuxResult};
++use crate::{result, SyscallResult, ToLinuxResult};
+ use arceos_posix_api::{self as api, char_ptr_to_str, ctypes};
+ use axfs::api::set_current_dir;
+-use core::ffi::{c_char, c_int};
++use core::ffi::{c_char, c_int, c_long, c_longlong};
++use arceos_posix_api::ctypes::{blkcnt_t, blksize_t, dev_t, gid_t, ino_t, mode_t, nlink_t, off_t, time_t, timespec, uid_t};
++use axlog::debug;
++
++#[repr(C)]
++#[derive(Debug, Default, Copy, Clone)]
++pub struct test_stat {
++    pub st_dev: dev_t,
++    pub st_ino: ino_t,
++    pub st_mode: mode_t,
++    pub st_nlink: nlink_t,
++    pub st_uid: uid_t,
++    pub st_gid: gid_t,
++    pub st_rdev: dev_t,
++    pub st_size: off_t,
++    pub st_blksize: blksize_t,
++    pub __pad2: i32,
++    pub st_blocks: blkcnt_t,
++    pub st_atime_sec: c_long,
++    pub st_atime_nsec: c_long,
++    pub st_mtime_sec: c_long,
++    pub st_mtime_nsec: c_long,
++    pub st_ctime_sec: c_long,
++    pub st_ctime_nsec: c_long,
++}
++
++impl From<ctypes::stat> for test_stat {
++    fn from(original: ctypes::stat) -> test_stat {
++        test_stat {
++            st_dev: original.st_dev,
++            st_ino: original.st_ino,
++            st_mode: original.st_mode,
++            st_nlink: original.st_nlink,
++            st_uid: original.st_uid,
++            st_gid: original.st_gid,
++            st_rdev: original.st_rdev,
++            st_size: original.st_size,
++            st_blksize: original.st_blksize,
++            st_blocks: original.st_blocks,
++            st_atime_sec: original.st_atime.tv_sec as c_long,
++            st_mtime_sec: original.st_mtime.tv_sec as c_long,
++            st_ctime_sec: original.st_ctime.tv_sec as c_long,
++            st_atime_nsec: original.st_atime.tv_nsec as c_long,
++            st_mtime_nsec: original.st_mtime.tv_nsec as c_long,
++            st_ctime_nsec: original.st_ctime.tv_nsec as c_long,
++            ..Default::default()
++        }
++    }
++}
+ 
+ #[inline]
+ pub fn sys_openat(
+@@ -24,10 +72,24 @@
+ }
+ 
+ #[inline]
+-pub unsafe fn sys_fstat(fd: c_int, buf: *mut ctypes::stat) -> SyscallResult {
+-    unsafe { api::sys_fstat(fd, buf) }.to_linux_result()
++pub unsafe fn sys_fstat(fd: c_int, buf: *mut test_stat) -> SyscallResult {
++    let mut stat_buf = ctypes::stat::default();
++    let result = unsafe { api::sys_fstat(fd, &mut stat_buf as *mut _) }.to_linux_result();
++    *buf = test_stat::from(stat_buf);
++    let stat = &*buf;
++    debug!{
++            "!!!atime: {:?}, ctime: {:?}, mtime: {:?}",
++            stat.st_atime_sec,
++            stat.st_ctime_sec,
++            stat.st_mtime_sec,
++        };
++    result
+ }
+ 
++// #[inline]
++// pub unsafe fn sys_fstat(fd: c_int, buf: *mut ctypes::stat) -> SyscallResult {
++//      unsafe { api::sys_fstat(fd,buf) }.to_linux_result()
++// }
+ #[inline]
+ pub unsafe fn sys_fstatat(
+     dir_fd: c_int,
+Index: modules/axfs/src/mounts.rs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>use alloc::sync::Arc;\nuse axfs_vfs::{VfsNodeType, VfsOps, VfsResult};\n\nuse crate::fs;\n\n#[cfg(feature = \"devfs\")]\npub(crate) fn devfs() -> Arc<fs::devfs::DeviceFileSystem> {\n    let null = fs::devfs::NullDev;\n    let zero = fs::devfs::ZeroDev;\n    let bar = fs::devfs::ZeroDev;\n    let devfs = fs::devfs::DeviceFileSystem::new();\n    let foo_dir = devfs.mkdir(\"foo\");\n    devfs.add(\"null\", Arc::new(null));\n    devfs.add(\"zero\", Arc::new(zero));\n    foo_dir.add(\"bar\", Arc::new(bar));\n    Arc::new(devfs)\n}\n\n#[cfg(feature = \"ramfs\")]\npub(crate) fn ramfs() -> Arc<fs::ramfs::RamFileSystem> {\n    Arc::new(fs::ramfs::RamFileSystem::new())\n}\n\n#[cfg(feature = \"procfs\")]\npub(crate) fn procfs() -> VfsResult<Arc<fs::ramfs::RamFileSystem>> {\n    let procfs = fs::ramfs::RamFileSystem::new();\n    let proc_root = procfs.root_dir();\n\n    // Create /proc/sys/net/core/somaxconn\n    proc_root.create(\"sys\", VfsNodeType::Dir)?;\n    proc_root.create(\"sys/net\", VfsNodeType::Dir)?;\n    proc_root.create(\"sys/net/core\", VfsNodeType::Dir)?;\n    proc_root.create(\"sys/net/core/somaxconn\", VfsNodeType::File)?;\n    let file_somaxconn = proc_root.clone().lookup(\"./sys/net/core/somaxconn\")?;\n    file_somaxconn.write_at(0, b\"4096\\n\")?;\n\n    // Create /proc/sys/vm/overcommit_memory\n    proc_root.create(\"sys/vm\", VfsNodeType::Dir)?;\n    proc_root.create(\"sys/vm/overcommit_memory\", VfsNodeType::File)?;\n    let file_over = proc_root.clone().lookup(\"./sys/vm/overcommit_memory\")?;\n    file_over.write_at(0, b\"0\\n\")?;\n\n    // Create /proc/self/stat\n    proc_root.create(\"self\", VfsNodeType::Dir)?;\n    proc_root.create(\"self/stat\", VfsNodeType::File)?;\n\n    Ok(Arc::new(procfs))\n}\n\n#[cfg(feature = \"sysfs\")]\npub(crate) fn sysfs() -> VfsResult<Arc<fs::ramfs::RamFileSystem>> {\n    let sysfs = fs::ramfs::RamFileSystem::new();\n    let sys_root = sysfs.root_dir();\n\n    // Create /sys/kernel/mm/transparent_hugepage/enabled\n    sys_root.create(\"kernel\", VfsNodeType::Dir)?;\n    sys_root.create(\"kernel/mm\", VfsNodeType::Dir)?;\n    sys_root.create(\"kernel/mm/transparent_hugepage\", VfsNodeType::Dir)?;\n    sys_root.create(\"kernel/mm/transparent_hugepage/enabled\", VfsNodeType::File)?;\n    let file_hp = sys_root\n        .clone()\n        .lookup(\"./kernel/mm/transparent_hugepage/enabled\")?;\n    file_hp.write_at(0, b\"always [madvise] never\\n\")?;\n\n    // Create /sys/devices/system/clocksource/clocksource0/current_clocksource\n    sys_root.create(\"devices\", VfsNodeType::Dir)?;\n    sys_root.create(\"devices/system\", VfsNodeType::Dir)?;\n    sys_root.create(\"devices/system/clocksource\", VfsNodeType::Dir)?;\n    sys_root.create(\"devices/system/clocksource/clocksource0\", VfsNodeType::Dir)?;\n    sys_root.create(\n        \"devices/system/clocksource/clocksource0/current_clocksource\",\n        VfsNodeType::File,\n    )?;\n    let file_cc = sys_root\n        .clone()\n        .lookup(\"devices/system/clocksource/clocksource0/current_clocksource\")?;\n    file_cc.write_at(0, b\"tsc\\n\")?;\n\n    Ok(Arc::new(sysfs))\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/modules/axfs/src/mounts.rs b/modules/axfs/src/mounts.rs
+--- a/modules/axfs/src/mounts.rs	(revision 0f190e700d98f599bf0ee76682ad406a51a06215)
++++ b/modules/axfs/src/mounts.rs	(date 1747546459897)
+@@ -1,18 +1,31 @@
+ use alloc::sync::Arc;
+ use axfs_vfs::{VfsNodeType, VfsOps, VfsResult};
+-
+-use crate::fs;
++// use devfile::{DeviceNode,DiskFile};
++use crate::{fs};
++use crate::dev::Disk;
+ 
+ #[cfg(feature = "devfs")]
+ pub(crate) fn devfs() -> Arc<fs::devfs::DeviceFileSystem> {
+-    let null = fs::devfs::NullDev;
+-    let zero = fs::devfs::ZeroDev;
+-    let bar = fs::devfs::ZeroDev;
++    // let null = fs::devfs::NullDev;
++    // let zero = fs::devfs::ZeroDev;
++    // let bar = fs::devfs::ZeroDev;
++    let null = Arc::new(fs::devfs::NullDev);
++    let zero = Arc::new(fs::devfs::ZeroDev);
++    let bar = Arc::new(fs::devfs::ZeroDev);
++    
+     let devfs = fs::devfs::DeviceFileSystem::new();
+-    let foo_dir = devfs.mkdir("foo");
+-    devfs.add("null", Arc::new(null));
+-    devfs.add("zero", Arc::new(zero));
+-    foo_dir.add("bar", Arc::new(bar));
++    // let sda1_dir = devfs.mkdir("sda1");
++    
++    // devfs.add("null", Arc::new(null));
++    // devfs.add("zero", Arc::new(zero));
++    // foo_dir.add("bar", Arc::new(bar));
++    devfs.add("null", null.clone());
++    devfs.add("zero", zero.clone());
++    devfs.add("sda1", bar.clone());
++    // devfs.register_device_by_name("sda1",8,0,fs).expect("No Device");
++    // devfs.register_device(1, 3, null);
++    // devfs.register_device(1, 5, zero);
++    // devfs.register_device(1, 0, bar);
+     Arc::new(devfs)
+ }
+ 
+Index: api/arceos_posix_api/src/imp/fs.rs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>use alloc::string::{String, ToString};\nuse alloc::sync::Arc;\nuse axfs::CURRENT_DIR;\nuse axfs::api::{DirEntry, create_dir, read_dir, remove_file};\nuse axfs_vfs::{VfsDirEntry, VfsNodeAttr, VfsNodeType};\nuse core::ffi::{c_char, c_int, c_void};\nuse core::panic;\nuse static_assertions::assert_eq_size;\n\nuse axerrno::{LinuxError, LinuxResult};\nuse axfs::fops::OpenOptions;\nuse axio::{PollState, SeekFrom};\nuse axsync::Mutex;\n\nuse super::fd_ops::{FileLike, get_file_like};\nuse crate::AT_FDCWD;\nuse crate::ctypes::__IncompleteArrayField;\nuse crate::utils::str_to_cstr;\nuse crate::{ctypes, utils::char_ptr_to_str};\n\n/// File wrapper for `axfs::fops::File`.\npub struct File {\n    inner: Mutex<axfs::fops::File>,\n    path: String,\n}\n\nimpl File {\n    fn new(inner: axfs::fops::File, path: String) -> Self {\n        Self {\n            inner: Mutex::new(inner),\n            path,\n        }\n    }\n\n    fn add_to_fd_table(self) -> LinuxResult<c_int> {\n        super::fd_ops::add_file_like(Arc::new(self))\n    }\n\n    fn from_fd(fd: c_int) -> LinuxResult<Arc<Self>> {\n        let f = super::fd_ops::get_file_like(fd)?;\n        f.into_any()\n            .downcast::<Self>()\n            .map_err(|_| LinuxError::EINVAL)\n    }\n\n    /// Get the path of the file.\n    pub fn path(&self) -> &str {\n        &self.path\n    }\n\n    /// Get the inner node of the file.    \n    pub fn inner(&self) -> &Mutex<axfs::fops::File> {\n        &self.inner\n    }\n}\n\nimpl FileLike for File {\n    fn read(&self, buf: &mut [u8]) -> LinuxResult<usize> {\n        Ok(self.inner.lock().read(buf)?)\n    }\n\n    fn write(&self, buf: &[u8]) -> LinuxResult<usize> {\n        Ok(self.inner.lock().write(buf)?)\n    }\n\n    fn stat(&self) -> LinuxResult<ctypes::stat> {\n        let metadata = self.inner.lock().get_attr()?;\n        Ok(attr2stat(metadata))\n    }\n\n    fn into_any(self: Arc<Self>) -> Arc<dyn core::any::Any + Send + Sync> {\n        self\n    }\n\n    fn poll(&self) -> LinuxResult<PollState> {\n        Ok(PollState {\n            readable: true,\n            writable: true,\n        })\n    }\n\n    fn set_nonblocking(&self, _nonblocking: bool) -> LinuxResult {\n        Ok(())\n    }\n}\n\nfn attr2stat(metadata: VfsNodeAttr) -> ctypes::stat {\n    let ty = metadata.file_type() as u8;\n    let perm = metadata.perm().bits() as u32;\n    let st_mode = ((ty as u32) << 12) | perm;\n    ctypes::stat {\n        st_ino: 1,\n        st_nlink: 1,\n        st_mode,\n        st_uid: 1000,\n        st_gid: 1000,\n        st_size: metadata.size() as _,\n        st_blocks: metadata.blocks() as _,\n        st_blksize: 512,\n        ..Default::default()\n    }\n}\n\n/// Convert open flags to [`OpenOptions`].\nfn flags_to_options(flags: c_int, _mode: ctypes::mode_t) -> OpenOptions {\n    let flags = flags as u32;\n    let mut options = OpenOptions::new();\n    match flags & 0b11 {\n        ctypes::O_RDONLY => options.read(true),\n        ctypes::O_WRONLY => options.write(true),\n        _ => {\n            options.read(true);\n            options.write(true);\n        }\n    };\n    if flags & ctypes::O_APPEND != 0 {\n        options.append(true);\n    }\n    if flags & ctypes::O_TRUNC != 0 {\n        options.truncate(true);\n    }\n    if flags & ctypes::O_CREAT != 0 {\n        options.create(true);\n    }\n    if flags & ctypes::O_EXEC != 0 {\n        //options.create_new(true);\n        options.execute(true);\n    }\n    if flags & ctypes::O_DIRECTORY != 0 {\n        options.directory(true);\n    }\n    options\n}\n\n/// Open a file by `filename` and insert it into the file descriptor table.\n///\n/// Return its index in the file table (`fd`). Return `EMFILE` if it already\n/// has the maximum number of files open.\npub fn sys_open(filename: *const c_char, flags: c_int, mode: ctypes::mode_t) -> c_int {\n    let filename = char_ptr_to_str(filename);\n    debug!(\"sys_open <= {:?} {:#o} {:#o}\", filename, flags, mode);\n    syscall_body!(sys_open, {\n        add_file_or_directory_fd(\n            axfs::fops::File::open,\n            axfs::fops::Directory::open_dir,\n            filename?,\n            &flags_to_options(flags, mode),\n        )\n    })\n}\n\n/// Open or create a file.\n/// fd: file descriptor\n/// filename: file path to be opened or created\n/// flags: open flags\n/// mode: see man 7 inode\n/// return new file descriptor if succeed, or return -1.\npub fn sys_openat(\n    dirfd: c_int,\n    filename: *const c_char,\n    flags: c_int,\n    mode: ctypes::mode_t,\n) -> c_int {\n    let filename = match char_ptr_to_str(filename) {\n        Ok(s) => s,\n        Err(_) => return LinuxError::EFAULT as c_int,\n    };\n\n    debug!(\n        \"sys_openat <= {} {:?} {:#o} {:#o}\",\n        dirfd, filename, flags, mode\n    );\n\n    if filename.starts_with('/') || dirfd == AT_FDCWD as _ {\n        return sys_open(filename.as_ptr() as _, flags, mode);\n    }\n\n    Directory::from_fd(dirfd)\n        .and_then(|dir| {\n            add_file_or_directory_fd(\n                |filename, options| dir.inner.lock().open_file_at(filename, options),\n                |filename, options| dir.inner.lock().open_dir_at(filename, options),\n                filename,\n                &flags_to_options(flags, mode),\n            )\n        })\n        .unwrap_or_else(|e| {\n            debug!(\"sys_openat => {}\", e);\n            -1\n        })\n}\n\n/// Create a directory by `dirname` relatively to `dirfd`.\n/// TODO: handle `mode`\npub fn sys_mkdirat(dirfd: c_int, dirname: *const c_char, mode: ctypes::mode_t) -> c_int {\n    let dirname = match char_ptr_to_str(dirname) {\n        Ok(s) => s,\n        Err(_) => return -1,\n    };\n\n    debug!(\"sys_mkdirat <= {} {:?} {:#o}\", dirfd, dirname, mode);\n\n    if dirname.starts_with('/') || dirfd == AT_FDCWD as _ {\n        return create_dir(dirname).and(Ok(0)).unwrap_or_else(|e| {\n            debug!(\"sys_mkdirat => {}\", e);\n            -1\n        });\n    }\n\n    Directory::from_fd(dirfd)\n        .and_then(|dir| {\n            dir.inner.lock().create_dir(dirname);\n            Ok(0)\n        })\n        .unwrap_or_else(|e| {\n            debug!(\"sys_mkdirat => {}\", e);\n            -1\n        })\n}\n\n/// Create a directory by `dirname` relatively to `dirfd`.\n/// TODO: handle `mode`\npub unsafe fn sys_fstatat(\n    dirfd: c_int,\n    pathname_p: *const c_char,\n    statbuf: *mut ctypes::stat,\n    flags: c_int,\n) -> LinuxResult<c_int> {\n    let pathname = char_ptr_to_str(pathname_p)?;\n\n    debug!(\n        \"sys_fstatat <= {} {pathname_p:p} {:?} {:#o}\",\n        dirfd, pathname, flags\n    );\n    debug!(\"{:?}\", unsafe {\n        core::slice::from_raw_parts(pathname_p, 20)\n    });\n    static mut IDX: usize = 0;\n    unsafe {\n        if IDX == 7 {\n            //panic!()\n        }\n        IDX += 1;\n    }\n\n    if pathname.starts_with('/') || dirfd == AT_FDCWD as _ {\n        let dir = CURRENT_DIR.lock().clone();\n        let file = dir.lookup(pathname)?;\n        let stat = attr2stat(file.get_attr()?);\n        unsafe { *statbuf = stat };\n        return Ok(0);\n    }\n\n    let dir: Arc<Directory> = Directory::from_fd(dirfd)?;\n    // FIXME: correct path; flags\n    let file: File = File::new(\n        dir.inner\n            .lock()\n            .open_file_at(pathname, &flags_to_options(flags, 0))?,\n        pathname.into(),\n    );\n    let stat = file.stat()?;\n    unsafe { *statbuf = stat };\n    Ok(0)\n}\n\n/// Use the function to open file or directory, then add into file descriptor table.\n/// First try opening files, if fails, try directory.\nfn add_file_or_directory_fd<F, D, E>(\n    open_file: F,\n    open_dir: D,\n    filename: &str,\n    options: &OpenOptions,\n) -> LinuxResult<c_int>\nwhere\n    E: Into<LinuxError>,\n    F: FnOnce(&str, &OpenOptions) -> Result<axfs::fops::File, E>,\n    D: FnOnce(&str, &OpenOptions) -> Result<axfs::fops::Directory, E>,\n{\n    if !options.has_directory() {\n        match open_file(filename, options)\n            .map_err(Into::into)\n            .and_then(|f| File::new(f, filename.into()).add_to_fd_table())\n        {\n            Err(LinuxError::EISDIR) => {}\n            r => return r,\n        }\n    }\n\n    Directory::new(\n        open_dir(filename, options).map_err(Into::into)?,\n        filename.to_string(),\n    )\n    .add_to_fd_table()\n}\n\n/// Set the position of the file indicated by `fd`.\n///\n/// Return its position after seek.\npub fn sys_lseek(fd: c_int, offset: ctypes::off_t, whence: c_int) -> ctypes::off_t {\n    debug!(\"sys_lseek <= {} {} {}\", fd, offset, whence);\n    syscall_body!(sys_lseek, {\n        let pos = match whence {\n            0 => SeekFrom::Start(offset as _),\n            1 => SeekFrom::Current(offset as _),\n            2 => SeekFrom::End(offset as _),\n            _ => return Err(LinuxError::EINVAL),\n        };\n        let off = File::from_fd(fd)?.inner.lock().seek(pos)?;\n        Ok(off)\n    })\n}\n\n/// Get the file metadata by `path` and write into `buf`.\n///\n/// Return 0 if success.\npub unsafe fn sys_stat(path: *const c_char, buf: *mut ctypes::stat) -> c_int {\n    let path = char_ptr_to_str(path);\n    debug!(\"sys_stat <= {:?} {:#x}\", path, buf as usize);\n    syscall_body!(sys_stat, {\n        if buf.is_null() {\n            return Err(LinuxError::EFAULT);\n        }\n        let mut options = OpenOptions::new();\n        options.read(true);\n        let file = axfs::fops::File::open(path?, &options)?;\n        let st = File::new(file, path?.to_string()).stat()?;\n        unsafe { *buf = st };\n        Ok(0)\n    })\n}\n\n/// Get file metadata by `fd` and write into `buf`.\n///\n/// Return 0 if success.\npub unsafe fn sys_fstat(fd: c_int, buf: *mut ctypes::stat) -> c_int {\n    debug!(\"sys_fstat <= {} {:#x}\", fd, buf as usize);\n    syscall_body!(sys_fstat, {\n        if buf.is_null() {\n            return Err(LinuxError::EFAULT);\n        }\n\n        unsafe { *buf = get_file_like(fd)?.stat()? };\n        Ok(0)\n    })\n}\n\n/// Get the metadata of the symbolic link and write into `buf`.\n///\n/// Return 0 if success.\npub unsafe fn sys_lstat(path: *const c_char, buf: *mut ctypes::stat) -> ctypes::ssize_t {\n    let path = char_ptr_to_str(path);\n    debug!(\"sys_lstat <= {:?} {:#x}\", path, buf as usize);\n    syscall_body!(sys_lstat, {\n        if buf.is_null() {\n            return Err(LinuxError::EFAULT);\n        }\n        unsafe { *buf = Default::default() }; // TODO\n        Ok(0)\n    })\n}\n\n/// Get the path of the current directory.\npub fn sys_getcwd(buf: *mut c_char, size: usize) -> *mut c_char {\n    debug!(\"sys_getcwd <= {:#x} {}\", buf as usize, size);\n    syscall_body!(sys_getcwd, {\n        if buf.is_null() {\n            return Ok(core::ptr::null::<c_char>() as _);\n        }\n        let dst = unsafe { core::slice::from_raw_parts_mut(buf as *mut u8, size as _) };\n        let cwd = axfs::api::current_dir()?;\n        let cwd = cwd.as_bytes();\n        if cwd.len() < size {\n            dst[..cwd.len()].copy_from_slice(cwd);\n            dst[cwd.len()] = 0;\n            Ok(buf)\n        } else {\n            Err(LinuxError::ERANGE)\n        }\n    })\n}\n\n/// Rename `old` to `new`\n/// If new exists, it is first removed.\n///\n/// Return 0 if the operation succeeds, otherwise return -1.\npub fn sys_rename(old: *const c_char, new: *const c_char) -> c_int {\n    syscall_body!(sys_rename, {\n        let old_path = char_ptr_to_str(old)?;\n        let new_path = char_ptr_to_str(new)?;\n        debug!(\"sys_rename <= old: {:?}, new: {:?}\", old_path, new_path);\n        axfs::api::rename(old_path, new_path)?;\n        Ok(0)\n    })\n}\n\n/// Directory wrapper for `axfs::fops::Directory`.\npub struct Directory {\n    inner: Mutex<axfs::fops::Directory>,\n    path: String,\n}\n\nimpl Directory {\n    fn new(inner: axfs::fops::Directory, path: String) -> Self {\n        Self {\n            inner: Mutex::new(inner),\n            path,\n        }\n    }\n\n    fn add_to_fd_table(self) -> LinuxResult<c_int> {\n        super::fd_ops::add_file_like(Arc::new(self))\n    }\n\n    /// Open a directory by `fd`.\n    pub fn from_fd(fd: c_int) -> LinuxResult<Arc<Self>> {\n        let f = super::fd_ops::get_file_like(fd)?;\n        f.into_any()\n            .downcast::<Self>()\n            .map_err(|_| LinuxError::EINVAL)\n    }\n\n    /// Get the path of the directory.\n    pub fn path(&self) -> &str {\n        &self.path\n    }\n}\n\nimpl FileLike for Directory {\n    fn read(&self, _buf: &mut [u8]) -> LinuxResult<usize> {\n        Err(LinuxError::EBADF)\n    }\n\n    fn write(&self, _buf: &[u8]) -> LinuxResult<usize> {\n        Err(LinuxError::EBADF)\n    }\n\n    /*\n     *fn stat(&self) -> LinuxResult<ctypes::stat> {\n     *    Err(LinuxError::EBADF)\n     *}\n     */\n\n    fn stat(&self) -> LinuxResult<ctypes::stat> {\n        let metadata = self.inner.lock().get_attr()?;\n        let ty = metadata.file_type() as u8;\n        let perm = metadata.perm().bits() as u32;\n        let st_mode = ((ty as u32) << 12) | perm;\n        Ok(ctypes::stat {\n            st_ino: 1,\n            st_nlink: 2,\n            st_mode,\n            st_uid: 1000,\n            st_gid: 1000,\n            st_size: metadata.size() as _,\n            //st_blocks: metadata.blocks() as _,\n            st_blocks: 1,\n            st_blksize: 512,\n            ..Default::default()\n        })\n    }\n\n    fn into_any(self: Arc<Self>) -> Arc<dyn core::any::Any + Send + Sync> {\n        self\n    }\n\n    fn poll(&self) -> LinuxResult<PollState> {\n        Ok(PollState {\n            readable: true,\n            writable: false,\n        })\n    }\n\n    fn set_nonblocking(&self, _nonblocking: bool) -> LinuxResult {\n        Ok(())\n    }\n}\n\n/*\n *pub unsafe fn sys_getdents(\n *    dir_fd: i32,\n *    buf: *mut ctypes::dirent,\n *    count: c_int,\n *) -> LinuxResult<isize> {\n *    let dir: Arc<Directory> = Directory::from_fd(dir_fd)?;\n *    let mut curr_dent = buf;\n *    let count = count.try_into().map_err(|_| LinuxError::EINVAL)?;\n *    let mut inner = dir.inner.lock();\n *    let end = (buf as *const u8).wrapping_add(count);\n *    let dirent_size = core::mem::size_of::<ctypes::dirent>();\n *    // TODO: support file name longer than 64 bytes\n *    // 64 : sizeof [char; 64];\n *    let mut nread = 0;\n *    while (curr_dent as *const u8).wrapping_add(dirent_size + 64) < end {\n *        let mut dirent_buf = [VfsDirEntry::default()];\n *        match inner.read_dir(&mut dirent_buf) {\n *            Ok(n) if n == 0 => break,\n *            Ok(n) => nread += n,\n *            Err(_) => break,\n *        }\n *        let name = dirent_buf[0].name_as_bytes();\n *        let name = unsafe { String::from_utf8_lossy(name) };\n *        assert!(name.len() < 64);\n *        let d_reclen = core::mem::size_of::<ctypes::dirent>() + name.len() + 1;\n *        unsafe {\n *            *curr_dent = ctypes::dirent {\n *                d_ino: 1,\n *                d_off: 0,\n *                d_reclen: d_reclen as u16,\n *                d_type: dirent_buf[0].entry_type() as u8,\n *                d_name: __IncompleteArrayField::<c_char>::new(),\n *            };\n *            let mut name_ptr = (curr_dent as *mut c_char).wrapping_add(19); // offset of d_name in dirent\n *            let str_len = str_to_cstr(&name, name_ptr);\n *            // FIXME: align struct??\n *            curr_dent = name_ptr.wrapping_add(str_len) as *mut _;\n *        };\n *        // cut off d_name at `\\0`\n *    }\n *\n *    return Ok(nread as isize);\n *}\n */\npub unsafe fn sys_getdents(\n    dir_fd: i32,\n    buf: *mut ctypes::dirent,\n    count: c_int,\n) -> LinuxResult<isize> {\n    const MAX_NAME_LEN: usize = 255; // Linux NAME_MAX\n    const DIRENT_MIN_SIZE: usize = core::mem::size_of::<ctypes::dirent>();\n\n    let dir = Directory::from_fd(dir_fd)?;\n    let mut inner = dir.inner.lock();\n\n    let buf_start = buf as *const u8;\n    let buf_end = buf_start.wrapping_add(count as usize);\n    let mut curr_ptr = buf as *mut u8;\n    let mut entries_written = 0;\n\n    // Temporary buffer for directory entries\n    let mut dirent_buf = [VfsDirEntry::default(); 1];\n\n    loop {\n        // Check remaining space (need space for struct + name + null terminator)\n        let remaining = buf_end as usize - curr_ptr as usize;\n        if remaining < DIRENT_MIN_SIZE + MAX_NAME_LEN + 1 {\n            break;\n        }\n\n        // Read next directory entry\n        match inner.read_dir(&mut dirent_buf) {\n            Ok(0) => break, // No more entries\n            Ok(_) => (),\n            Err(e) => {\n                if entries_written == 0 {\n                    return Err(e.into());\n                }\n                break;\n            }\n        }\n\n        let entry = &dirent_buf[0];\n        let name = entry.name_as_bytes();\n        let name_len = name.len().min(MAX_NAME_LEN);\n\n        // Calculate required space\n        let reclen = core::mem::align_of::<ctypes::dirent>()\n            .max(8)\n            .max(DIRENT_MIN_SIZE + name_len + 1);\n\n        if (curr_ptr as usize + reclen) > buf_end as usize {\n            break;\n        }\n\n        // Fill dirent structure\n        let dirent = curr_ptr as *mut ctypes::dirent;\n        unsafe {\n            (*dirent).d_ino = 1;\n            (*dirent).d_off = 0;\n            (*dirent).d_reclen = reclen as u16;\n            (*dirent).d_type = entry.entry_type() as u8;\n\n            // Copy name (including null terminator)\n            let name_dst = (*dirent).d_name.as_mut_ptr();\n            core::ptr::copy_nonoverlapping(name.as_ptr(), name_dst as *mut u8, name_len);\n            *name_dst.add(name_len) = 0;\n\n            curr_ptr = curr_ptr.add(reclen);\n        }\n        entries_written += 1;\n    }\n\n    Ok(if entries_written > 0 {\n        (curr_ptr as usize - buf_start as usize) as isize\n    } else {\n        0\n    })\n}\n\npub fn sys_unlink(path: *const c_char) -> LinuxResult<isize> {\n    let path = char_ptr_to_str(path).map_err(|_| LinuxError::EFAULT)?;\n    warn!(\"sys_unlink <= {:?}\", path);\n    remove_file(path)?;\n    warn!(\"sys_unlink <= {:?}\", path);\n    Ok(0)\n}\npub fn sys_unlinkat(dir_fd: i32, path: *const c_char) -> LinuxResult<isize> {\n    if dir_fd < 0 {\n        return sys_unlink(path);\n    }\n    let dir: Arc<Directory> = Directory::from_fd(dir_fd)?;\n    let path = char_ptr_to_str(path).map_err(|_| LinuxError::EFAULT)?;\n    dir.inner.lock().remove_file(path)?;\n    Ok(0)\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/api/arceos_posix_api/src/imp/fs.rs b/api/arceos_posix_api/src/imp/fs.rs
+--- a/api/arceos_posix_api/src/imp/fs.rs	(revision 0f190e700d98f599bf0ee76682ad406a51a06215)
++++ b/api/arceos_posix_api/src/imp/fs.rs	(date 1747546760492)
+@@ -3,7 +3,7 @@
+ use axfs::CURRENT_DIR;
+ use axfs::api::{DirEntry, create_dir, read_dir, remove_file};
+ use axfs_vfs::{VfsDirEntry, VfsNodeAttr, VfsNodeType};
+-use core::ffi::{c_char, c_int, c_void};
++use core::ffi::{c_char, c_int, c_uint, c_void};
+ use core::panic;
+ use static_assertions::assert_eq_size;
+ 
+@@ -14,7 +14,8 @@
+ 
+ use super::fd_ops::{FileLike, get_file_like};
+ use crate::AT_FDCWD;
+-use crate::ctypes::__IncompleteArrayField;
++use crate::ctypes::{__IncompleteArrayField, time_t, timespec};
++// use crate::ctypes::{__IncompleteArrayField, time_t};
+ use crate::utils::str_to_cstr;
+ use crate::{ctypes, utils::char_ptr_to_str};
+ 
+@@ -88,15 +89,35 @@
+     let ty = metadata.file_type() as u8;
+     let perm = metadata.perm().bits() as u32;
+     let st_mode = ((ty as u32) << 12) | perm;
++    debug!("!!!!mode is {}",st_mode);
+     ctypes::stat {
+-        st_ino: 1,
+-        st_nlink: 1,
++        st_dev: metadata.dev() as _,
++        st_ino: metadata.st_ino() as _,
+         st_mode,
+-        st_uid: 1000,
+-        st_gid: 1000,
++        st_nlink: metadata.nlink() as _,
++        st_uid: metadata.uid() as _,
++        st_gid: metadata.gid() as _,
+         st_size: metadata.size() as _,
+-        st_blocks: metadata.blocks() as _,
+         st_blksize: 512,
++        st_blocks: metadata.blocks() as _,
++        // st_atime_sec: metadata.atime() as core::ffi::c_long,
++        // st_atime_nsec: metadata.atime_nse() as core::ffi::c_long,
++        // st_mtime_sec: metadata.mtime() as core::ffi::c_long,
++        // st_mtime_nsec: metadata.mtime_nse() as core::ffi::c_long,
++        // st_ctime_sec: metadata.ctime() as core::ffi::c_long,
++        // st_ctime_nsec: metadata.ctime_nse() as core::ffi::c_long,
++        st_atime:timespec{
++            tv_sec: metadata.atime() as time_t,
++            tv_nsec: metadata.atime_nse() as core::ffi::c_long
++        },
++        st_ctime:timespec{
++            tv_sec: metadata.ctime() as time_t,
++            tv_nsec: metadata.ctime_nse() as core::ffi::c_long
++        },
++        st_mtime:timespec{
++            tv_sec: metadata.mtime() as time_t,
++            tv_nsec: metadata.mtime_nse() as core::ffi::c_long
++        },
+         ..Default::default()
+     }
+ }
+@@ -339,7 +360,6 @@
+         if buf.is_null() {
+             return Err(LinuxError::EFAULT);
+         }
+-
+         unsafe { *buf = get_file_like(fd)?.stat()? };
+         Ok(0)
+     })
+@@ -447,14 +467,14 @@
+         let perm = metadata.perm().bits() as u32;
+         let st_mode = ((ty as u32) << 12) | perm;
+         Ok(ctypes::stat {
+-            st_ino: 1,
+-            st_nlink: 2,
++            st_ino: metadata.st_ino() as u64,
++            st_nlink: metadata.nlink(),
+             st_mode,
+-            st_uid: 1000,
+-            st_gid: 1000,
++            st_uid: metadata.uid() as c_uint,
++            st_gid: metadata.gid() as c_uint,
+             st_size: metadata.size() as _,
+             //st_blocks: metadata.blocks() as _,
+-            st_blocks: 1,
++            st_blocks: metadata.blocks() as _,
+             st_blksize: 512,
+             ..Default::default()
+         })
+Index: ulib/axmono/src/lib.rs
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>/*!\nAstrancE lib for building a monolithic kernel\nThis library mainly provides a set of functions for userspace applications to interact with the kernel.\nAlthough AstrancE is designed to be a unikernel, some may want to use user mode codes.\n*/\n#![no_std]\n#![feature(never_type)]\n#![feature(stmt_expr_attributes)]\n#![feature(naked_functions)]\n#[macro_use]\nextern crate alloc;\n#[macro_use]\nextern crate axlog;\n\nextern crate axsyscall;\npub mod ctypes;\npub mod utils;\npub mod ptr;\nuse core::clone;\n\nuse axerrno::AxResult;\nuse axhal::arch::TrapFrame;\nuse axhal::trap::{SYSCALL, register_trap_handler};\nuse axmm::kernel_aspace;\nuse axprocess::Process;\nuse axtask::{current, yield_now};\nuse ctypes::{CloneFlags, WaitStatus};\nuse task::sys_waitpid;\n\npub mod elf;\npub mod loader;\n#[cfg(feature = \"syscalls\")]\nmod syscall;\n\n#[cfg(feature = \"process\")]\npub mod task;\n\n#[cfg(feature = \"mm\")]\npub mod mm;\n\n#[cfg(any(feature = \"mm\", feature = \"process\"))]\n/// If the target architecture requires it, the kernel portion of the address\n/// space will be copied to the user address space.\npub fn copy_from_kernel(aspace: &mut axmm::AddrSpace) -> AxResult {\n    use axmm::kernel_aspace;\n\n    if !cfg!(target_arch = \"aarch64\") && !cfg!(target_arch = \"loongarch64\") {\n        // ARMv8 (aarch64) and LoongArch64 use separate page tables for user space\n        // (aarch64: TTBR0_EL1, LoongArch64: PGDL), so there is no need to copy the\n        // kernel portion to the user page table.\n        aspace.copy_mappings_from(&kernel_aspace().lock(), false)?;\n    }\n\n    Ok(())\n}\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/ulib/axmono/src/lib.rs b/ulib/axmono/src/lib.rs
+--- a/ulib/axmono/src/lib.rs	(revision 0f190e700d98f599bf0ee76682ad406a51a06215)
++++ b/ulib/axmono/src/lib.rs	(date 1747546849415)
+@@ -38,6 +38,7 @@
+ #[cfg(feature = "mm")]
+ pub mod mm;
+ 
++
+ #[cfg(any(feature = "mm", feature = "process"))]
+ /// If the target architecture requires it, the kernel portion of the address
+ /// space will be copied to the user address space.
+Index: Cargo.toml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>[workspace]\nresolver = \"2\"\n\nmembers = [\n  \"modules/*\",\n  #\"crates/*\",\n\n  \"api/axfeat\",\n  \"api/arceos_api\",\n  \"api/arceos_posix_api\",\n\n  \"ulib/axstd\",\n  \"ulib/axlibc\",\n\n  \"examples/helloworld\",\n  \"examples/httpclient\",\n  \"examples/httpserver\",\n  \"examples/httpserver\",\n  \"examples/shell\",\n  \"examples/TCP_test\",\n  \"ulib/axmono\",\n]\n\n[workspace.package]\nversion = \"0.1.0\"\nedition = \"2024\"\nauthors = [\"Yuekai Jia <equation618@gmail.com>\"]\nlicense = \"GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0\"\nhomepage = \"https://github.com/arceos-org/arceos\"\ndocumentation = \"https://arceos-org.github.io/arceos\"\nrepository = \"https://github.com/arceos-org/arceos\"\nkeywords = [\"arceos\", \"kernel\"]\ncategories = [\"os\", \"no-std\"]\n\n[workspace.dependencies]\naxstd = { path = \"ulib/axstd\" }\naxlibc = { path = \"ulib/axlibc\" }\naxmono = { path = \"ulib/axmono\" }\narceos_api = { path = \"api/arceos_api\" }\narceos_posix_api = { path = \"api/arceos_posix_api\" }\naxfeat = { path = \"api/axfeat\" }\n\naxalloc = { path = \"modules/axalloc\" }\naxconfig = { path = \"modules/axconfig\" }\naxdisplay = { path = \"modules/axdisplay\" }\naxdriver = { path = \"modules/axdriver\" }\naxfs = { path = \"modules/axfs\", features = [\"lwext4_rs\"] }\naxhal = { path = \"modules/axhal\", features = [\"uspace\"] }\naxlog = { path = \"modules/axlog\" }\naxsignal = { path = \"modules/axsignal\" }\naxmm = { path = \"modules/axmm\", features = [\"mmap\", \"heap\", \"COW\"] }\naxnet = { path = \"modules/axnet\" }\n#axns = { path = \"modules/axns\" }\naxns = { git = \"https://github.com/oscomp/arceos.git\", features = [\n  \"thread-local\",\n] }\naxruntime = { path = \"modules/axruntime\" }\naxsync = { path = \"modules/axsync\" }\naxtask = { path = \"modules/axtask\" }\naxdma = { path = \"modules/axdma\" }\naxsyscall = { path = \"modules/axsyscall\" }\nacbat = { path = \"modules/acbat\" }\n\nsyscalls = { git = \"https://github.com/jasonwhite/syscalls.git\", default-features = false, features = [\n  \"loongarch64\",\n  \"riscv64\",\n] }\n\nmemory_set = { path = \"./crates/axmm_crates/memory_set\", features = [\"RAII\"] }\nmemory_addr = { path = \"./crates/axmm_crates/memory_addr\" }\npage_table_multiarch = { path = \"./crates/page_table_multiarch/page_table_multiarch\" }\npage_table_entry = { path = \"./crates/page_table_multiarch/page_table_entry\" }\naxfs_vfs = { path = \"./crates/axfs_crates/axfs_vfs\" }\naxfs_devfs = { path = \"./crates/axfs_crates/axfs_devfs\" }\naxfs_ramfs = { path = \"./crates/axfs_crates/axfs_ramfs\" }\nlwext4_rust = { path = \"./crates/lwext4_rust\", default-features = false }\nbitflags = \"2.9.0\"\nlinkme = \"0.3.32\"\nweak-map = { git = \"https://github.com/Starry-OS/weak-map.git\" }\nlinux-raw-sys = { version = \"0.9.4\", default-features = false, features = [\n    \"no_std\",\n    \"general\",\n    \"net\",\n    \"prctl\",\n    \"system\",\n] }\n\n#[patch.crates-io]\n#page_table_multiarch = { git = \"https://github.com/oscomp/page_table_multiarch.git\", rev = \"c8a13b0\"}\n#page_table_entry = { git = \"https://github.com/oscomp/page_table_multiarch.git\", rev = \"c8a13b0\" }\n\n[profile.release]\nlto = true\n\n#[patch.crates-io]\n#page_table_multiarch = { git = \"https://github.com/Mivik/page_table_multiarch.git\", rev = \"19ededd\" }\n#page_table_entry = { git = \"https://github.com/Mivik/page_table_multiarch.git\", rev = \"19ededd\" }\n\n[patch.crates-io]\nmemory_addr = { version = \"0.3.2\", path = \"./crates/axmm_crates/memory_addr\" }\npage_table_multiarch = { path = \"./crates/page_table_multiarch/page_table_multiarch\" }\npage_table_entry = { path = \"./crates/page_table_multiarch/page_table_entry\" }\naxfs_vfs = { path = \"./crates/axfs_crates/axfs_vfs\" }\naxfs_devfs = { path = \"./crates/axfs_crates/axfs_devfs\" }\naxfs_ramfs = { path = \"./crates/axfs_crates/axfs_ramfs\" }\nlwext4_rust = { path = \"./crates/lwext4_rust\" }\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/Cargo.toml b/Cargo.toml
+--- a/Cargo.toml	(revision 0f190e700d98f599bf0ee76682ad406a51a06215)
++++ b/Cargo.toml	(date 1747546673135)
+@@ -104,3 +104,7 @@
+ axfs_devfs = { path = "./crates/axfs_crates/axfs_devfs" }
+ axfs_ramfs = { path = "./crates/axfs_crates/axfs_ramfs" }
+ lwext4_rust = { path = "./crates/lwext4_rust" }
++
++[patch.'https://github.com/Azure-stars/lwext4_rust.git']
++lwext4_rust={path = "./crates/lwext4_rust"}
++
+Index: .gitmodules
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>[submodule \"crates/axmm_crates\"]\n\tpath = crates/axmm_crates\n\turl = git@github.com:AstranciA/axmm_crates.git\n[submodule \"crates/page_table_multiarch\"]\n\tpath = crates/page_table_multiarch\n\turl = git@github.com:AstranciA/page_table_multiarch.git\n\n[submodule \"crates/axfs_crates\"]\n\tpath = crates/axfs_crates\n\turl = git@github.com:AstranciA/axfs_crates.git\n[submodule \"crates/lwext4_rust\"]\n\tpath = crates/lwext4_rust\n\turl = git@github.com:MukioXun/lwext4_rust.git\n[submodule \"crates/fast-trap\"]\n\tpath = crates/fast-trap\n\turl = git@github.com:AstranciA/fast-trap.git\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.gitmodules b/.gitmodules
+--- a/.gitmodules	(revision 0f190e700d98f599bf0ee76682ad406a51a06215)
++++ b/.gitmodules	(date 1747552261076)
+@@ -1,6 +1,3 @@
+-[submodule "crates/axmm_crates"]
+-	path = crates/axmm_crates
+-	url = git@github.com:AstranciA/axmm_crates.git
+ [submodule "crates/page_table_multiarch"]
+ 	path = crates/page_table_multiarch
+ 	url = git@github.com:AstranciA/page_table_multiarch.git
+@@ -14,3 +11,6 @@
+ [submodule "crates/fast-trap"]
+ 	path = crates/fast-trap
+ 	url = git@github.com:AstranciA/fast-trap.git
++[submodule "crates/axmm_crates"]
++	path = crates/axmm_crates
++	url = git@github.com:MukioXun/axmm_crates.git

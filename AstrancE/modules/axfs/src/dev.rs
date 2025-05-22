@@ -1,22 +1,23 @@
 use axdriver::prelude::*;
-
+use axfs_vfs::{VfsNodeAttr, VfsNodeOps, VfsResult};
 const BLOCK_SIZE: usize = 512;
-
 /// A disk device with a cursor.
 pub struct Disk {
     block_id: u64,
     offset: usize,
-    dev: AxBlockDevice,
+    dev: AxBlockDevice, //Ramdisk
+    dev_t: (u8, u8),
 }
 
 impl Disk {
     /// Create a new disk.
-    pub fn new(dev: AxBlockDevice) -> Self {
+    pub fn new(dev:AxBlockDevice, major: u8, minor: u8) -> Self {
         assert_eq!(BLOCK_SIZE, dev.block_size());
         Self {
             block_id: 0,
             offset: 0,
             dev,
+            dev_t: (major, minor),
         }
     }
 
@@ -24,6 +25,19 @@ impl Disk {
     pub fn size(&self) -> u64 {
         self.dev.num_blocks() * BLOCK_SIZE as u64
     }
+    
+    // ///Clone disk for filesystem
+    // pub fn get_dev(&self) -> AxBlockDevice {
+    //     let dev = self.dev.deep_clone().expect("Clone failed");
+    // 
+    //     // 尝试从 trait object 恢复为具体类型
+    //     dev.as_any()
+    //         .downcast_ref::<AxBlockDevice>()
+    //         .expect("Not a RamDisk")
+    //         .clone()
+    // }
+    ///Get dev index
+    pub fn dev_t(&self) -> (u8, u8) {self.dev_t}
 
     /// Get the position of the cursor.
     pub fn position(&self) -> u64 {
@@ -117,6 +131,28 @@ impl Disk {
         Ok(buf.len())
     }
 }
+
+// impl VfsNodeOps for Disk{
+//     fn get_attr(&self) -> VfsResult<VfsNodeAttr> {
+//         //TODO:dev num
+//         Ok(VfsNodeAttr::new_file(4096, 1))
+//     }
+//     fn remove(&self, _path: &str) -> VfsResult {
+//         todo!()
+//     }
+// 
+// }
+// 
+// impl Clone for Disk {
+//     fn clone(&self) -> Self {
+//         Disk {
+//             block_id: self.block_id,
+//             offset: self.offset,
+//             dev: self.get_dev(), // 确保 dev 实现了 Clone
+//             dev_t: self.dev_t,
+//         }
+//     }
+// }
 
 unsafe impl Send for Disk {}
 unsafe impl Sync for Disk {}

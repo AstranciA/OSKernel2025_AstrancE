@@ -42,6 +42,12 @@ axdriver_net = { git = "https://github.com/arceos-org/axdriver_crates.git", tag 
 axdriver_display = { git = "https://github.com/arceos-org/axdriver_crates.git", tag = "v0.1.2", optional = true }
 axdriver_pci = { git = "https://github.com/arceos-org/axdriver_crates.git", tag = "v0.1.2", optional = true }
 axdriver_virtio = { git = "https://github.com/arceos-org/axdriver_crates.git", tag = "v0.1.2", optional = true }
+#axdriver_base = { workspace = true, tag = "v0.1.2" }
+#axdriver_block = { workspace = true, tag = "v0.1.2", optional = true }
+#axdriver_net = { workspace = true, tag = "v0.1.2", optional = true }
+#axdriver_display = { workspace = true, tag = "v0.1.2", optional = true }
+#axdriver_pci = { workspace = true, tag = "v0.1.2", optional = true }
+#axdriver_virtio = { workspace = true, tag = "v0.1.2", optional = true }
 axalloc = { workspace = true, optional = true }
 axhal = { workspace = true, optional = true }
 axconfig = { workspace = true, optional = true }
