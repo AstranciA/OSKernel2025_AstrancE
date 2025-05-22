@@ -1,7 +1,55 @@
-use crate::{SyscallResult, ToLinuxResult};
+use crate::{result, SyscallResult, ToLinuxResult};
 use arceos_posix_api::{self as api, char_ptr_to_str, ctypes};
 use axfs::api::set_current_dir;
-use core::ffi::{c_char, c_int};
+use core::ffi::{c_char, c_int, c_long, c_longlong};
+use arceos_posix_api::ctypes::{blkcnt_t, blksize_t, dev_t, gid_t, ino_t, mode_t, nlink_t, off_t, time_t, timespec, uid_t};
+use axlog::debug;
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct test_stat {
+    pub st_dev: dev_t,
+    pub st_ino: ino_t,
+    pub st_mode: mode_t,
+    pub st_nlink: nlink_t,
+    pub st_uid: uid_t,
+    pub st_gid: gid_t,
+    pub st_rdev: dev_t,
+    pub st_size: off_t,
+    pub st_blksize: blksize_t,
+    pub __pad2: i32,
+    pub st_blocks: blkcnt_t,
+    pub st_atime_sec: c_long,
+    pub st_atime_nsec: c_long,
+    pub st_mtime_sec: c_long,
+    pub st_mtime_nsec: c_long,
+    pub st_ctime_sec: c_long,
+    pub st_ctime_nsec: c_long,
+}
+
+impl From<ctypes::stat> for test_stat {
+    fn from(original: ctypes::stat) -> test_stat {
+        test_stat {
+            st_dev: original.st_dev,
+            st_ino: original.st_ino,
+            st_mode: original.st_mode,
+            st_nlink: original.st_nlink,
+            st_uid: original.st_uid,
+            st_gid: original.st_gid,
+            st_rdev: original.st_rdev,
+            st_size: original.st_size,
+            st_blksize: original.st_blksize,
+            st_blocks: original.st_blocks,
+            st_atime_sec: original.st_atime.tv_sec as c_long,
+            st_mtime_sec: original.st_mtime.tv_sec as c_long,
+            st_ctime_sec: original.st_ctime.tv_sec as c_long,
+            st_atime_nsec: original.st_atime.tv_nsec as c_long,
+            st_mtime_nsec: original.st_mtime.tv_nsec as c_long,
+            st_ctime_nsec: original.st_ctime.tv_nsec as c_long,
+            ..Default::default()
+        }
+    }
+}
 
 #[inline]
 pub fn sys_openat(
@@ -24,10 +72,24 @@ pub unsafe fn sys_stat(path: *const c_char, buf: *mut ctypes::stat) -> SyscallRe
 }
 
 #[inline]
-pub unsafe fn sys_fstat(fd: c_int, buf: *mut ctypes::stat) -> SyscallResult {
-    unsafe { api::sys_fstat(fd, buf) }.to_linux_result()
+pub unsafe fn sys_fstat(fd: c_int, buf: *mut test_stat) -> SyscallResult {
+    let mut stat_buf = ctypes::stat::default();
+    let result = unsafe { api::sys_fstat(fd, &mut stat_buf as *mut _) }.to_linux_result();
+    *buf = test_stat::from(stat_buf);
+    let stat = &*buf;
+    debug!{
+            "!!!atime: {:?}, ctime: {:?}, mtime: {:?}",
+            stat.st_atime_sec,
+            stat.st_ctime_sec,
+            stat.st_mtime_sec,
+        };
+    result
 }
 
+// #[inline]
+// pub unsafe fn sys_fstat(fd: c_int, buf: *mut ctypes::stat) -> SyscallResult {
+//      unsafe { api::sys_fstat(fd,buf) }.to_linux_result()
+// }
 #[inline]
 pub unsafe fn sys_fstatat(
     dir_fd: c_int,
@@ -85,4 +147,16 @@ pub fn sys_unlink(path: *const c_char) -> SyscallResult {
 #[inline]
 pub fn sys_unlinkat(dir_fd: c_int, path: *const c_char) -> SyscallResult {
     api::sys_unlinkat(dir_fd, path)
+}
+
+pub fn sys_fgetxattr(fd: c_int, name: *const c_char,buf: *mut u8, sizes: c_int) ->SyscallResult{
+    api::sys_fgetxattr(fd, name, buf, sizes).to_linux_result()
+}
+
+pub fn sys_fsetxattr(fd: c_int, name: *const c_char, buf: *mut u8, size:c_int, flags: c_int) ->SyscallResult{
+    api::sys_fsetxattr(fd, name, buf, size, flags).to_linux_result()
+}
+
+pub fn sys_fremovexattr(fd: c_int, name: *const c_char) -> SyscallResult{
+    api::sys_fremovexattr(fd, name).to_linux_result()
 }

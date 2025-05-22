@@ -10,13 +10,18 @@ use axns::{ResArc, def_resource};
 use axsync::Mutex;
 use lazyinit::LazyInit;
 use spin::RwLock;
-
+use axdriver::AxBlockDevice;
+use axfs_devfs::DeviceFileSystem;
 use crate::{
     api::{self, FileType},
     dev::Disk,
     fs::{self},
     mounts,
 };
+use crate::fs::fatfs::FatFileSystem;
+use crate::fs::lwext4_rust::Ext4FileSystem;
+// use crate::devfile::DeviceNode;
+use crate::mounts::devfs;
 
 def_resource! {
     pub static CURRENT_DIR_PATH: ResArc<Mutex<String>> = ResArc::new();
@@ -42,7 +47,7 @@ struct MountPoint {
     fs: Arc<dyn VfsOps>,
 }
 
-struct RootDirectory {
+struct RootDirectory { 
     main_fs: Arc<dyn VfsOps>,
     mounts: RwLock<Vec<MountPoint>>,
 }
@@ -123,6 +128,12 @@ impl RootDirectory {
             f(self.mounts.read()[idx].fs.clone(), &path[max_len..]) // matched at `idx`
         }
     }
+
+    fn root_dir() -> Arc<RootDirectory> {
+        ROOT_DIR.get()
+            .expect("ROOT_DIR not initialized")
+            .clone()
+    }
 }
 
 impl VfsNodeOps for RootDirectory {
@@ -166,8 +177,10 @@ impl VfsNodeOps for RootDirectory {
         })
     }
 }
-
-pub(crate) fn init_rootfs(disk: crate::dev::Disk) {
+//disk: crate::dev::Disk
+pub(crate) fn init_rootfs(disk: crate::dev::Disk){
+    // let demo = axfs_devfs::blkdev::Blkdev::new(dev,8,0);
+    // disk = Disk::new(demo.get_dev());
     cfg_if::cfg_if! {
         if #[cfg(feature = "myfs")] { // override the default filesystem
             let main_fs = fs::myfs::new_myfs(disk);
@@ -175,6 +188,7 @@ pub(crate) fn init_rootfs(disk: crate::dev::Disk) {
             static EXT4_FS: LazyInit<Arc<fs::lwext4_rust::Ext4FileSystem<Disk>>> = LazyInit::new();
             EXT4_FS.init_once(Arc::new(fs::lwext4_rust::Ext4FileSystem::new(disk)));
             let main_fs = EXT4_FS.clone();
+            // let dev_fs =  EXT4_FS.clone();
         } else if #[cfg(feature = "fatfs")] {
             static FAT_FS: LazyInit<Arc<fs::fatfs::FatFileSystem>> = LazyInit::new();
             FAT_FS.init_once(Arc::new(fs::fatfs::FatFileSystem::new(disk)));
@@ -189,7 +203,6 @@ pub(crate) fn init_rootfs(disk: crate::dev::Disk) {
     root_dir
         .mount("/dev", mounts::devfs())
         .expect("failed to mount devfs at /dev");
-
     #[cfg(feature = "ramfs")]
     root_dir
         .mount("/tmp", mounts::ramfs())
@@ -206,7 +219,7 @@ pub(crate) fn init_rootfs(disk: crate::dev::Disk) {
     root_dir // should not fail
         .mount("/sys", mounts::sysfs().unwrap())
         .expect("fail to mount sysfs at /sys");
-
+    
     ROOT_DIR.init_once(Arc::new(root_dir));
     info!("rootfs initialized");
     CURRENT_DIR.init_new(Mutex::new(ROOT_DIR.clone()));
@@ -339,11 +352,62 @@ pub(crate) fn rename(old: &str, new: &str) -> AxResult {
     parent_node_of(None, old).rename(old, new)
 }
 
-pub fn mount(source: &'static str, target: &'static str, flags: usize) -> AxResult {
-    let img = crate::api::File::open(source)?;
-    warn!("mounting {} to {}", source, target);
-    let fs = fs::lwext4_rust::Ext4FileSystem::new(img);
+// pub fn mount(source: &'static str, target: &'static str, flags: usize) -> AxResult {
+//     let img = crate::api::File::open(source)?;
+//     warn!("mounting {} to {}", source, target);
+//     let fs = fs::lwext4_rust::Ext4FileSystem::new(img);
+// 
+//     ROOT_DIR.mount(&target, Arc::new(fs));
+//     Ok(())
+// }
 
-    ROOT_DIR.mount(&target, Arc::new(fs));
-    Ok(())
-}
+// pub fn mount_dev(_path: &str, mnt: &str, fstype: &str) -> AxResult
+// {
+//     //TODO:cheack _path availble
+//     if _path.is_empty() || !_path.starts_with("/dev/") {
+//         return ax_err!(NotFound);
+//     }
+// 
+//     if !mnt.starts_with('/') || mnt.len() < 2 {
+//         return ax_err!(InvalidInput);
+//     }
+//     //TODO:fix lookup the mounted fs
+//     let root = ROOT_DIR.clone();
+//     let devfs = lookup_mounted_fs(root,"/dev");
+//     let dev_path = _path.strip_prefix("/dev/").ok_or(AxError::NotFound)?;
+//     let dev = devfs.root_dir().lookup(dev_path)?;
+//     let disk = Disk::new(dev.get_dev());
+// 
+//     let fs:Arc<dyn VfsOps>=match fstype {
+//         "ext4" => Arc::new(Ext4FileSystem::new(disk)),
+//         "vfat" => Arc::new(FatFileSystem::new(disk)),
+//         _ => return ax_err!(UnsupportedFs),
+//     };
+//     //TODO:cheack mnt availble
+//     ROOT_DIR.mount(mnt, fs)?;
+//     Ok(())
+// }
+// pub fn umount_dev(_path: &str) -> AxResult
+// {
+//     //TODO:check _path and drop the mounted fs
+//     ROOT_DIR._umount(_path);
+//     Ok(())
+// }
+
+// fn mount_device(dev_path: &str, mount_path: &str, fstype: &str) -> Result<()> {
+//     let root  = ROOT_DIR.clone();
+//     let dev_node = root.lookup(dev_path)?;
+//     let dev_file = dev_node.clone();
+// 
+//     let disk = dev_file.inner.lock().clone(); // 需要 Disk 实现 Clone，或重新构造
+// 
+//     let fs: Arc<dyn VfsOps> = match fstype {
+//         "ext4" => Arc::new(Ext4FileSystem::new(disk)),
+//         // 其他文件系统……
+//         _ => return Err(err_invalid()),
+//     };
+//     
+//     ROOT_DIR.mount(mount_path, fs)?;
+//     Ok(())
+// }
+

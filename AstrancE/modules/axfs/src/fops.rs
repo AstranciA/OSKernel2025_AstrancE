@@ -1,11 +1,15 @@
 //! Low-level filesystem operations.
 
-use axerrno::{AxError, AxResult, ax_err, ax_err_type};
+use alloc::collections::BTreeMap;
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
+use core::ffi::c_int;
+use axerrno::{AxError, AxResult, ax_err, ax_err_type, LinuxResult, LinuxError};
 use axfs_vfs::{VfsError, VfsNodeRef};
 use axio::SeekFrom;
 use cap_access::{Cap, WithCap};
 use core::fmt;
-
+use spin::Mutex;
 #[cfg(feature = "myfs")]
 pub use crate::dev::Disk;
 #[cfg(feature = "myfs")]
@@ -22,9 +26,10 @@ pub type FilePerm = axfs_vfs::VfsNodePerm;
 
 /// An opened file object, with open permissions and a cursor.
 pub struct File {
-    node: WithCap<VfsNodeRef>,
+    pub node: WithCap<VfsNodeRef>,
     is_append: bool,
     offset: u64,
+    xattrs: Mutex<BTreeMap<String, Vec<u8>>>, // extra attr
 }
 
 /// An opened directory object, with open permissions and a cursor for
@@ -32,6 +37,7 @@ pub struct File {
 pub struct Directory {
     node: WithCap<VfsNodeRef>,
     entry_idx: usize,
+    xattrs: Mutex<BTreeMap<String, Vec<u8>>>, // extra attr
 }
 
 /// Options and flags which can be used to configure how a file is opened.
@@ -147,7 +153,7 @@ impl OpenOptions {
 }
 
 impl File {
-    fn access_node(&self, cap: Cap) -> AxResult<&VfsNodeRef> {
+    pub fn access_node(&self, cap: Cap) -> AxResult<&VfsNodeRef> {
         self.node.access_or_err(cap, AxError::PermissionDenied)
     }
 
@@ -193,6 +199,7 @@ impl File {
             node: WithCap::new(node, access_cap),
             is_append: opts.append,
             offset: 0,
+            xattrs: Mutex::new(BTreeMap::new()),
         })
     }
 
@@ -283,6 +290,61 @@ impl File {
     pub fn get_attr(&self) -> AxResult<FileAttr> {
         self.access_node(Cap::empty())?.get_attr()
     }
+
+    ///Gets the file extra attributes
+    pub fn get_xattr(&self, name: &str, buf: &mut [u8], size: usize) -> Result<usize, LinuxError> {
+        let xattrs = self.xattrs.lock();
+        let val = xattrs.get(name).ok_or(LinuxError::ENODATA)?; // Attribute not found
+        if val.len() > size {
+            return Err(LinuxError::ERANGE); // Buffer too small
+        }
+        if val.len() > buf.len() {
+            return Err(LinuxError::ERANGE); // Provided buffer slice too small
+        }
+        // Copy data into the provided buffer
+        buf[..val.len()].copy_from_slice(val);
+        Ok(val.len())
+    }
+    pub fn set_xattr(&mut self, name: &str, value: &[u8], size: usize) -> Result<usize, LinuxError> {
+        if size > value.len() {
+            return Err(LinuxError::EINVAL); // Size exceeds provided buffer length
+        }
+
+        let slice = &value[..size]; // Take only the portion up to `size`
+        let mut xattrs = self.xattrs.lock();
+        xattrs.insert(name.to_string(), slice.to_vec());
+        Ok(size)
+    }
+
+    //TODO：fix the lxattr
+    
+    // pub fn list_xattr(&self, buf: *mut u8) -> Result<usize, i32> {
+    //     let file = self;
+    //     let xattrs = file.xattrs.lock();
+    //     let mut offset = 0;
+    //     for key in xattrs.keys() {
+    //         let bytes = key.as_bytes();
+    //         if offset + bytes.len() + 1 > buf.len() {
+    //             return Err(-1)?;
+    //         }
+    //         buf[offset..offset + bytes.len()].copy_from_slice(bytes);
+    //         buf[offset + bytes.len()] = 0;
+    //         offset += bytes.len() + 1;
+    //     }
+    //     Ok(offset)
+    // }
+    pub fn remove_xattr(&mut self, name: &str) -> Result<usize, LinuxError> {
+        let mut xattrs = self.xattrs.lock();
+        if xattrs.is_empty() {
+            Ok(0) // Success: no attributes exist, treat as removed
+        } else if xattrs.remove(name).is_some() {
+            Ok(0) // Success: attribute removed
+        } else {
+            debug!("remove xattr at bottoum is failed");
+            Err(LinuxError::ENODATA) // Attribute not found
+        }
+    }
+    
 }
 
 impl Directory {
@@ -317,6 +379,7 @@ impl Directory {
             // directories that don't have this permission.
             node: WithCap::new(node, cap),
             entry_idx: 0,
+            xattrs: Default::default(),
         })
     }
 
@@ -390,6 +453,60 @@ impl Directory {
     /// Gets the file attributes.
     pub fn get_attr(&self) -> AxResult<FileAttr> {
         self.access_node(Cap::empty())?.get_attr()
+    }
+
+    ///Gets the dir extra attributes
+    pub fn get_xattr(&self, name: &str, buf: &mut [u8], size: usize) -> Result<usize, LinuxError> {
+        let xattrs = self.xattrs.lock();
+        let val = xattrs.get(name).ok_or(LinuxError::ENODATA)?; // Attribute not found
+        if val.len() > size {
+            return Err(LinuxError::ERANGE); // Buffer too small
+        }
+        if val.len() > buf.len() {
+            return Err(LinuxError::ERANGE); // Provided buffer slice too small
+        }
+        // Copy data into the provided buffer
+        buf[..val.len()].copy_from_slice(val);
+        Ok(val.len())
+    }
+    pub fn set_xattr(&mut self, name: &str, value: &[u8], size: usize) -> Result<usize, LinuxError> {
+        if size > value.len() {
+            return Err(LinuxError::EINVAL); // Size exceeds provided buffer length
+        }
+
+        let slice = &value[..size]; // Take only the portion up to `size`
+        let mut xattrs = self.xattrs.lock();
+        xattrs.insert(name.to_string(), slice.to_vec());
+        Ok(size)
+    }
+
+    //TODO：fix the lxattr
+
+    // pub fn list_xattr(&self, buf: *mut u8) -> Result<usize, i32> {
+    //     let file = self;
+    //     let xattrs = file.xattrs.lock();
+    //     let mut offset = 0;
+    //     for key in xattrs.keys() {
+    //         let bytes = key.as_bytes();
+    //         if offset + bytes.len() + 1 > buf.len() {
+    //             return Err(-1)?;
+    //         }
+    //         buf[offset..offset + bytes.len()].copy_from_slice(bytes);
+    //         buf[offset + bytes.len()] = 0;
+    //         offset += bytes.len() + 1;
+    //     }
+    //     Ok(offset)
+    // }
+    pub fn remove_xattr(&mut self, name: &str) -> Result<usize, LinuxError> {
+        let mut xattrs = self.xattrs.lock();
+        if xattrs.is_empty() {
+            Ok(0) // Success: no attributes exist, treat as removed
+        } else if xattrs.remove(name).is_some() {
+            Ok(0) // Success: attribute removed
+        } else {
+            debug!("remove xattr at bottoum is failed");
+            Err(LinuxError::ENODATA) // Attribute not found
+        }
     }
 }
 

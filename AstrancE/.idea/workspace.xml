@@ -17,6 +17,9 @@
       <package file="$PROJECT_DIR$/examples/shell">
         <enabledFeature name="default" />
       </package>
+      <package file="$PROJECT_DIR$/examples/TCP_test">
+        <enabledFeature name="default" />
+      </package>
       <package file="$PROJECT_DIR$/api/arceos_api">
         <enabledFeature name="default" />
       </package>
@@ -28,6 +31,7 @@
         <enabledFeature name="fs" />
         <enabledFeature name="fd" />
         <enabledFeature name="axfs_devfs" />
+        <enabledFeature name="uspace" />
       </package>
       <package file="$PROJECT_DIR$/modules/axalloc">
         <enabledFeature name="tlsf" />
@@ -63,6 +67,7 @@
         <enabledFeature name="axsync" />
         <enabledFeature name="irq" />
         <enabledFeature name="paging" />
+        <enabledFeature name="tls" />
         <enabledFeature name="axtask" />
         <enabledFeature name="alloc" />
         <enabledFeature name="net" />
@@ -77,13 +82,23 @@
         <enabledFeature name="fatfs" />
         <enabledFeature name="ramfs" />
       </package>
+      <package file="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs">
+        <enabledFeature name="default" />
+      </package>
+      <package file="$PROJECT_DIR$/crates/axfs_crates/axfs_ramfs">
+        <enabledFeature name="default" />
+      </package>
+      <package file="$PROJECT_DIR$/crates/axfs_crates/axfs_vfs">
+        <enabledFeature name="default" />
+      </package>
       <package file="$PROJECT_DIR$/modules/axhal">
+        <enabledFeature name="default" />
+        <enabledFeature name="axalloc" />
         <enabledFeature name="fp_simd" />
         <enabledFeature name="irq" />
-        <enabledFeature name="default" />
         <enabledFeature name="paging" />
         <enabledFeature name="page_table_multiarch" />
-        <enabledFeature name="axalloc" />
+        <enabledFeature name="uspace" />
       </package>
       <package file="$PROJECT_DIR$/ulib/axlibc">
         <enabledFeature name="default" />
@@ -96,6 +111,7 @@
       </package>
       <package file="$PROJECT_DIR$/ulib/axmono">
         <enabledFeature name="mm" />
+        <enabledFeature name="sig" />
         <enabledFeature name="axns" />
         <enabledFeature name="default" />
         <enabledFeature name="process" />
@@ -128,6 +144,9 @@
         <enabledFeature name="alloc" />
         <enabledFeature name="net" />
       </package>
+      <package file="$PROJECT_DIR$/modules/axsignal">
+        <enabledFeature name="default" />
+      </package>
       <package file="$PROJECT_DIR$/ulib/axstd">
         <enabledFeature name="default" />
       </package>
@@ -138,6 +157,7 @@
       <package file="$PROJECT_DIR$/modules/axsyscall">
         <enabledFeature name="default" />
         <enabledFeature name="pipe" />
+        <enabledFeature name="multitask" />
         <enabledFeature name="fs" />
         <enabledFeature name="fd" />
       </package>
@@ -149,6 +169,9 @@
         <enabledFeature name="sched_rr" />
         <enabledFeature name="preempt" />
         <enabledFeature name="kernel_guard" />
+      </package>
+      <package file="$PROJECT_DIR$/crates/lwext4_rust">
+        <enabledFeature name="default" />
       </package>
       <package file="$PROJECT_DIR$/crates/axmm_crates/memory_addr">
         <enabledFeature name="RAII" />
@@ -177,25 +200,83 @@
         <enabledFeature name="default" />
       </package>
     </cargoProject>
-    <cargoProject FILE="$PROJECT_DIR$/crates/lwext4_rust/Cargo.toml" />
+    <cargoProject FILE="$PROJECT_DIR$/crates/page_table_multiarch/Cargo.toml">
+      <package file="$PROJECT_DIR$/crates/page_table_multiarch/page_table_entry">
+        <enabledFeature name="default" />
+      </package>
+      <package file="$PROJECT_DIR$/crates/page_table_multiarch/page_table_multiarch">
+        <enabledFeature name="default" />
+      </package>
+    </cargoProject>
+    <cargoProject FILE="$PROJECT_DIR$/crates/axdriver_crates/Cargo.toml">
+      <package file="$PROJECT_DIR$/crates/axdriver_crates/axdriver_base">
+        <enabledFeature name="default" />
+      </package>
+      <package file="$PROJECT_DIR$/crates/axdriver_crates/axdriver_block">
+        <enabledFeature name="default" />
+      </package>
+      <package file="$PROJECT_DIR$/crates/axdriver_crates/axdriver_display">
+        <enabledFeature name="default" />
+      </package>
+      <package file="$PROJECT_DIR$/crates/axdriver_crates/axdriver_net">
+        <enabledFeature name="default" />
+      </package>
+      <package file="$PROJECT_DIR$/crates/axdriver_crates/axdriver_pci">
+        <enabledFeature name="default" />
+      </package>
+      <package file="$PROJECT_DIR$/crates/axdriver_crates/axdriver_virtio">
+        <enabledFeature name="default" />
+      </package>
+    </cargoProject>
   </component>
   <component name="ChangeListManager">
     <list default="true" id="7c2d0aa3-ed80-457d-a6b3-f7e100db3c2a" name="Changes" comment="mmap first">
-      <change afterPath="$PROJECT_DIR$/crates/axfs_crates" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/crates/lwext4_rust" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/shelf/_2025_5_18_05_34___Changes_.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/shelf/_2025_5_21_04_49___Changes_.xml" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/shelf/在进行更新之前于_2025_5_18_05_34_取消提交了更改_[Changes]/shelved.patch" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/.idea/shelf/在进行更新之前于_2025_5_21_04_49_取消提交了更改_[Changes]/shelved.patch" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/chrdev.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/modules/axfs/src/blkdev.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.gitmodules" beforeDir="false" afterPath="$PROJECT_DIR$/.gitmodules" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/null.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/null.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/zero.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/zero.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/api/arceos_posix_api/src/imp/fd_ops.rs" beforeDir="false" afterPath="$PROJECT_DIR$/api/arceos_posix_api/src/imp/fd_ops.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/api/arceos_posix_api/src/imp/fs.rs" beforeDir="false" afterPath="$PROJECT_DIR$/api/arceos_posix_api/src/imp/fs.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/api/arceos_posix_api/src/imp/resources.rs" beforeDir="false" afterPath="$PROJECT_DIR$/api/arceos_posix_api/src/imp/resources.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/api/arceos_posix_api/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/api/arceos_posix_api/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/axdriver_crates/axdriver_base/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axdriver_crates/axdriver_base/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/axdriver_crates/axdriver_block/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axdriver_crates/axdriver_block/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/axdriver_crates/axdriver_block/src/ramdisk.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axdriver_crates/axdriver_block/src/ramdisk.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/axdriver_crates/axdriver_virtio/src/blk.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axdriver_crates/axdriver_virtio/src/blk.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/axfs_crates" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/dir.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/dir.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/axfs_crates/axfs_vfs/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_vfs/src/lib.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/axfs_crates/axfs_vfs/src/structs.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_vfs/src/structs.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/axmm_crates" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axmm_crates" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lwext4_rust" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lwext4_rust/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4/CMakeLists.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4/Makefile" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4/src/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4/src/CMakeLists.txt" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lwext4_rust/src/file.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust/src/file.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/page_table_multiarch" beforeDir="false" afterPath="$PROJECT_DIR$/crates/page_table_multiarch" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/axdriver/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axdriver/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/axfs/src/dev.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axfs/src/dev.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/axfs/src/fops.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axfs/src/fops.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/axfs/src/fs/lwext4_rust.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axfs/src/fs/lwext4_rust.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/axfs/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axfs/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/axfs/src/mounts.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axfs/src/mounts.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/axfs/src/root.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axfs/src/root.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/axsyscall/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axsyscall/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/axsyscall/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axsyscall/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/axsyscall/src/syscall_imp/fs.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axsyscall/src/syscall_imp/fs.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/axsyscall/src/syscall_imp/source.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axsyscall/src/syscall_imp/source.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ulib/axmono/src/ctypes.rs" beforeDir="false" afterPath="$PROJECT_DIR$/ulib/axmono/src/ctypes.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ulib/axmono/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/ulib/axmono/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ulib/axmono/src/syscall/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/ulib/axmono/src/syscall/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ulib/axmono/src/task/process.rs" beforeDir="false" afterPath="$PROJECT_DIR$/ulib/axmono/src/task/process.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -241,41 +322,44 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Cargo.Test test::write (2).executor": "Run",
-    "Cargo.Test test::write (3).executor": "Run",
-    "Cargo.Test test::write.executor": "Run",
-    "ModuleVcsDetector.initialDetectionPerformed": "true",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "RunOnceActivity.git.unshallow": "true",
-    "RunOnceActivity.rust.reset.selective.auto.import": "true",
-    "Shell Script.RUN.executor": "Run",
-    "Shell Script.TRACE.executor": "Run",
-    "deletionFromPopupRequiresConfirmation": "false",
-    "git-widget-placeholder": "main",
-    "last_opened_file_path": "/root/App_oscomp",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "org.rust.cargo.project.model.PROJECT_DISCOVERY": "true",
-    "org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon": "",
-    "org.rust.disableDetachedFileInspection/root/AstrancE/modules/axsyscall/src/mod.rs": "true",
-    "org.rust.first.attach.projects": "true",
-    "org.rust.hideNoCargoProjectNotifications/root/AstrancE/crates/axfs_vfs/src/structs.rs": "true",
-    "run.code.analysis.last.selected.profile": "pProject Default",
-    "settings.editor.selected.configurable": "project.propVCSSupport.DirectoryMappings",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Cargo.Test test::write (2).executor&quot;: &quot;Run&quot;,
+    &quot;Cargo.Test test::write (3).executor&quot;: &quot;Run&quot;,
+    &quot;Cargo.Test test::write.executor&quot;: &quot;Run&quot;,
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.rust.reset.selective.auto.import&quot;: &quot;true&quot;,
+    &quot;Shell Script.RUN.executor&quot;: &quot;Run&quot;,
+    &quot;Shell Script.TRACE.executor&quot;: &quot;Run&quot;,
+    &quot;deletionFromPopupRequiresConfirmation&quot;: &quot;false&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/root/App_oscomp&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;org.rust.cargo.project.model.PROJECT_DISCOVERY&quot;: &quot;true&quot;,
+    &quot;org.rust.cargo.project.model.impl.CargoExternalSystemProjectAware.subscribe.first.balloon&quot;: &quot;&quot;,
+    &quot;org.rust.disableDetachedFileInspection/root/AstrancE/modules/axdevice/src/disk.rs&quot;: &quot;true&quot;,
+    &quot;org.rust.disableDetachedFileInspection/root/AstrancE/modules/axdevice/src/mod.rs&quot;: &quot;true&quot;,
+    &quot;org.rust.disableDetachedFileInspection/root/AstrancE/modules/axsyscall/src/mod.rs&quot;: &quot;true&quot;,
+    &quot;org.rust.first.attach.projects&quot;: &quot;true&quot;,
+    &quot;org.rust.hideNoCargoProjectNotifications/root/AstrancE/crates/axfs_vfs/src/structs.rs&quot;: &quot;true&quot;,
+    &quot;run.code.analysis.last.selected.profile&quot;: &quot;pProject Default&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;project.propVCSSupport.DirectoryMappings&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RdControllerToolWindowsLayoutState" isNewUi="true">
     <layout>
       <window_info id="Bookmarks" side_tool="true" />
       <window_info id="Merge Requests" />
+      <window_info id="Backup and Sync History" />
       <window_info id="Commit_Guest" show_stripe_button="false" />
-      <window_info content_ui="combo" id="Project" order="0" sideWeight="0.8772831" weight="0.21133502" />
+      <window_info active="true" content_ui="combo" id="Project" order="0" sideWeight="0.8772831" visible="true" weight="0.14274693" />
       <window_info id="Commit" order="1" weight="0.16425215" />
       <window_info id="Structure" order="2" sideWeight="0.122716896" side_tool="true" weight="0.16386719" />
       <window_info id="Pull Requests" order="3" weight="0.16425215" />
@@ -283,14 +367,14 @@
       <window_info anchor="bottom" id="TypeScript" />
       <window_info anchor="bottom" id="Debug" />
       <window_info anchor="bottom" id="File Transfer" />
-      <window_info anchor="bottom" id="Services" order="0" weight="0.28315586" />
-      <window_info anchor="bottom" id="Version Control" order="1" weight="0.43234444" />
+      <window_info anchor="bottom" id="Services" order="0" weight="0.1914524" />
+      <window_info anchor="bottom" id="Version Control" order="1" weight="0.60931766" />
       <window_info anchor="bottom" id="Problems" order="2" />
-      <window_info anchor="bottom" id="Problems View" order="3" weight="0.7528143" />
-      <window_info active="true" anchor="bottom" id="Terminal" order="4" visible="true" weight="0.34962407" />
-      <window_info anchor="bottom" id="Find" order="5" weight="0.32962245" />
-      <window_info anchor="bottom" id="Build" order="6" weight="0.4801013" />
-      <window_info anchor="bottom" id="Run" order="7" weight="0.47975707" />
+      <window_info anchor="bottom" id="Problems View" order="3" weight="0.38522887" />
+      <window_info active="true" anchor="bottom" id="Terminal" order="4" visible="true" weight="0.34446076" />
+      <window_info anchor="bottom" id="Find" order="5" weight="0.63685346" />
+      <window_info anchor="bottom" id="Build" order="6" weight="0.14474976" />
+      <window_info anchor="bottom" id="Run" order="7" weight="0.6487051" />
       <window_info anchor="bottom" id="Messages" order="8" weight="0.33113274" />
       <window_info anchor="bottom" id="TODO" order="9" weight="0.33113274" />
       <window_info anchor="right" id="Notifications" order="0" weight="0.32977617" />
@@ -299,22 +383,54 @@
       <window_info anchor="right" id="Gradle" order="3" weight="0.25" />
       <window_info anchor="right" id="Maven" order="4" weight="0.25" />
       <window_info anchor="right" id="Cargo" order="5" weight="0.2" />
-      <window_info anchor="right" id="RustCargo" order="6" weight="0.26191407" />
+      <window_info anchor="right" id="RustCargo" order="6" weight="0.33011132" />
       <window_info anchor="right" id="Coverage" order="7" side_tool="true" weight="0.32977617" />
       <window_info anchor="right" id="Hierarchy" order="8" weight="0.32977617" />
-      <window_info anchor="right" id="documentation.v2" order="9" side_tool="true" weight="0.32977617" />
+      <window_info anchor="right" id="documentation.v2" order="9" side_tool="true" weight="0.3298828" />
     </layout>
   </component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/modules/axfs/src" />
+      <recent name="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src" />
+      <recent name="$PROJECT_DIR$/api/arceos_posix_api/src" />
       <recent name="$PROJECT_DIR$" />
       <recent name="$PROJECT_DIR$/modules/axsyscall" />
-      <recent name="$PROJECT_DIR$/modules" />
     </key>
   </component>
   <component name="RunManager" selected="Shell Script.RUN">
     <configuration name="RUN" type="ShConfigurationType">
       <option name="SCRIPT_TEXT" value="make build ARCH=riscv64 FEATURES=lwext4_rs,fs BLK=y BUS=mmio &amp;&amp; qemu-system-riscv64 -m 128M -smp 1 -machine virt -bios default -kernel ./App_oscomp_riscv64-qemu-virt.bin -device virtio-blk-device,drive=disk0 -drive id=disk0,if=none,format=raw,file=./testfolder/disk.img -nographic" />
+      <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
+      <option name="SCRIPT_PATH" value="" />
+      <option name="SCRIPT_OPTIONS" value="" />
+      <option name="INDEPENDENT_SCRIPT_WORKING_DIRECTORY" value="true" />
+      <option name="SCRIPT_WORKING_DIRECTORY" value="$PROJECT_DIR$/../App_oscomp" />
+      <option name="INDEPENDENT_INTERPRETER_PATH" value="true" />
+      <option name="INTERPRETER_PATH" value="/bin/bash" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="EXECUTE_IN_TERMINAL" value="true" />
+      <option name="EXECUTE_SCRIPT_FILE" value="false" />
+      <envs />
+      <method v="2" />
+    </configuration>
+    <configuration name="RUN" type="ShConfigurationType">
+      <option name="SCRIPT_TEXT" value="make build ARCH=riscv64 FEATURES=lwext4_rs,fs BLK=y BUS=mmio &amp;&amp; qemu-system-riscv64 -m 128M -smp 1 -machine virt -bios default -kernel ./App_oscomp_riscv64-qemu-virt.bin -device virtio-blk-device,drive=disk0 -drive id=disk0,if=none,format=raw,file=./testfolder/disk.img -nographic" />
+      <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
+      <option name="SCRIPT_PATH" value="" />
+      <option name="SCRIPT_OPTIONS" value="" />
+      <option name="INDEPENDENT_SCRIPT_WORKING_DIRECTORY" value="true" />
+      <option name="SCRIPT_WORKING_DIRECTORY" value="$PROJECT_DIR$/../App_oscomp" />
+      <option name="INDEPENDENT_INTERPRETER_PATH" value="true" />
+      <option name="INTERPRETER_PATH" value="/bin/bash" />
+      <option name="INTERPRETER_OPTIONS" value="" />
+      <option name="EXECUTE_IN_TERMINAL" value="true" />
+      <option name="EXECUTE_SCRIPT_FILE" value="false" />
+      <envs />
+      <method v="2" />
+    </configuration>
+    <configuration name="TRACE" type="ShConfigurationType">
+      <option name="SCRIPT_TEXT" value="make build ARCH=riscv64 FEATURES=lwext4_rs,fs BLK=y BUS=mmio LOG=trace &amp;&amp; qemu-system-riscv64 -m 128M -smp 1 -machine virt -bios default -kernel ./App_oscomp_riscv64-qemu-virt.bin -device virtio-blk-device,drive=disk0 -drive id=disk0,if=none,format=raw,file=./testfolder/disk.img -nographic" />
       <option name="INDEPENDENT_SCRIPT_PATH" value="true" />
       <option name="SCRIPT_PATH" value="" />
       <option name="SCRIPT_OPTIONS" value="" />
@@ -399,7 +515,33 @@
       <workItem from="1744866329946" duration="3523000" />
       <workItem from="1745133474584" duration="928000" />
       <workItem from="1745165234651" duration="656000" />
-      <workItem from="1745394975032" duration="9068000" />
+      <workItem from="1745394975032" duration="15419000" />
+      <workItem from="1745586725831" duration="8079000" />
+      <workItem from="1745595080321" duration="2501000" />
+      <workItem from="1745637522470" duration="12769000" />
+      <workItem from="1745852279644" duration="1546000" />
+      <workItem from="1745893986348" duration="37858000" />
+      <workItem from="1746618868692" duration="19170000" />
+      <workItem from="1746801754504" duration="550000" />
+      <workItem from="1746869176385" duration="12882000" />
+      <workItem from="1746937842847" duration="9580000" />
+      <workItem from="1746979302210" duration="7032000" />
+      <workItem from="1747019771770" duration="2879000" />
+      <workItem from="1747030262407" duration="14152000" />
+      <workItem from="1747124648681" duration="20899000" />
+      <workItem from="1747191044704" duration="5981000" />
+      <workItem from="1747219936598" duration="15391000" />
+      <workItem from="1747320391882" duration="8951000" />
+      <workItem from="1747407541046" duration="2370000" />
+      <workItem from="1747545113964" duration="4569000" />
+      <workItem from="1747552125861" duration="1737000" />
+      <workItem from="1747578813972" duration="1177000" />
+      <workItem from="1747752206284" duration="6295000" />
+      <workItem from="1747795041422" duration="1372000" />
+      <workItem from="1747802936575" duration="10539000" />
+      <workItem from="1747833663778" duration="15373000" />
+      <workItem from="1747892002663" duration="13364000" />
+      <workItem from="1747915886277" duration="2395000" />
     </task>
     <task id="LOCAL-00001" summary="Changes">
       <option name="closed" value="true" />
@@ -531,6 +673,11 @@
     <option featureType="com.intellij.fileTypeFactory" implementationName=".bashrc" />
   </component>
   <component name="Vcs.Log.Tabs.Properties">
+    <option name="OPEN_GENERIC_TABS">
+      <map>
+        <entry key="cf93c5cc-c414-48b7-8f92-b1d72b8352a5" value="TOOL_WINDOW" />
+      </map>
+    </option>
     <option name="RECENT_FILTERS">
       <map>
         <entry key="Branch">
@@ -566,13 +713,18 @@
                   <entry key="branch">
                     <value>
                       <list>
-                        <option value="main" />
+                        <option value="Qix/HEAD" />
                       </list>
                     </value>
                   </entry>
                 </map>
               </option>
             </State>
+          </value>
+        </entry>
+        <entry key="cf93c5cc-c414-48b7-8f92-b1d72b8352a5">
+          <value>
+            <State />
           </value>
         </entry>
       </map>

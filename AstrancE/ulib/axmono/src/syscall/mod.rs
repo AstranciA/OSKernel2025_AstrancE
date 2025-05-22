@@ -23,11 +23,16 @@ use axtask::{CurrentTask, TaskExtMut, TaskExtRef, current};
 use core::ffi::c_int;
 use memory_addr::MemoryAddr;
 use syscalls::Sysno;
+use crate::task::ThreadData;
+
 mod mm;
 
 syscall_handler_def!(
         exit => [code,..] {
             crate::task::sys_exit((code & 0xff) as i32)
+        }
+        exit_group => [code,..]{
+            task::exit::sys_exit_group((code & 0xff) as i32)
         }
         clone => [flags, sp, ..] {
             let clone_flags = CloneFlags::from_bits_retain(flags as u32);
@@ -61,6 +66,12 @@ syscall_handler_def!(
         }
         brk => [brk, ..] {
             apply!(mm::sys_brk, brk)
+        }
+        set_tid_address => args{
+                let tidptr = args[0];
+                let tid: usize = current().task_ext().thread.tid() as _;
+                current().task_ext().thread_data().set_clear_child_tid(tidptr);
+                Ok(tid as isize)
         }
         mmap => args {
             let curr = current();
