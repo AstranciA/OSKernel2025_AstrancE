@@ -1395,12 +1395,6 @@ dependencies = [
 [[package]]
 name = "lwext4_rust"
 version = "0.2.0"
-<<<<<<< HEAD
-||||||| 4aee5b8
-source = "git+https://github.com/Azure-stars/lwext4_rust.git#d1561e971c37555428695b12b869ec938af5a058"
-=======
-source = "git+https://github.com/Azure-stars/lwext4_rust.git#2e56b0aa2680b210892a46375fefca2bdf6e2865"
->>>>>>> f29b2482962f77e62d1c4f497cb7367ebc0e6da4
 dependencies = [
  "byteorder",
  "log",

@@ -243,7 +243,6 @@ impl UspaceContext {
         Self(*trap_frame)
     }
 
-<<<<<<< HEAD
     /// Gets the instruction pointer.
     pub const fn get_ip(&self) -> usize {
         self.0.era
@@ -274,34 +273,6 @@ impl UspaceContext {
         self.0.regs.tp = tp;
     }
 
-||||||| 4aee5b8
-    /// Gets the instruction pointer.
-    pub const fn get_ip(&self) -> usize {
-        self.0.era
-    }
-
-    /// Gets the stack pointer.
-    pub const fn get_sp(&self) -> usize {
-        self.0.regs.sp
-    }
-
-    /// Sets the instruction pointer.
-    pub const fn set_ip(&mut self, pc: usize) {
-        self.0.era = pc;
-    }
-
-    /// Sets the stack pointer.
-    pub const fn set_sp(&mut self, sp: usize) {
-        self.0.regs.sp = sp;
-    }
-
-    /// Sets the return value register.
-    pub const fn set_retval(&mut self, a0: usize) {
-        self.0.regs.a0 = a0;
-    }
-
-=======
->>>>>>> f29b2482962f77e62d1c4f497cb7367ebc0e6da4
     /// Enters user space.
     ///
     /// It restores the user registers and jumps to the user entry point
@@ -344,15 +315,12 @@ impl UspaceContext {
     }
 }
 
-<<<<<<< HEAD
 impl Clone for UspaceContext {
     fn clone(&self) -> Self {
         Self::from(&self.0)
     }
 }
 
-||||||| 4aee5b8
-=======
 #[cfg(feature = "uspace")]
 impl core::ops::Deref for UspaceContext {
     type Target = TrapFrame;
@@ -369,7 +337,6 @@ impl core::ops::DerefMut for UspaceContext {
     }
 }
 
->>>>>>> f29b2482962f77e62d1c4f497cb7367ebc0e6da4
 /// Saved hardware states of a task.
 ///
 /// The context usually includes:
