@@ -19,7 +19,7 @@ pub use result::{SyscallResult, ToLinuxResult};
 macro_rules! syscall_handler_def {
     ($($(#[$attr:meta])* $sys:ident => $args:tt $body:expr $(,)?)*) => {
         #[axhal::trap::register_trap_handler(axhal::trap::SYSCALL)]
-        pub fn handle_syscall(tf: &axhal::arch::TrapFrame, syscall_num: usize) -> Option<isize> {
+        pub fn handle_syscall(tf: &mut axhal::arch::TrapFrame, syscall_num: usize) -> Option<isize> {
             use syscalls::Sysno;
             use $crate::result::{SyscallResult, LinuxResultToIsize};
             let args = [tf.arg0(), tf.arg1(), tf.arg2(), tf.arg3(), tf.arg4(), tf.arg5()];
