@@ -1,6 +1,6 @@
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::{ctypes::TimeStat, mm::map_trapoline, task::add_thread_to_table};
+use crate::{ctypes::TimeStat, elf::OwnedElfFile, mm::map_trapoline, task::add_thread_to_table};
 use alloc::{
     boxed::Box,
     string::{String, ToString},
@@ -392,7 +392,7 @@ pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxR
         ExecType::Shell
     };
 
-    let elf_file = match exec_type {
+    let elf_file: OwnedElfFile = match exec_type {
         ExecType::Elf => load_elf_from_disk(&program_path)
             .inspect_err(|err| debug!("load_elf_from_disk failed: {:?}", err))?,
         ExecType::Shell => {

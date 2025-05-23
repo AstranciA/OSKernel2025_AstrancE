@@ -13,7 +13,7 @@ use axtask::{TaskExtRef, current};
 use memory_addr::{MemoryAddr, VirtAddrRange, va};
 use xmas_elf::ElfFile;
 
-use crate::{copy_from_kernel, elf::ELFInfo};
+use crate::{copy_from_kernel, elf::{ELFInfo, OwnedElfFile}};
 
 pub fn new_user_aspace_empty() -> AxResult<AddrSpace> {
     error!("{:x?}", axconfig::plat::USER_SPACE_SIZE);
@@ -30,7 +30,7 @@ pub fn new_user_aspace_empty() -> AxResult<AddrSpace> {
 /// - Third: thread pointer.
 /// - The last return value is the address space of the user app.
 pub fn load_elf_to_mem(
-    elf_file: ElfFile<'static>,
+    elf_file: OwnedElfFile,
     args: Option<&[String]>,
     envs: Option<&[String]>,
 ) -> AxResult<(VirtAddr, VirtAddr, Option<VirtAddr>, AddrSpace)> {
