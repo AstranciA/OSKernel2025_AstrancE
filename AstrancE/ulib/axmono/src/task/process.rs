@@ -7,6 +7,7 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
+use core::ffi::c_int;
 use arceos_posix_api::{FD_TABLE, ctypes::*};
 use axerrno::{AxError, AxResult, LinuxError, LinuxResult};
 use axfs::{

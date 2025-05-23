@@ -1,13 +1,14 @@
 use alloc::sync::Arc;
+use alloc::vec::Vec;
 use axtask::yield_now;
 use core::ffi::{c_int, c_short};
 
-use axerrno::{LinuxError, LinuxResult};
+use axerrno::{ax_err, LinuxError, LinuxResult};
 use axio::PollState;
 use axns::{ResArc, def_resource};
 use flatten_objects::FlattenObjects;
 use spin::RwLock;
-
+use axfs_vfs::VfsResult;
 use crate::ctypes;
 use crate::imp::stdio::{stdin, stdout};
 
@@ -21,6 +22,18 @@ pub trait FileLike: Send + Sync {
     fn into_any(self: Arc<Self>) -> Arc<dyn core::any::Any + Send + Sync>;
     fn poll(&self) -> LinuxResult<PollState>;
     fn set_nonblocking(&self, nonblocking: bool) -> LinuxResult;
+    fn fgetxattr(&self, name: &str, value: &mut [u8], size: usize, flags: usize)-> LinuxResult<usize>{
+        warn!("Unsupport fgetxattr for this type");
+        Ok(0)
+    }
+    fn fsetxattr(&self, name: &str, value: &[u8], size: usize, flags: usize) -> LinuxResult<usize>{
+        warn!("Unsupport fsetxattr for this type");
+        Ok(0)
+    }
+    fn fremovexattr(&self, name: &str) -> LinuxResult<usize>{
+        warn!("Unsupport fremovexattr for this type");
+        Ok(0)
+    }
 }
 
 def_resource! {
