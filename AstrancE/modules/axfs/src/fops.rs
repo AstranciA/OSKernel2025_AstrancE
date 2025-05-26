@@ -1,19 +1,19 @@
 //! Low-level filesystem operations.
 
-use alloc::collections::BTreeMap;
-use alloc::string::{String, ToString};
-use alloc::vec::Vec;
-use core::ffi::c_int;
-use axerrno::{AxError, AxResult, ax_err, ax_err_type, LinuxResult, LinuxError};
-use axfs_vfs::{VfsError, VfsNodeRef};
-use axio::SeekFrom;
-use cap_access::{Cap, WithCap};
-use core::fmt;
-use spin::Mutex;
 #[cfg(feature = "myfs")]
 pub use crate::dev::Disk;
 #[cfg(feature = "myfs")]
 pub use crate::fs::myfs::MyFileSystemIf;
+use alloc::collections::BTreeMap;
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
+use axerrno::{AxError, AxResult, LinuxError, LinuxResult, ax_err, ax_err_type};
+use axfs_vfs::{VfsError, VfsNodeRef};
+use axio::SeekFrom;
+use cap_access::{Cap, WithCap};
+use core::ffi::c_int;
+use core::fmt;
+use spin::Mutex;
 
 /// Alias of [`axfs_vfs::VfsNodeType`].
 pub type FileType = axfs_vfs::VfsNodeType;
@@ -208,8 +208,8 @@ impl File {
     pub fn open(path: &str, opts: &OpenOptions) -> AxResult<Self> {
         Self::_open_at(None, path, opts)
     }
-    
-    pub fn open_at(dir: &VfsNodeRef,path: &str, opts: &OpenOptions) -> AxResult<Self>{
+
+    pub fn open_at(dir: &VfsNodeRef, path: &str, opts: &OpenOptions) -> AxResult<Self> {
         Self::_open_at(Some(dir), path, opts)
     }
 
@@ -305,7 +305,12 @@ impl File {
         buf[..val.len()].copy_from_slice(val);
         Ok(val.len())
     }
-    pub fn set_xattr(&mut self, name: &str, value: &[u8], size: usize) -> Result<usize, LinuxError> {
+    pub fn set_xattr(
+        &mut self,
+        name: &str,
+        value: &[u8],
+        size: usize,
+    ) -> Result<usize, LinuxError> {
         if size > value.len() {
             return Err(LinuxError::EINVAL); // Size exceeds provided buffer length
         }
@@ -317,7 +322,7 @@ impl File {
     }
 
     //TODO：fix the lxattr
-    
+
     // pub fn list_xattr(&self, buf: *mut u8) -> Result<usize, i32> {
     //     let file = self;
     //     let xattrs = file.xattrs.lock();
@@ -344,7 +349,6 @@ impl File {
             Err(LinuxError::ENODATA) // Attribute not found
         }
     }
-    
 }
 
 impl Directory {
@@ -469,7 +473,12 @@ impl Directory {
         buf[..val.len()].copy_from_slice(val);
         Ok(val.len())
     }
-    pub fn set_xattr(&mut self, name: &str, value: &[u8], size: usize) -> Result<usize, LinuxError> {
+    pub fn set_xattr(
+        &mut self,
+        name: &str,
+        value: &[u8],
+        size: usize,
+    ) -> Result<usize, LinuxError> {
         if size > value.len() {
             return Err(LinuxError::EINVAL); // Size exceeds provided buffer length
         }

@@ -126,7 +126,17 @@ impl<IO: IoTrait> VfsNodeOps for DirWrapper<'static, IO> {
             VfsNodeType::Dir,
             BLOCK_SIZE as u64,
             1,
-            0,0,0,0,0,0,0,0,0,0,0
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
+            0,
         ))
     }
 

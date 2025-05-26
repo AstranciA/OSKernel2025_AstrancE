@@ -1,8 +1,8 @@
 use alloc::sync::Arc;
 use axfs_vfs::{VfsNodeType, VfsOps, VfsResult};
 // use devfile::{DeviceNode,DiskFile};
-use crate::{fs};
 use crate::dev::Disk;
+use crate::fs;
 
 #[cfg(feature = "devfs")]
 pub(crate) fn devfs() -> Arc<fs::devfs::DeviceFileSystem> {
@@ -12,10 +12,10 @@ pub(crate) fn devfs() -> Arc<fs::devfs::DeviceFileSystem> {
     let null = Arc::new(fs::devfs::NullDev);
     let zero = Arc::new(fs::devfs::ZeroDev);
     let bar = Arc::new(fs::devfs::ZeroDev);
-    
+
     let devfs = fs::devfs::DeviceFileSystem::new();
     // let sda1_dir = devfs.mkdir("sda1");
-    
+
     // devfs.add("null", Arc::new(null));
     // devfs.add("zero", Arc::new(zero));
     // foo_dir.add("bar", Arc::new(bar));

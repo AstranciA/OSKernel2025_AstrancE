@@ -4,13 +4,13 @@
 // use alloc::sync::{Arc, Weak};
 // use spin::Mutex;
 // use axdriver::prelude::*;
-// 
+//
 // pub struct Blkdev {
 //     dev: AxBlockDevice,
 //     dev_t: (u32, u32),
 //     mount_n: usize,
 // }
-// 
+//
 // impl Blkdev {
 //     pub fn new(dev: AxBlockDevice, major: u32, minor: u32) -> Self {
 //         Self{
@@ -27,19 +27,19 @@
 //     }
 //     pub fn dev_t(&self) -> (u32, u32) {self.dev_t}
 //     pub fn mount_n(&self) ->usize {self.mount_n}
-// 
+//
 // }
-// 
+//
 // impl VfsNodeOps for Blkdev {
 //     fn get_attr(&self) -> VfsResult<VfsNodeAttr> {
 //         //TODO:dev num
 //         Ok(VfsNodeAttr::new_file(4096, 1))
 //     }
-// 
+//
 //     fn remove(&self, _path: &str) -> VfsResult {
 //         todo!()
 //     }
-// 
+//
 //     fn as_any(&self) -> &dyn Any {
 //         todo!()
 //     }

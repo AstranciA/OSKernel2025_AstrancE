@@ -76,7 +76,7 @@ typedef struct {{
             "RLIMIT_.*",
             "EAI_.*",
             "MAXADDRS",
-            "POLL.*"
+            "POLL.*",
         ];
 
         #[derive(Debug)]

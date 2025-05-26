@@ -11,7 +11,7 @@ pub struct Disk {
 
 impl Disk {
     /// Create a new disk.
-    pub fn new(dev:AxBlockDevice, major: u8, minor: u8) -> Self {
+    pub fn new(dev: AxBlockDevice, major: u8, minor: u8) -> Self {
         assert_eq!(BLOCK_SIZE, dev.block_size());
         Self {
             block_id: 0,
@@ -25,11 +25,11 @@ impl Disk {
     pub fn size(&self) -> u64 {
         self.dev.num_blocks() * BLOCK_SIZE as u64
     }
-    
+
     // ///Clone disk for filesystem
     // pub fn get_dev(&self) -> AxBlockDevice {
     //     let dev = self.dev.deep_clone().expect("Clone failed");
-    // 
+    //
     //     // 尝试从 trait object 恢复为具体类型
     //     dev.as_any()
     //         .downcast_ref::<AxBlockDevice>()
@@ -37,7 +37,9 @@ impl Disk {
     //         .clone()
     // }
     ///Get dev index
-    pub fn dev_t(&self) -> (u8, u8) {self.dev_t}
+    pub fn dev_t(&self) -> (u8, u8) {
+        self.dev_t
+    }
 
     /// Get the position of the cursor.
     pub fn position(&self) -> u64 {
@@ -140,9 +142,9 @@ impl Disk {
 //     fn remove(&self, _path: &str) -> VfsResult {
 //         todo!()
 //     }
-// 
+//
 // }
-// 
+//
 // impl Clone for Disk {
 //     fn clone(&self) -> Self {
 //         Disk {

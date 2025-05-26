@@ -11,12 +11,12 @@ use syscall_imp::{
 };
 mod syscall_imp;
 use arceos_posix_api::ctypes;
-use core::ffi::*;
 use arceos_posix_api::ctypes::pid_t;
+use core::ffi::*;
 
 pub mod result;
-pub use result::{SyscallResult, ToLinuxResult};
 use crate::syscall_imp::fs::sys_fsetxattr;
+pub use result::{SyscallResult, ToLinuxResult};
 
 #[macro_export]
 macro_rules! syscall_handler_def {

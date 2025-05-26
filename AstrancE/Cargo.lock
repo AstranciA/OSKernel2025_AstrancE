@@ -1399,7 +1399,6 @@ dependencies = [
  "byteorder",
  "log",
  "printf-compat",
- "spin 0.10.0",
 ]
 
 [[package]]

@@ -26,18 +26,18 @@
 extern crate log;
 extern crate alloc;
 use alloc::sync::Arc;
+pub mod api;
+mod blkdev;
 mod dev;
+pub mod fops;
 mod fs;
 mod mounts;
 mod root;
-mod blkdev;
-pub mod api;
-pub mod fops;
 pub use root::{CURRENT_DIR, CURRENT_DIR_PATH};
 
+use crate::dev::Disk;
 use axdriver::{AxDeviceContainer, prelude::*};
 use axfs_vfs::{VfsNodeOps, VfsOps};
-use crate::dev::Disk;
 
 /// Initializes filesystems by block devices.
 pub fn init_filesystems(mut blk_devs: AxDeviceContainer<AxBlockDevice>) {
@@ -50,6 +50,6 @@ pub fn init_filesystems(mut blk_devs: AxDeviceContainer<AxBlockDevice>) {
     // devfs.add("ram1",Arc::new(disk.clone()));
     // let node = devfs.root_dir().lookup("ram1").unwrap();
     //let disk = Disk::new(node.get_dev(),1,0);
-    root::init_rootfs(Disk::new(dev,1,0));
+    root::init_rootfs(Disk::new(dev, 1, 0));
     info!("Initialize device filesystems...");
 }

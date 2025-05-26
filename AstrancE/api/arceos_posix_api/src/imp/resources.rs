@@ -1,7 +1,7 @@
 use crate::ctypes;
+use crate::ctypes::pid_t;
 use axerrno::LinuxError;
 use core::ffi::c_int;
-use crate::ctypes::pid_t;
 
 /// Get resource limitations
 ///
@@ -67,12 +67,11 @@ pub unsafe fn sys_prlimit64(
             return Err(LinuxError::EINVAL); // 
         }
         if !old_limit.is_null() {
-            unsafe{sys_getrlimit(resource, old_limit)};
+            unsafe { sys_getrlimit(resource, old_limit) };
         }
         if !new_limit.is_null() {
-            unsafe{sys_setrlimit(resource, new_limit)};
+            unsafe { sys_setrlimit(resource, new_limit) };
         }
         Ok(0)
     })
 }
-

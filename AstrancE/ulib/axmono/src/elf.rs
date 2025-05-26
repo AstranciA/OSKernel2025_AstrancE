@@ -112,7 +112,7 @@ impl ELFInfo {
             entry: VirtAddr::from(elf.header.pt2.entry_point() as usize + elf_offset),
             segments,
             auxv: elf_parser.auxv_vector(PAGE_SIZE_4K),
-            _elf: elf
+            _elf: elf,
         }
     }
 

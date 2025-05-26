@@ -40,7 +40,7 @@ pub fn read(path: &str) -> io::Result<Vec<u8>> {
     Ok(bytes)
 }
 
-pub fn read_at(dir: &VfsNodeRef,path: &str) -> io::Result<Vec<u8>> {
+pub fn read_at(dir: &VfsNodeRef, path: &str) -> io::Result<Vec<u8>> {
     let mut file = File::open_at(dir, path)?;
     let size = file.metadata().map(|m| m.len()).unwrap_or(0);
     let mut bytes = Vec::with_capacity(size as usize);
