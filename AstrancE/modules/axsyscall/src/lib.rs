@@ -137,8 +137,7 @@ syscall_handler_def!(
         fstatat => [dir_fd, pathname, buf, flags, ..] {
             unsafe { apply!(syscall_imp::fs::sys_fstatat, dir_fd, pathname, buf, flags) }
         }
-
-
+    
         #[cfg(all(feature = "fs", feature = "fd"))]
         lseek => [fd, offset, whence, ..] {
             apply!(syscall_imp::fs::sys_lseek, fd, offset, whence)
@@ -186,6 +185,12 @@ syscall_handler_def!(
         }
         fremovexattr =>[fd, name,..]{
             syscall_imp::fs::sys_fremovexattr(fd as c_int ,name as *const c_char)
+        }
+        mount => [src, mnt, fstype, mntflag,..]{
+            syscall_imp::fs::sys_mount(src as _,mnt as _,fstype as _,mntflag)
+        }
+        umount2=> [mnt,..]{
+            syscall_imp::fs::sys_umount2(mnt as _)
         }
         // 进程控制相关系统调用
         /*

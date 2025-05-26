@@ -1,8 +1,9 @@
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use axfs::CURRENT_DIR;
+use axfs::root::ROOT_DIR;
 use axfs::api::{DirEntry, create_dir, read_dir, remove_file};
-use axfs_vfs::{VfsDirEntry, VfsNodeAttr, VfsNodeType};
+use axfs_vfs::{VfsDirEntry, VfsNodeAttr, VfsNodeOps, VfsNodeType};
 use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::panic;
 use static_assertions::assert_eq_size;
@@ -99,7 +100,8 @@ fn attr2stat(metadata: VfsNodeAttr) -> ctypes::stat {
     let ty = metadata.file_type() as u8;
     let perm = metadata.perm().bits() as u32;
     let st_mode = ((ty as u32) << 12) | perm;
-    debug!("!!!!mode is {}",st_mode);
+    // debug!("!!!!mode is {}",st_mode);
+    debug!("!!!stat: the file size is {}", metadata.size() as usize);
     ctypes::stat {
         st_dev: metadata.dev() as _,
         st_ino: metadata.st_ino() as _,
@@ -267,8 +269,14 @@ pub unsafe fn sys_fstatat(
         }
         IDX += 1;
     }
-
-    if pathname.starts_with('/') || dirfd == AT_FDCWD as _ {
+    if pathname.starts_with('/'){
+        let dir = ROOT_DIR.clone();
+        let file = dir.lookup(pathname)?;
+        let stat = attr2stat(file.get_attr()?);
+        unsafe { *statbuf = stat };
+        return Ok(0);
+    }
+    if dirfd == AT_FDCWD as _{
         let dir = CURRENT_DIR.lock().clone();
         let file = dir.lookup(pathname)?;
         let stat = attr2stat(file.get_attr()?);
@@ -725,5 +733,15 @@ pub fn sys_unlinkat(dir_fd: i32, path: *const c_char) -> LinuxResult<isize> {
     let dir: Arc<Directory> = Directory::from_fd(dir_fd)?;
     let path = char_ptr_to_str(path).map_err(|_| LinuxError::EFAULT)?;
     dir.inner.lock().remove_file(path)?;
+    Ok(0)
+}
+
+pub fn sys_mount(src: *const c_char,mnt: *const c_char, fstype: *const c_char, mntflag: usize) -> LinuxResult<isize> {
+    debug!("mount simple return");
+    Ok(0)
+}
+
+pub fn sys_umount2(mnt: *const c_char) -> LinuxResult<isize> {
+    debug!("umount2 simple return");
     Ok(0)
 }

@@ -14,6 +14,7 @@ pub struct test_stat {
     pub st_nlink: nlink_t,
     pub st_uid: uid_t,
     pub st_gid: gid_t,
+    pub __pad1: i32,
     pub st_rdev: dev_t,
     pub st_size: off_t,
     pub st_blksize: blksize_t,
@@ -66,9 +67,18 @@ pub fn sys_lseek(fd: c_int, offset: ctypes::off_t, whence: c_int) -> SyscallResu
     (api::sys_lseek(fd, offset, whence) as isize).to_linux_result()
 }
 
+// #[inline]
+// pub unsafe fn sys_stat(path: *const c_char, buf: *mut ctypes::stat) -> SyscallResult {
+//     api::sys_stat(path, buf).to_linux_result()
+// }
+
+
 #[inline]
-pub unsafe fn sys_stat(path: *const c_char, buf: *mut ctypes::stat) -> SyscallResult {
-    api::sys_stat(path, buf).to_linux_result()
+pub unsafe fn sys_stat(path: *const c_char, buf: *mut test_stat) -> SyscallResult {
+    let mut stat_buf = ctypes::stat::default();
+    let result = api::sys_stat(path, &mut stat_buf as *mut _).to_linux_result();
+    *buf = test_stat::from(stat_buf);
+    result
 }
 
 #[inline]
@@ -76,13 +86,13 @@ pub unsafe fn sys_fstat(fd: c_int, buf: *mut test_stat) -> SyscallResult {
     let mut stat_buf = ctypes::stat::default();
     let result = unsafe { api::sys_fstat(fd, &mut stat_buf as *mut _) }.to_linux_result();
     *buf = test_stat::from(stat_buf);
-    let stat = &*buf;
-    debug!{
-            "!!!atime: {:?}, ctime: {:?}, mtime: {:?}",
-            stat.st_atime_sec,
-            stat.st_ctime_sec,
-            stat.st_mtime_sec,
-        };
+    // let stat = &*buf;
+    // debug!{
+    //         "!!!atime: {:?}, ctime: {:?}, mtime: {:?}",
+    //         stat.st_atime_sec,
+    //         stat.st_ctime_sec,
+    //         stat.st_mtime_sec,
+    //     };
     result
 }
 
@@ -159,4 +169,12 @@ pub fn sys_fsetxattr(fd: c_int, name: *const c_char, buf: *mut u8, size:c_int, f
 
 pub fn sys_fremovexattr(fd: c_int, name: *const c_char) -> SyscallResult{
     api::sys_fremovexattr(fd, name).to_linux_result()
+}
+
+pub fn sys_mount(src: *const c_char, mnt: *const c_char, fstype: *const c_char, mntflag: usize) -> SyscallResult {
+    api::sys_mount(src, mnt, fstype, mntflag)
+}
+
+pub fn sys_umount2(mnt: *const c_char) -> SyscallResult {
+    api::sys_umount2(mnt)
 }

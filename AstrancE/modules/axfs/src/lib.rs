@@ -29,7 +29,7 @@ use alloc::sync::Arc;
 mod dev;
 mod fs;
 mod mounts;
-mod root;
+pub mod root;
 mod blkdev;
 pub mod api;
 pub mod fops;

@@ -117,6 +117,14 @@ syscall_handler_def!(
         getppid => _ {
             current().task_ext().thread.process().parent().map(|p|p.pid() as _).ok_or(LinuxError::EINVAL)
         }
+        geteuid => _{
+            //TODO: returns the effective user ID of the calling process
+            Ok(0)
+        }
+        getegid => _{
+            //TODO:returns the effective group ID of the calling process
+            Ok(0)
+        }
         // FIXME: cutime cstimes
         times => args {
             let curr_task = current();
