@@ -104,3 +104,7 @@ axfs_vfs = { path = "./crates/axfs_crates/axfs_vfs" }
 axfs_devfs = { path = "./crates/axfs_crates/axfs_devfs" }
 axfs_ramfs = { path = "./crates/axfs_crates/axfs_ramfs" }
 lwext4_rust = { path = "./crates/lwext4_rust" }
+
+[patch.'https://github.com/Azure-stars/lwext4_rust.git']
+lwext4_rust={path = "./crates/lwext4_rust"}
+

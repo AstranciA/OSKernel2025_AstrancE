@@ -1,6 +1,7 @@
 use crate::ctypes;
 use axerrno::LinuxError;
 use core::ffi::c_int;
+use crate::ctypes::pid_t;
 
 /// Get resource limitations
 ///
@@ -49,3 +50,29 @@ pub unsafe fn sys_setrlimit(resource: c_int, rlimits: *mut crate::ctypes::rlimit
         Ok(0)
     })
 }
+pub unsafe fn sys_prlimit64(
+    pid: pid_t,
+    resource: c_int,
+    new_limit: *mut ctypes::rlimit,
+    old_limit: *mut ctypes::rlimit,
+) -> c_int {
+    debug!(
+        "sys_prlimit64 <= pid: {}, resource: {}, new: {:#x}, old: {:#x}",
+        pid, resource, new_limit as usize, old_limit as usize
+    );
+    syscall_body!(sys_prlimit64, {
+        // 1. 获取目标进程（目前仅支持当前进程 pid==0）
+        //TODO:support:pid != 0
+        if pid != 0 {
+            return Err(LinuxError::EINVAL); // 
+        }
+        if !old_limit.is_null() {
+            unsafe{sys_getrlimit(resource, old_limit)};
+        }
+        if !new_limit.is_null() {
+            unsafe{sys_setrlimit(resource, new_limit)};
+        }
+        Ok(0)
+    })
+}
+

@@ -328,7 +328,7 @@ pub fn yield_with_time_stat() {
     time_stat_from_old_task();
 }
 #[register_trap_handler(PRE_TRAP)]
-fn pre_trap_handler(trap_frame: &TrapFrame, from_user: bool) -> bool {
+fn pre_trap_handler(trap_frame: &mut TrapFrame, from_user: bool) -> bool {
     if from_user {
         time_stat_from_user_to_kernel();
     }
@@ -336,7 +336,7 @@ fn pre_trap_handler(trap_frame: &TrapFrame, from_user: bool) -> bool {
 }
 
 #[register_trap_handler(POST_TRAP)]
-fn post_trap_handler(trap_frame: &TrapFrame, from_user: bool) -> bool {
+fn post_trap_handler(trap_frame: &mut TrapFrame, from_user: bool) -> bool {
     if from_user {
         time_stat_from_kernel_to_user();
         handle_pending_signals(trap_frame);

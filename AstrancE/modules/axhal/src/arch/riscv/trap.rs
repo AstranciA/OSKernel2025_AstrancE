@@ -1,3 +1,4 @@
+use memory_addr::VirtAddr;
 use page_table_entry::MappingFlags;
 use riscv::interrupt::Trap;
 use riscv::interrupt::supervisor::{Exception as E, Interrupt as I};
@@ -18,11 +19,15 @@ fn handle_breakpoint(sepc: &mut usize) {
     *sepc += 2
 }
 
-fn handle_page_fault(tf: &TrapFrame, mut access_flags: MappingFlags, is_user: bool) {
+fn handle_page_fault(
+    tf: &TrapFrame,
+    vaddr: VirtAddr,
+    mut access_flags: MappingFlags,
+    is_user: bool,
+) {
     if is_user {
         access_flags |= MappingFlags::USER;
     }
-    let vaddr = va!(stval::read());
     if !handle_trap!(PAGE_FAULT, vaddr, access_flags, is_user) {
         panic!(
             "Unhandled {} Page Fault @ {:#x}, fault_vaddr={:#x} ({:?}):\n{:#x?}",
@@ -45,6 +50,12 @@ fn riscv_trap_handler(tf: &mut TrapFrame, from_user: bool) {
     }
     //warn!("trap from {:x?}", tf);
     if let Ok(cause) = scause.cause().try_into::<I, E>() {
+        // Interrupts modify the value of `stval`, which must be saved before the
+        // interrupt is enabled
+        let vaddr = va!(stval::read());
+        if scause.is_exception() {
+            unmask_irqs(tf);
+        }
         match cause {
             #[cfg(feature = "uspace")]
             Trap::Exception(E::UserEnvCall) => {
@@ -52,13 +63,13 @@ fn riscv_trap_handler(tf: &mut TrapFrame, from_user: bool) {
                 tf.sepc += 4;
             }
             Trap::Exception(E::LoadPageFault) => {
-                handle_page_fault(tf, MappingFlags::READ, from_user)
+                handle_page_fault(tf, vaddr, MappingFlags::READ, from_user)
             }
             Trap::Exception(E::StorePageFault) => {
-                handle_page_fault(tf, MappingFlags::WRITE, from_user)
+                handle_page_fault(tf, vaddr, MappingFlags::WRITE, from_user)
             }
             Trap::Exception(E::InstructionPageFault) => {
-                handle_page_fault(tf, MappingFlags::EXECUTE, from_user)
+                handle_page_fault(tf, vaddr, MappingFlags::EXECUTE, from_user)
             }
             Trap::Exception(E::Breakpoint) => handle_breakpoint(&mut tf.sepc),
             Trap::Interrupt(_) => {
@@ -69,6 +80,8 @@ fn riscv_trap_handler(tf: &mut TrapFrame, from_user: bool) {
                 panic!("Unhandled trap {:?} @ {:#x}:\n{:#x?}", cause, tf.sepc, tf);
             }
         }
+        post_trap(tf, from_user);
+        mask_irqs();
     } else {
         panic!(
             "Unknown trap {:?} @ {:#x}:\n{:#x?}",
@@ -77,5 +90,26 @@ fn riscv_trap_handler(tf: &mut TrapFrame, from_user: bool) {
             tf
         );
     }
-    post_trap(tf, from_user);
+}
+
+// Interrupt unmasking function for exception handling.
+// NOTE: It must be invoked after the switch to kernel mode has finished
+//
+// If interrupts were enabled before the exception (the `SPIE` bit in the
+// `sstatus` register is set), re-enable interrupts before exception handling
+//
+// On riscv64, when an exception occurs, `sstatus.SIE` is set to zero to mask
+// the interrupt and the old value of `SIE` is stored in SPIE. Recover `SIE`
+// according to `SPIE` when using `sret`.
+fn unmask_irqs(tf: &TrapFrame) {
+    const PIE: usize = 1 << 5;
+    if tf.sstatus & PIE == PIE {
+        super::enable_irqs();
+    } else {
+        debug!("Interrupts were disabled before exception");
+    }
+}
+
+fn mask_irqs() {
+    super::disable_irqs();
 }

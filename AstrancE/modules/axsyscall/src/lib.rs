@@ -12,14 +12,17 @@ use syscall_imp::{
 mod syscall_imp;
 use arceos_posix_api::ctypes;
 use core::ffi::*;
+use arceos_posix_api::ctypes::pid_t;
+
 pub mod result;
 pub use result::{SyscallResult, ToLinuxResult};
+use crate::syscall_imp::fs::sys_fsetxattr;
 
 #[macro_export]
 macro_rules! syscall_handler_def {
     ($($(#[$attr:meta])* $sys:ident => $args:tt $body:expr $(,)?)*) => {
         #[axhal::trap::register_trap_handler(axhal::trap::SYSCALL)]
-        pub fn handle_syscall(tf: &axhal::arch::TrapFrame, syscall_num: usize) -> Option<isize> {
+        pub fn handle_syscall(tf: &mut axhal::arch::TrapFrame, syscall_num: usize) -> Option<isize> {
             use syscalls::Sysno;
             use $crate::result::{SyscallResult, LinuxResultToIsize};
             let args = [tf.arg0(), tf.arg1(), tf.arg2(), tf.arg3(), tf.arg4(), tf.arg5()];
@@ -175,6 +178,15 @@ syscall_handler_def!(
             syscall_imp::pipe::sys_pipe(fds)
         }
 
+        fgetxattr =>[fd, name, buf, sizes,..]{
+            syscall_imp::fs::sys_fgetxattr(fd as c_int,name as *const c_char ,buf as *mut c_char, sizes as c_int)
+        }
+        fsetxattr =>[fd, name, buf, sizes, flag,..]{
+            sys_fsetxattr(fd as c_int, name as _, buf as _, sizes as _, flag as _)
+        }
+        fremovexattr =>[fd, name,..]{
+            syscall_imp::fs::sys_fremovexattr(fd as c_int ,name as *const c_char)
+        }
         // 进程控制相关系统调用
         /*
          *exit => [code,..] {
@@ -213,6 +225,24 @@ syscall_handler_def!(
             let req: *const ctypes::timespec = args[2] as *const ctypes::timespec;
             let rem: *mut ctypes::timespec = args[3] as *mut ctypes::timespec;
             syscall_imp::time::sys_nanosleep(req, rem)
+        }
+        //资源相关系统调用
+        getrlimit => args {
+            let resource = args[0] as c_int;
+            let rlimit = args[1] as *mut ctypes::rlimit;
+            syscall_imp::source::sys_getrlimit(resource, rlimit)
+        }
+        setrlimit => args {
+            let resource = args[0] as c_int;
+            let rlimit = args[1] as *mut ctypes::rlimit;
+            syscall_imp::source::sys_setrlimit(resource, rlimit)
+        }
+        prlimit64 => args {
+            let pid = args[0] as pid_t;
+            let resource = args[1] as c_int;
+            let new_limit = args[2] as *mut ctypes::rlimit;
+            let old_limit = args[3] as *mut ctypes::rlimit;
+            syscall_imp::source::sys_prlimit64(pid, resource, new_limit, old_limit)
         }
         // 其他系统调用
         uname => [buf, ..] apply!(sys_uname, buf),

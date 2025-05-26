@@ -3,7 +3,7 @@ use alloc::sync::Arc;
 use axfs::CURRENT_DIR;
 use axfs::api::{DirEntry, create_dir, read_dir, remove_file};
 use axfs_vfs::{VfsDirEntry, VfsNodeAttr, VfsNodeType};
-use core::ffi::{c_char, c_int, c_void};
+use core::ffi::{c_char, c_int, c_uint, c_void};
 use core::panic;
 use static_assertions::assert_eq_size;
 
@@ -14,7 +14,8 @@ use axsync::Mutex;
 
 use super::fd_ops::{FileLike, get_file_like};
 use crate::AT_FDCWD;
-use crate::ctypes::__IncompleteArrayField;
+use crate::ctypes::{__IncompleteArrayField, time_t, timespec};
+// use crate::ctypes::{__IncompleteArrayField, time_t};
 use crate::utils::str_to_cstr;
 use crate::{ctypes, utils::char_ptr_to_str};
 
@@ -82,21 +83,45 @@ impl FileLike for File {
     fn set_nonblocking(&self, _nonblocking: bool) -> LinuxResult {
         Ok(())
     }
+    fn fgetxattr(&self, name: &str, value: &mut [u8], size: usize, flags: usize)-> LinuxResult<usize>{
+        Ok(self.inner.lock().get_xattr(name, value, size)?)
+    }
+    fn fsetxattr(&self, name: &str, value: &[u8], size: usize, flags: usize) -> LinuxResult<usize>{
+        Ok(self.inner.lock().set_xattr(name, value, size)?)
+    }
+    fn fremovexattr(&self, name: &str) -> LinuxResult<usize>{
+        debug!("This error?");
+        Ok(self.inner.lock().remove_xattr(name)?)
+    }
 }
 
 fn attr2stat(metadata: VfsNodeAttr) -> ctypes::stat {
     let ty = metadata.file_type() as u8;
     let perm = metadata.perm().bits() as u32;
     let st_mode = ((ty as u32) << 12) | perm;
+    debug!("!!!!mode is {}",st_mode);
     ctypes::stat {
-        st_ino: 1,
-        st_nlink: 1,
+        st_dev: metadata.dev() as _,
+        st_ino: metadata.st_ino() as _,
         st_mode,
-        st_uid: 1000,
-        st_gid: 1000,
+        st_nlink: metadata.nlink() as _,
+        st_uid: metadata.uid() as _,
+        st_gid: metadata.gid() as _,
         st_size: metadata.size() as _,
-        st_blocks: metadata.blocks() as _,
         st_blksize: 512,
+        st_blocks: metadata.blocks() as _,
+        st_atime:timespec{
+            tv_sec: metadata.atime() as time_t,
+            tv_nsec: metadata.atime_nse() as core::ffi::c_long
+        },
+        st_ctime:timespec{
+            tv_sec: metadata.ctime() as time_t,
+            tv_nsec: metadata.ctime_nse() as core::ffi::c_long
+        },
+        st_mtime:timespec{
+            tv_sec: metadata.mtime() as time_t,
+            tv_nsec: metadata.mtime_nse() as core::ffi::c_long
+        },
         ..Default::default()
     }
 }
@@ -339,7 +364,6 @@ pub unsafe fn sys_fstat(fd: c_int, buf: *mut ctypes::stat) -> c_int {
         if buf.is_null() {
             return Err(LinuxError::EFAULT);
         }
-
         unsafe { *buf = get_file_like(fd)?.stat()? };
         Ok(0)
     })
@@ -360,6 +384,85 @@ pub unsafe fn sys_lstat(path: *const c_char, buf: *mut ctypes::stat) -> ctypes::
     })
 }
 
+///get the xattr by fd and write into 'buf'
+pub fn sys_fgetxattr(fd: c_int, name: *const c_char, buf: *mut u8, sizes: c_int) -> usize {
+    debug!("sys_fgetxattr <= fd: {:?}, buf: {:#x}", fd, buf as usize);
+    syscall_body!(sys_fgetxattr, {
+        if fd < 0 {
+            debug!("Invalid file descriptor: {}", fd);
+            return Err(LinuxError::EBADF);
+        }
+        let file = get_file_like(fd).map_err(|e| {
+            debug!("Failed to get File from fd {}: {:?}", fd, e);
+            LinuxError::EBADF
+        })?;
+        let attr_name = char_ptr_to_str(name).map_err(|e| {
+            debug!("Failed to convert name pointer to string: {:?}", e);
+            LinuxError::EINVAL
+        })?;
+        if buf.is_null() {
+            return Err(LinuxError::EINVAL);
+        }
+        let sizes_usize = sizes as usize;
+        let buf_slice = unsafe { core::slice::from_raw_parts_mut(buf, sizes_usize) };
+        file.fgetxattr(attr_name, buf_slice, sizes_usize, 0).map_err(|e| {
+            debug!("Failed to get xattr: {:?}", e);
+            e
+        })
+    })
+}
+///write the buf into  the xattr by fd
+pub fn sys_fsetxattr(fd: c_int, name: *const c_char, buf: *mut u8, size: c_int, flags: c_int) -> usize {
+    debug!("sys_fsetxattr <= fd: {:?}, buf: {:#x}", fd, buf as usize);
+    syscall_body!(sys_fsetxattr, {
+        if fd < 0 {
+            debug!("Invalid file descriptor: {}", fd);
+            return Err(LinuxError::EBADF);
+        }
+        let file = get_file_like(fd).map_err(|e| {
+            debug!("Failed to get File from fd {}: {:?}", fd, e);
+            LinuxError::EBADF
+        })?;
+        let attr_name = char_ptr_to_str(name).map_err(|e| {
+            debug!("Failed to convert name pointer to string: {:?}", e);
+            LinuxError::EINVAL
+        })?;
+        if buf.is_null() {
+            return Err(LinuxError::EINVAL);
+        }
+        let size_usize = size as usize;
+        let value_slice = unsafe { core::slice::from_raw_parts(buf as *const u8, size_usize) };
+        file.fsetxattr(attr_name, value_slice, size_usize, flags as usize).map_err(|e| {
+            debug!("Failed to set xattr: {:?}", e);
+            e
+        })
+    })
+}
+/// remove the axttr by fd
+pub fn sys_fremovexattr(fd: c_int, name: *const c_char) -> usize {
+    debug!("sys_fremovexattr <= fd: {:?}, name: {:#x}", fd, name as usize);
+    syscall_body!(sys_fremovexattr, {
+        if fd < 0 {
+            debug!("Invalid file descriptor: {}", fd);
+            return Err(LinuxError::EBADF);
+        }
+        let file = get_file_like(fd).map_err(|e| {
+            debug!("Failed to get File from fd {}: {:?}", fd, e);
+            LinuxError::EBADF
+        })?;
+        let attr_name = char_ptr_to_str(name).map_err(|e| {
+            debug!("Failed to convert name pointer to string: {:?}", e);
+            LinuxError::EINVAL
+        })?;
+        let attr = file.stat();
+        debug!("model: {:?}. name: {:?}",attr.unwrap().st_mode, attr_name);
+        file.fremovexattr(attr_name).map_err(|e| {
+            debug!("Failed to remove xattr: {:?}", e);
+            e // Propagate the specific error (e.g., ENOATTR)
+        })?;
+        Ok(0)
+    })
+}
 /// Get the path of the current directory.
 pub fn sys_getcwd(buf: *mut c_char, size: usize) -> *mut c_char {
     debug!("sys_getcwd <= {:#x} {}", buf as usize, size);
@@ -447,14 +550,14 @@ impl FileLike for Directory {
         let perm = metadata.perm().bits() as u32;
         let st_mode = ((ty as u32) << 12) | perm;
         Ok(ctypes::stat {
-            st_ino: 1,
-            st_nlink: 2,
+            st_ino: metadata.st_ino() as u64,
+            st_nlink: metadata.nlink(),
             st_mode,
-            st_uid: 1000,
-            st_gid: 1000,
+            st_uid: metadata.uid() as c_uint,
+            st_gid: metadata.gid() as c_uint,
             st_size: metadata.size() as _,
             //st_blocks: metadata.blocks() as _,
-            st_blocks: 1,
+            st_blocks: metadata.blocks() as _,
             st_blksize: 512,
             ..Default::default()
         })
@@ -473,6 +576,17 @@ impl FileLike for Directory {
 
     fn set_nonblocking(&self, _nonblocking: bool) -> LinuxResult {
         Ok(())
+    }
+
+    fn fgetxattr(&self, name: &str, value: &mut [u8], size: usize, flags: usize)-> LinuxResult<usize>{
+        Ok(self.inner.lock().get_xattr(name, value, size)?)
+    }
+    fn fsetxattr(&self, name: &str, value: &[u8], size: usize, flags: usize) -> LinuxResult<usize>{
+        Ok(self.inner.lock().set_xattr(name, value, size)?)
+    }
+    fn fremovexattr(&self, name: &str) -> LinuxResult<usize>{
+        debug!("This error?");
+        Ok(self.inner.lock().remove_xattr(name)?)
     }
 }
 

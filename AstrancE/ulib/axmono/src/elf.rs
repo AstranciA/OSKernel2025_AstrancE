@@ -1,6 +1,9 @@
+use core::ops::Deref;
+
 use alloc::format;
 use alloc::string::ToString;
 use alloc::{string::String, vec::Vec};
+use axerrno::{AxError, AxResult};
 use axhal::{
     mem::{MemoryAddr, PAGE_SIZE_4K, VirtAddr},
     paging::MappingFlags,
@@ -13,8 +16,36 @@ use xmas_elf::{
     program::{Flags, ProgramHeader, SegmentData},
 };
 
-const USPACE: [usize; 16 * 1024] = [0; 16 * 1024];
-const USTACK: [usize; 4 * 1024] = [0; 4 * 1024];
+/*
+ *const USPACE: [usize; 16 * 1024] = [0; 16 * 1024];
+ *const USTACK: [usize; 4 * 1024] = [0; 4 * 1024];
+ */
+
+/// 持有ELF文件内容和解析结果的包装类型
+pub struct OwnedElfFile {
+    _content: Vec<u8>, // 保持所有权但不直接使用，下划线前缀表示这是一个仅用于所有权的字段
+    elf_file: ElfFile<'static>, // 实际上这个'static引用指向_content
+}
+impl OwnedElfFile {
+    pub fn new(content: Vec<u8>) -> AxResult<Self> {
+        // 创建引用content的切片，但绕过生命周期检查
+        // 安全性由结构体保证：elf_file不会比_content活得更久
+        let slice = unsafe { core::slice::from_raw_parts(content.as_ptr(), content.len()) };
+        let elf_file = ElfFile::new(slice).map_err(|_| AxError::InvalidData)?;
+        Ok(Self {
+            _content: content,
+            elf_file,
+        })
+    }
+}
+// 允许OwnedElfFile被当作ElfFile使用
+impl Deref for OwnedElfFile {
+    type Target = ElfFile<'static>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.elf_file
+    }
+}
 
 /// The information of a given ELF file
 pub struct ELFInfo {
@@ -24,10 +55,12 @@ pub struct ELFInfo {
     pub segments: Vec<ELFSegment>,
     /// The auxiliary vectors of the ELF file
     pub auxv: [AuxvEntry; 16],
+
+    _elf: OwnedElfFile,
 }
 
 impl ELFInfo {
-    pub fn new(elf: ElfFile<'static>, uspace_base: VirtAddr) -> Self {
+    pub fn new(elf: OwnedElfFile, uspace_base: VirtAddr) -> Self {
         let elf_header = elf.header;
 
         // will be checked in parser
@@ -79,6 +112,7 @@ impl ELFInfo {
             entry: VirtAddr::from(elf.header.pt2.entry_point() as usize + elf_offset),
             segments,
             auxv: elf_parser.auxv_vector(PAGE_SIZE_4K),
+            _elf: elf
         }
     }
 

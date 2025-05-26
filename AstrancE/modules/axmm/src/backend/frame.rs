@@ -49,7 +49,6 @@ impl FrameTracker for FrameTrackerImpl {
 
     fn dealloc_frame(&mut self) {
         if self.tracking {
-            trace!("Dealloc frame {:?} by FrameTrackerImpl::drop", self.pa);
             dealloc_frame(self.pa);
         }
     }
