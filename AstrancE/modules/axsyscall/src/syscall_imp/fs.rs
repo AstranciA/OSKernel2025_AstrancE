@@ -1,7 +1,7 @@
 use crate::{result, SyscallResult, ToLinuxResult};
 use arceos_posix_api::{self as api, char_ptr_to_str, ctypes};
 use axfs::api::set_current_dir;
-use core::ffi::{c_char, c_int, c_long, c_longlong};
+use core::ffi::{c_char, c_int, c_long, c_longlong, c_uint};
 use arceos_posix_api::ctypes::{blkcnt_t, blksize_t, dev_t, gid_t, ino_t, mode_t, nlink_t, off_t, time_t, timespec, uid_t};
 use axlog::debug;
 
@@ -14,11 +14,10 @@ pub struct test_stat {
     pub st_nlink: nlink_t,
     pub st_uid: uid_t,
     pub st_gid: gid_t,
-    pub __pad1: i32,
     pub st_rdev: dev_t,
+    pub __pad1: u64,
     pub st_size: off_t,
     pub st_blksize: blksize_t,
-    pub __pad2: i32,
     pub st_blocks: blkcnt_t,
     pub st_atime_sec: c_long,
     pub st_atime_nsec: c_long,
@@ -30,6 +29,7 @@ pub struct test_stat {
 
 impl From<ctypes::stat> for test_stat {
     fn from(original: ctypes::stat) -> test_stat {
+        debug!("Now the st_atime is {}",original.st_atime.tv_sec);
         test_stat {
             st_dev: original.st_dev,
             st_ino: original.st_ino,
@@ -38,6 +38,7 @@ impl From<ctypes::stat> for test_stat {
             st_uid: original.st_uid,
             st_gid: original.st_gid,
             st_rdev: original.st_rdev,
+            __pad1: 0,
             st_size: original.st_size,
             st_blksize: original.st_blksize,
             st_blocks: original.st_blocks,
@@ -47,8 +48,8 @@ impl From<ctypes::stat> for test_stat {
             st_atime_nsec: original.st_atime.tv_nsec as c_long,
             st_mtime_nsec: original.st_mtime.tv_nsec as c_long,
             st_ctime_nsec: original.st_ctime.tv_nsec as c_long,
-            ..Default::default()
         }
+        
     }
 }
 
