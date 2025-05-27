@@ -9,23 +9,20 @@ pub(crate) fn devfs() -> Arc<fs::devfs::DeviceFileSystem> {
     // let null = fs::devfs::NullDev;
     // let zero = fs::devfs::ZeroDev;
     // let bar = fs::devfs::ZeroDev;
+
     let null = Arc::new(fs::devfs::NullDev);
     let zero = Arc::new(fs::devfs::ZeroDev);
-    let bar = Arc::new(fs::devfs::ZeroDev);
 
     let devfs = fs::devfs::DeviceFileSystem::new();
     // let sda1_dir = devfs.mkdir("sda1");
 
     // devfs.add("null", Arc::new(null));
     // devfs.add("zero", Arc::new(zero));
-    // foo_dir.add("bar", Arc::new(bar));
     devfs.add("null", null.clone());
     devfs.add("zero", zero.clone());
-    devfs.add("sda1", bar.clone());
     // devfs.register_device_by_name("sda1",8,0,fs).expect("No Device");
     // devfs.register_device(1, 3, null);
     // devfs.register_device(1, 5, zero);
-    // devfs.register_device(1, 0, bar);
     Arc::new(devfs)
 }
 

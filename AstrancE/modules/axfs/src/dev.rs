@@ -134,16 +134,6 @@ impl Disk {
     }
 }
 
-// impl VfsNodeOps for Disk{
-//     fn get_attr(&self) -> VfsResult<VfsNodeAttr> {
-//         //TODO:dev num
-//         Ok(VfsNodeAttr::new_file(4096, 1))
-//     }
-//     fn remove(&self, _path: &str) -> VfsResult {
-//         todo!()
-//     }
-//
-// }
 //
 // impl Clone for Disk {
 //     fn clone(&self) -> Self {
@@ -158,3 +148,5 @@ impl Disk {
 
 unsafe impl Send for Disk {}
 unsafe impl Sync for Disk {}
+
+

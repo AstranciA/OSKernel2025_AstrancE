@@ -25,31 +25,57 @@
 #[macro_use]
 extern crate log;
 extern crate alloc;
-use alloc::sync::Arc;
+
+use alloc::{
+    collections::BTreeMap,
+    format,
+    string::{String, ToString},
+    sync::Arc,
+};
 pub mod api;
 mod blkdev;
 mod dev;
 pub mod fops;
-mod fs;
+pub mod fs;
 mod mounts;
 mod root;
-pub use root::{CURRENT_DIR, CURRENT_DIR_PATH};
+pub mod path;
+use api::create_dir;
+use axsync::Mutex;
+use lazyinit::LazyInit;
+pub use root::{CURRENT_DIR, CURRENT_DIR_PATH, ROOT_DIR};
 
-use crate::dev::Disk;
+pub use crate::dev::Disk;
 use axdriver::{AxDeviceContainer, prelude::*};
 use axfs_vfs::{VfsNodeOps, VfsOps};
+
+lazy_static::lazy_static! {
+    pub static ref DISKS: Mutex<BTreeMap<String, Disk>> = Mutex::new(BTreeMap::new());
+}
 
 /// Initializes filesystems by block devices.
 pub fn init_filesystems(mut blk_devs: AxDeviceContainer<AxBlockDevice>) {
     info!("Initialize filesystems...");
-    let dev = blk_devs.take_one().expect("No block device found!");
-    info!("  use block device 0: {:?}", dev.device_name());
-    // root::init_rootfs(self::dev::Disk::new(dev));
-    // let disk = Disk::new(dev,1,0);
-    // let devfs = mounts::devfs();
-    // devfs.add("ram1",Arc::new(disk.clone()));
-    // let node = devfs.root_dir().lookup("ram1").unwrap();
-    //let disk = Disk::new(node.get_dev(),1,0);
-    root::init_rootfs(Disk::new(dev, 1, 0));
+    let root = blk_devs
+        .first()
+        .expect("No block device found!")
+        .device_name();
+    info!("  use block device 0: {:?} as rootfs", root);
+    let mut i = 0;
+    let mut disks = DISKS.lock();
+    while let Some(device) = blk_devs.take_one() {
+        // TODO: better device_name
+        let device_name = format!("disk{}", i);
+        warn!(
+            "Find block device: {} -> {}",
+            device.device_name(),
+            device_name
+        );
+        //let a = fs::lwext4_rust::Ext4FileSystem::new(Disk::new(device, 1, 0));
+        disks.insert(device_name, Disk::new(device, 1, 0));
+        i += 1;
+    }
+    info!("{} disks in total", disks.len());
+    root::init_rootfs(disks.remove("disk0").expect("No block device found!"));
     info!("Initialize device filesystems...");
 }
