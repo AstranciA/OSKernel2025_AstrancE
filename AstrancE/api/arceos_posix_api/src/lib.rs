@@ -34,7 +34,7 @@ pub mod ctypes;
 pub use imp::io::{sys_read, sys_write, sys_writev};
 #[cfg(feature = "fs")]
 pub use imp::path_link::{AT_FDCWD, FilePath, HARDLINK_MANAGER, handle_file_path};
-pub use imp::resources::{sys_getrlimit, sys_setrlimit,sys_prlimit64};
+pub use imp::resources::{sys_getrlimit, sys_prlimit64, sys_setrlimit};
 pub use imp::sys::{UtsName, sys_sysconf, sys_uname};
 pub use imp::task::{sys_exit, sys_getpid, sys_sched_yield};
 pub use imp::time::{sys_clock_gettime, sys_get_time_of_day, sys_nanosleep};

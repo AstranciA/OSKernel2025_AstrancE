@@ -3,6 +3,7 @@ use core::{
     ffi::{CStr, c_char, c_void},
 };
 
+use crate::task::ThreadData;
 use crate::{
     ctypes::{CloneFlags, WaitStatus},
     mm::mmap::MmapIOImpl,
@@ -12,18 +13,17 @@ use alloc::{string::String, sync::Arc, vec::Vec};
 use arceos_posix_api::{
     self as api, char_ptr_to_str, ctypes::*, get_file_like, str_vec_ptr_to_str, sys_read,
 };
-use linux_raw_sys::general as linux;
 use axerrno::{AxError, LinuxError};
 use axfs::{CURRENT_DIR, api::set_current_dir, fops::Directory};
 use axhal::trap::{PRE_TRAP, register_trap_handler};
 use axhal::{arch::TrapFrame, time::nanos_to_ticks};
 use axmm::{MmapFlags, MmapPerm};
-use axsyscall::{ToLinuxResult, syscall_handler_def, apply};
+use axsyscall::{ToLinuxResult, apply, syscall_handler_def};
 use axtask::{CurrentTask, TaskExtMut, TaskExtRef, current};
 use core::ffi::c_int;
+use linux_raw_sys::general as linux;
 use memory_addr::MemoryAddr;
 use syscalls::Sysno;
-use crate::task::ThreadData;
 
 mod mm;
 
@@ -107,6 +107,9 @@ syscall_handler_def!(
                 // TODO
                 Err(LinuxError::EPERM)
             }
+        }
+        mprotect => [addr, size, prot, ..] {
+            apply!(mm::sys_mprotect, addr, size, prot)
         }
         getpid => _ {
             Ok(current().task_ext().thread.process().pid() as _)

@@ -36,6 +36,8 @@ fn client() -> io::Result<()> {
 #[cfg_attr(feature = "axstd", unsafe(no_mangle))]
 fn main() {
     println!("Hello, simple tcp client!");
-    client().expect("test tcp\
-     client failed");
+    client().expect(
+        "test tcp\
+     client failed",
+    );
 }

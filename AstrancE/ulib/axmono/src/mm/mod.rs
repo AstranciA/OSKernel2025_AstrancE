@@ -2,21 +2,21 @@ pub mod mmap;
 use alloc::string::String;
 use axerrno::AxResult;
 use axfs::api::write;
+use axhal::trap::{PAGE_FAULT, register_trap_handler};
 use axhal::{
-    mem::{virt_to_phys, VirtAddr},
+    mem::{VirtAddr, virt_to_phys},
     paging::MappingFlags,
-    tls::{self, TlsArea},
-    trap::{register_trap_handler, PAGE_FAULT},
 };
 use axmm::AddrSpace;
 use axtask::{TaskExtRef, current};
-use memory_addr::{MemoryAddr, VirtAddrRange, va};
 use xmas_elf::ElfFile;
 
-use crate::{copy_from_kernel, elf::{ELFInfo, OwnedElfFile}};
+use crate::{
+    copy_from_kernel,
+    elf::{ELFInfo, OwnedElfFile},
+};
 
 pub fn new_user_aspace_empty() -> AxResult<AddrSpace> {
-    error!("{:x?}", axconfig::plat::USER_SPACE_SIZE);
     AddrSpace::new_empty(
         VirtAddr::from_usize(axconfig::plat::USER_SPACE_BASE),
         axconfig::plat::USER_SPACE_SIZE,
@@ -137,22 +137,6 @@ pub fn map_elf_sections(
     // map trapoline
     map_trapoline(uspace);
 
-    /*
-     *#[cfg(feature = "sig")]
-     *{
-     *    let signal_stack = (ustack_start - axconfig::plat::SIGNAL_STACK_SIZE)
-     *        .align_down_4k()
-     *        .wrapping_sub(0x1000); //sub to protect
-     *    let signal_stack =
-     *        VirtAddrRange::from_start_size(signal_stack, axconfig::plat::SIGNAL_STACK_SIZE);
-     *    uspace.map_alloc(
-     *        signal_stack.start,
-     *        signal_stack.size(),
-     *        MappingFlags::READ | MappingFlags::WRITE | MappingFlags::USER,
-     *        false,
-     *    )?;
-     *}
-     */
     Ok((elf_info.entry, ustack_end - sp_offset, tp))
 }
 
@@ -165,8 +149,8 @@ pub(crate) fn map_trapoline(aspace: &mut AddrSpace) {
     aspace
         .map_linear(
             axconfig::plat::USER_TRAMPOLINE_BASE.into(),
-            unsafe { virt_to_phys((_strampoline as usize).into()) },
-            unsafe { _etrampoline as usize - _strampoline as usize },
+            virt_to_phys((_strampoline as usize).into()),
+            _etrampoline as usize - _strampoline as usize,
             MappingFlags::READ | MappingFlags::EXECUTE | MappingFlags::USER,
         )
         .unwrap();
@@ -174,11 +158,11 @@ pub(crate) fn map_trapoline(aspace: &mut AddrSpace) {
 
 pub(crate) unsafe fn trampoline_vaddr(fn_: usize) -> usize {
     assert!(
-        fn_ >= unsafe { _strampoline as usize } && fn_ < unsafe { _etrampoline as usize },
+        fn_ >= _strampoline as usize && fn_ < _etrampoline as usize,
         "Invalid trampoline address"
     );
 
-    fn_ - unsafe { _strampoline as usize } + axconfig::plat::USER_TRAMPOLINE_BASE
+    fn_ - _strampoline as usize + axconfig::plat::USER_TRAMPOLINE_BASE
 }
 
 #[percpu::def_percpu]

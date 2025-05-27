@@ -157,7 +157,11 @@ pub(crate) fn sys_sigtimedwait(
 
     // 主等待循环
     loop {
-        warn!("{:?} {:?}", sigset, curr.task_ext().process_data().signal().lock().has_pending());
+        warn!(
+            "{:?} {:?}",
+            sigset,
+            curr.task_ext().process_data().signal().lock().has_pending()
+        );
         // 检查是否有待处理的信号
         if let Some(sig) = curr
             .task_ext()

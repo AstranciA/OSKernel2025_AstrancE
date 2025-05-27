@@ -1,9 +1,11 @@
-use crate::{result, SyscallResult, ToLinuxResult};
+use crate::{SyscallResult, ToLinuxResult, result};
+use arceos_posix_api::ctypes::{
+    blkcnt_t, blksize_t, dev_t, gid_t, ino_t, mode_t, nlink_t, off_t, time_t, timespec, uid_t,
+};
 use arceos_posix_api::{self as api, char_ptr_to_str, ctypes};
 use axfs::api::set_current_dir;
-use core::ffi::{c_char, c_int, c_long, c_longlong, c_uint};
-use arceos_posix_api::ctypes::{blkcnt_t, blksize_t, dev_t, gid_t, ino_t, mode_t, nlink_t, off_t, time_t, timespec, uid_t};
 use axlog::debug;
+use core::ffi::{c_char, c_int, c_long, c_longlong};
 
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
@@ -29,7 +31,6 @@ pub struct test_stat {
 
 impl From<ctypes::stat> for test_stat {
     fn from(original: ctypes::stat) -> test_stat {
-        debug!("Now the st_atime is {}",original.st_atime.tv_sec);
         test_stat {
             st_dev: original.st_dev,
             st_ino: original.st_ino,
@@ -49,7 +50,6 @@ impl From<ctypes::stat> for test_stat {
             st_mtime_nsec: original.st_mtime.tv_nsec as c_long,
             st_ctime_nsec: original.st_ctime.tv_nsec as c_long,
         }
-        
     }
 }
 
@@ -128,12 +128,8 @@ pub fn sys_rename(old: *const c_char, new: *const c_char) -> SyscallResult {
 
 #[inline]
 pub fn sys_mkdirat(dir_fd: usize, dir_path: *const c_char, mode: usize) -> SyscallResult {
-    arceos_posix_api::sys_mkdirat(
-        dir_fd as c_int,
-        dir_path,
-        mode.try_into().unwrap(),
-    )
-    .to_linux_result()
+    arceos_posix_api::sys_mkdirat(dir_fd as c_int, dir_path, mode.try_into().unwrap())
+        .to_linux_result()
 }
 
 #[inline]
@@ -160,15 +156,21 @@ pub fn sys_unlinkat(dir_fd: c_int, path: *const c_char) -> SyscallResult {
     api::sys_unlinkat(dir_fd, path)
 }
 
-pub fn sys_fgetxattr(fd: c_int, name: *const c_char,buf: *mut u8, sizes: c_int) ->SyscallResult{
+pub fn sys_fgetxattr(fd: c_int, name: *const c_char, buf: *mut u8, sizes: c_int) -> SyscallResult {
     api::sys_fgetxattr(fd, name, buf, sizes).to_linux_result()
 }
 
-pub fn sys_fsetxattr(fd: c_int, name: *const c_char, buf: *mut u8, size:c_int, flags: c_int) ->SyscallResult{
+pub fn sys_fsetxattr(
+    fd: c_int,
+    name: *const c_char,
+    buf: *mut u8,
+    size: c_int,
+    flags: c_int,
+) -> SyscallResult {
     api::sys_fsetxattr(fd, name, buf, size, flags).to_linux_result()
 }
 
-pub fn sys_fremovexattr(fd: c_int, name: *const c_char) -> SyscallResult{
+pub fn sys_fremovexattr(fd: c_int, name: *const c_char) -> SyscallResult {
     api::sys_fremovexattr(fd, name).to_linux_result()
 }
 

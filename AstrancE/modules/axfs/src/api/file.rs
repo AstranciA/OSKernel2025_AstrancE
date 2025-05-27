@@ -72,8 +72,8 @@ impl OpenOptions {
         fops::File::open(path, &self.0).map(|inner| File { inner })
     }
 
-    pub fn open_at(&self,dir: &VfsNodeRef, path: &str) -> Result<File> {
-        fops::File::open_at(dir,path, &self.0).map(|inner| File { inner })
+    pub fn open_at(&self, dir: &VfsNodeRef, path: &str) -> Result<File> {
+        fops::File::open_at(dir, path, &self.0).map(|inner| File { inner })
     }
 }
 
@@ -135,7 +135,7 @@ impl File {
     pub fn open(path: &str) -> Result<Self> {
         OpenOptions::new().read(true).open(path)
     }
-    
+
     pub fn open_at(dir: &VfsNodeRef, path: &str) -> Result<Self> {
         OpenOptions::new().read(true).open_at(dir, path)
     }

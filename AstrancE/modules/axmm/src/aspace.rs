@@ -406,7 +406,7 @@ impl AddrSpace {
     }
 
     /// Updates mapping within the specified virtual address range.
-    ///
+    /// Will considered COW
     /// Returns an error if the address range is out of the address space or not
     /// aligned.
     pub fn protect(&mut self, start: VirtAddr, size: usize, flags: MappingFlags) -> AxResult {
@@ -414,7 +414,12 @@ impl AddrSpace {
         self.populate_area(start, size)?;
 
         self.areas
-            .protect(start, size, |_| Some(flags), &mut self.pt)
+            .protect(
+                start,
+                size,
+                |old_flags| Some(old_flags.protect(flags)),
+                &mut self.pt,
+            )
             .map_err(mapping_err_to_ax_err)?;
 
         Ok(())

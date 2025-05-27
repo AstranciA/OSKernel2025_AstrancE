@@ -1,6 +1,3 @@
-[submodule "crates/axmm_crates"]
-	path = crates/axmm_crates
-	url = git@github.com:AstranciA/axmm_crates.git
 [submodule "crates/page_table_multiarch"]
 	path = crates/page_table_multiarch
 	url = git@github.com:AstranciA/page_table_multiarch.git
@@ -14,3 +11,9 @@
 [submodule "crates/fast-trap"]
 	path = crates/fast-trap
 	url = git@github.com:AstranciA/fast-trap.git
+[submodule "crates/axmm_crates"]
+	path = crates/axmm_crates
+	url = git@github.com:AstranciA/axmm_crates.git
+[submodule "crates/axdriver_crates"]
+	path = crates/axdriver_crates
+	url = git@github.com:AstranciA/axdriver_crates.git

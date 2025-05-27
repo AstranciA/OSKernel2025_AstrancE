@@ -7,7 +7,6 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
-use core::ffi::c_int;
 use arceos_posix_api::{FD_TABLE, ctypes::*};
 use axerrno::{AxError, AxResult, LinuxError, LinuxResult};
 use axfs::{
@@ -22,6 +21,7 @@ use axprocess::Pid;
 use axsignal::{Signal, SignalContext};
 use axsync::Mutex;
 use axtask::{AxTaskRef, TaskExtRef, WaitQueue, current};
+use core::ffi::c_int;
 use memory_addr::VirtAddrRange;
 use spin::RwLock;
 
@@ -428,8 +428,6 @@ pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxR
     let (entry_point, user_stack_base, thread_pointer) =
         map_elf_sections(elf_info, &mut aspace, Some(args_), Some(envs))?;
 
-    let task_ext = unsafe { &mut *(current_task.task_ext_ptr() as *mut TaskExt) };
-
     unsafe { current_task.task_ext().process_data().aspace.force_unlock() };
 
     current_task.set_name(&program_path);
@@ -437,7 +435,11 @@ pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxR
         set_current_dir(pwd.as_str())?;
     }
 
-    debug!("to uspace");
+    debug!(
+        "exec: enter uspace, entry: {:?}, stack: {:?}",
+        entry_point, user_stack_base,
+    );
+
     let mut uctx = UspaceContext::new(entry_point.as_usize(), user_stack_base, 0);
     if let Some(tp) = thread_pointer {
         uctx.set_tp(tp.as_usize());

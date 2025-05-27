@@ -2,24 +2,24 @@
 //!
 //! TODO: it doesn't work very well if the mount points have containment relationships.
 
-use alloc::{string::String, sync::Arc, vec::Vec};
-use axerrno::{AxError, AxResult, ax_err};
-use axfs_vfs::{VfsNodeAttr, VfsNodeOps, VfsNodeRef, VfsNodeType, VfsOps, VfsResult};
-use axio::Read;
-use axns::{ResArc, def_resource};
-use axsync::Mutex;
-use lazyinit::LazyInit;
-use spin::RwLock;
-use axdriver::AxBlockDevice;
-use axfs_devfs::DeviceFileSystem;
+use crate::fs::fatfs::FatFileSystem;
+use crate::fs::lwext4_rust::Ext4FileSystem;
 use crate::{
     api::{self, FileType},
     dev::Disk,
     fs::{self},
     mounts,
 };
-use crate::fs::fatfs::FatFileSystem;
-use crate::fs::lwext4_rust::Ext4FileSystem;
+use alloc::{string::String, sync::Arc, vec::Vec};
+use axdriver::AxBlockDevice;
+use axerrno::{AxError, AxResult, ax_err};
+use axfs_devfs::DeviceFileSystem;
+use axfs_vfs::{VfsNodeAttr, VfsNodeOps, VfsNodeRef, VfsNodeType, VfsOps, VfsResult};
+use axio::Read;
+use axns::{ResArc, def_resource};
+use axsync::Mutex;
+use lazyinit::LazyInit;
+use spin::RwLock;
 // use crate::devfile::DeviceNode;
 use crate::mounts::devfs;
 
@@ -47,7 +47,7 @@ struct MountPoint {
     fs: Arc<dyn VfsOps>,
 }
 
-pub struct RootDirectory {
+struct RootDirectory {
     main_fs: Arc<dyn VfsOps>,
     mounts: RwLock<Vec<MountPoint>>,
 }
@@ -130,9 +130,7 @@ impl RootDirectory {
     }
 
     fn root_dir() -> Arc<RootDirectory> {
-        ROOT_DIR.get()
-            .expect("ROOT_DIR not initialized")
-            .clone()
+        ROOT_DIR.get().expect("ROOT_DIR not initialized").clone()
     }
 }
 
@@ -178,7 +176,7 @@ impl VfsNodeOps for RootDirectory {
     }
 }
 //disk: crate::dev::Disk
-pub(crate) fn init_rootfs(disk: crate::dev::Disk){
+pub(crate) fn init_rootfs(disk: crate::dev::Disk) {
     // let demo = axfs_devfs::blkdev::Blkdev::new(dev,8,0);
     // disk = Disk::new(demo.get_dev());
     cfg_if::cfg_if! {
@@ -219,7 +217,7 @@ pub(crate) fn init_rootfs(disk: crate::dev::Disk){
     root_dir // should not fail
         .mount("/sys", mounts::sysfs().unwrap())
         .expect("fail to mount sysfs at /sys");
-    
+
     ROOT_DIR.init_once(Arc::new(root_dir));
     info!("rootfs initialized");
     CURRENT_DIR.init_new(Mutex::new(ROOT_DIR.clone()));
@@ -356,7 +354,7 @@ pub(crate) fn rename(old: &str, new: &str) -> AxResult {
 //     let img = crate::api::File::open(source)?;
 //     warn!("mounting {} to {}", source, target);
 //     let fs = fs::lwext4_rust::Ext4FileSystem::new(img);
-// 
+//
 //     ROOT_DIR.mount(&target, Arc::new(fs));
 //     Ok(())
 // }
@@ -367,7 +365,7 @@ pub(crate) fn rename(old: &str, new: &str) -> AxResult {
 //     if _path.is_empty() || !_path.starts_with("/dev/") {
 //         return ax_err!(NotFound);
 //     }
-// 
+//
 //     if !mnt.starts_with('/') || mnt.len() < 2 {
 //         return ax_err!(InvalidInput);
 //     }
@@ -377,7 +375,7 @@ pub(crate) fn rename(old: &str, new: &str) -> AxResult {
 //     let dev_path = _path.strip_prefix("/dev/").ok_or(AxError::NotFound)?;
 //     let dev = devfs.root_dir().lookup(dev_path)?;
 //     let disk = Disk::new(dev.get_dev());
-// 
+//
 //     let fs:Arc<dyn VfsOps>=match fstype {
 //         "ext4" => Arc::new(Ext4FileSystem::new(disk)),
 //         "vfat" => Arc::new(FatFileSystem::new(disk)),
@@ -398,16 +396,15 @@ pub(crate) fn rename(old: &str, new: &str) -> AxResult {
 //     let root  = ROOT_DIR.clone();
 //     let dev_node = root.lookup(dev_path)?;
 //     let dev_file = dev_node.clone();
-// 
+//
 //     let disk = dev_file.inner.lock().clone(); // 需要 Disk 实现 Clone，或重新构造
-// 
+//
 //     let fs: Arc<dyn VfsOps> = match fstype {
 //         "ext4" => Arc::new(Ext4FileSystem::new(disk)),
 //         // 其他文件系统……
 //         _ => return Err(err_invalid()),
 //     };
-//     
+//
 //     ROOT_DIR.mount(mount_path, fs)?;
 //     Ok(())
 // }
-
