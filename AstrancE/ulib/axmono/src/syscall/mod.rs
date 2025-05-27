@@ -108,6 +108,9 @@ syscall_handler_def!(
                 Err(LinuxError::EPERM)
             }
         }
+        mprotect => [addr, size, prot, ..] {
+            apply!(mm::sys_mprotect, addr, size, prot)
+        }
         getpid => _ {
             Ok(current().task_ext().thread.process().pid() as _)
         }

@@ -18,7 +18,7 @@ impl MmapIO for MmapIOImpl {
         }
         let start: ctypes::off_t = start.try_into().unwrap();
         let prev = sys_lseek(fd, 0, 1);
-        let curr = sys_lseek(fd, start + self.file_offset, 0);
+        sys_lseek(fd, start + self.file_offset, 0);
         sys_read(fd, buf.as_mut_ptr() as *mut c_void, buf.len());
         // recover cursor
         sys_lseek(fd, prev, 0);
