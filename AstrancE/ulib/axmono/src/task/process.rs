@@ -398,7 +398,7 @@ pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxR
         ExecType::Shell => {
             // try reading shebang
             //debug!("execve:{:?} starts with shebang #!...", program_name);
-            program_path = "/riscv/musl/busybox".parse().unwrap(); // busybox
+            program_path = "/usr/bin/busybox".parse().unwrap(); // busybox
 
             args_.push(program_path.clone().into());
             args_.push("ash".into());
