@@ -275,13 +275,16 @@ pub fn clone_task(
 
         curr.task_ext().thread.process()
     } else {
+        error!("setting parent");
         let parent = if flags.contains(CloneFlags::PARENT) {
+            error!("setting parent 1");
             curr.task_ext()
                 .thread
                 .process()
                 .parent()
                 .ok_or(LinuxError::EINVAL)?
         } else {
+            error!("setting parent 2");
             curr.task_ext().thread.process().clone()
         };
         let builder = parent.fork(tid);
@@ -399,7 +402,7 @@ pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxR
         ExecType::Shell => {
             // try reading shebang
             //debug!("execve:{:?} starts with shebang #!...", program_name);
-            program_path = "/riscv/musl/busybox".parse().unwrap(); // busybox
+            program_path = "/musl/busybox".parse().unwrap(); // busybox
 
             args_.push(program_path.clone().into());
             args_.push("ash".into());

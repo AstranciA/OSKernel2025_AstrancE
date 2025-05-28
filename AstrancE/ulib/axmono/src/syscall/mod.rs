@@ -117,6 +117,12 @@ syscall_handler_def!(
         getppid => _ {
             current().task_ext().thread.process().parent().map(|p|p.pid() as _).ok_or(LinuxError::EINVAL)
         }
+        getgid => _ {
+            Ok(current().task_ext().thread.process().group().pgid() as _)
+        }
+        getuid => _{
+            Ok(0)
+        }
         // FIXME: cutime cstimes
         times => args {
             let curr_task = current();
@@ -136,7 +142,7 @@ syscall_handler_def!(
             //unsafe { core::slice::from_raw_parts_mut(args[0] as *mut api::ctypes::tms, 1).copy_from_slice(tms); }
         }
         rt_sigaction => [signum, act, oldact, ..] {
-            task::signal::sys_sigaction(signum.try_into().map_err(|_| LinuxError::EINVAL)?, act as _, oldact as _)
+            task::signal::sys_sigaction(signum.try_into().map_err(|_| LinuxError::EINVAL)?, act as _, oldact as _).map_err(|_| panic!("1"))
         }
         rt_sigprocmask => [how, set, oldset, ..] {
             task::signal::sys_sigprocmask(how.try_into().map_err(|_| LinuxError::EINVAL)?, set as _, oldset as _)
@@ -147,7 +153,14 @@ syscall_handler_def!(
         rt_sigreturn => _ {
             task::signal::sys_sigreturn()
         }
+        rt_sigsuspend => [mask_ptr,sigsetsize,..]{
+            task::signal::sys_rt_sigsuspend(mask_ptr as _,sigsetsize as _)
+        }
         kill => [pid, sig, ..] {
             task::signal::sys_kill(pid as _, sig as _)
+        }
+        //FIXME incomplete！
+        setxattr => _ {
+            Ok(0)
         }
 );

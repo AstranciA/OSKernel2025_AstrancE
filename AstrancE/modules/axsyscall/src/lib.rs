@@ -77,6 +77,10 @@ syscall_handler_def!(
             syscall_imp::io::sys_read(fd, buf)
         }
 
+        readv => [fd, iov, iocnt, ..]{
+            apply!(syscall_imp::io::sys_readv, fd, iov, iocnt)
+        }
+
         writev => [fd, iov, iocnt, ..] {
             apply!(syscall_imp::io::sys_writev, fd, iov, iocnt)
         }
@@ -90,6 +94,11 @@ syscall_handler_def!(
         close => [fd, ..] {
             apply!(syscall_imp::fd::sys_close, fd)
         }
+        #[cfg(all(feature = "fs", feature = "fd"))]
+        ioctl =>[fd,op,..]{
+                Ok(0)
+        }
+
 
         #[cfg(all(feature = "fs", target_arch = "x86_64"))]
         unlink => [path_name, ..] {

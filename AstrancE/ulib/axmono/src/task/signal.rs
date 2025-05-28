@@ -61,9 +61,10 @@ pub(crate) fn sys_sigaction(
     let curr = current();
     let mut sigctx = curr.task_ext().process_data().signal.lock();
     if !act.is_null() {
+        warn!("2222");
         let act = SigAction::try_from(unsafe { *act }).inspect_err(|e| {})?;
+        warn!("1111");
         let old = sigctx.set_action(sig, act);
-
         // 设置旧动作（如果有）
         unsafe { old_act.as_mut().map(|ptr| unsafe { *ptr = old.into() }) };
     } else {
@@ -180,6 +181,37 @@ pub(crate) fn sys_sigtimedwait(
 
         // 让出CPU
         yield_with_time_stat();
+    }
+}
+
+pub(crate) fn sys_rt_sigsuspend(mask_ptr: *const sigset_t, sigsetsize: usize) -> LinuxResult<isize> {
+    // 1. 验证信号集大小
+    if sigsetsize != core::mem::size_of::<sigset_t>() {
+        return Err(LinuxError::EINVAL);
+    }
+    // 2. 从用户空间读取信号掩码
+    let new_mask: SignalSet = unsafe {
+        let mask_ref = mask_ptr.as_ref().ok_or(LinuxError::EFAULT)?;
+        (*mask_ref).into()
+    };
+    // 3. 获取当前进程和信号上下文
+    let curr = current();
+    let mut sigctx = curr.task_ext().process_data().signal.lock();
+    // 4. 保存当前信号掩码
+    // 假设 set_mask 返回旧的掩码（需确认实际实现）
+    let old_mask = sigctx.set_mask(new_mask);
+    // 5. 挂起进程，等待信号
+    loop {
+        // 检查是否有待处理的信号（未被屏蔽的信号）
+        if sigctx.has_pending() {
+            // 如果有待处理信号，恢复原来的信号掩码并返回
+            sigctx.set_mask(old_mask);
+            return Err(LinuxError::EINTR);
+        }
+        // 让出 CPU，进入等待状态
+        drop(sigctx); // 释放锁，避免死锁
+        yield_with_time_stat();
+        sigctx = curr.task_ext().process_data().signal.lock(); // 重新获取锁
     }
 }
 
