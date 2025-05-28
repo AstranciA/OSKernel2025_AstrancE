@@ -239,6 +239,7 @@ pub fn clone_task(
      *_ctid: usize,
      */
 ) -> LinuxResult<AxTaskRef> {
+    debug!("clone_task with flags: {:?}", flags);
     let curr = current();
     let current_task_ext = curr.task_ext();
     const FLAG_MASK: u32 = 0xff;
@@ -264,12 +265,10 @@ pub fn clone_task(
     let current_pwd = current_dir()?;
     let mut new_task = spawn_user_task_inner(curr.name(), new_uctx, current_pwd);
     let tid = new_task.id().as_u64() as Pid;
+    debug!("new process data");
     let process = if flags.contains(CloneFlags::THREAD) {
         new_task.ctx_mut().set_page_table_root(
-            curr.task_ext()
-                .process_data()
-                .aspace
-                .lock()
+            current_aspace
                 .page_table_root(),
         );
 
