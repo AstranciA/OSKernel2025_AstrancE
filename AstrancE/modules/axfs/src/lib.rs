@@ -38,8 +38,8 @@ mod dev;
 pub mod fops;
 pub mod fs;
 mod mounts;
-mod root;
 pub mod path;
+mod root;
 use api::create_dir;
 use axsync::Mutex;
 use lazyinit::LazyInit;
@@ -51,6 +51,16 @@ use axfs_vfs::{VfsNodeOps, VfsOps};
 
 lazy_static::lazy_static! {
     pub static ref DISKS: Mutex<BTreeMap<String, Disk>> = Mutex::new(BTreeMap::new());
+}
+
+/// 按字母递增的设备命名
+fn get_device_name(index: u8) -> String {
+    // 确保 index 在合理范围内 (0-25 对应 a-z)
+    let c = b'a' + (index % 26);
+    let mut name = String::with_capacity(3); // "vda" 是3字节
+    name.push_str("vd");
+    name.push(c as char);
+    name
 }
 
 /// Initializes filesystems by block devices.
@@ -65,7 +75,7 @@ pub fn init_filesystems(mut blk_devs: AxDeviceContainer<AxBlockDevice>) {
     let mut disks = DISKS.lock();
     while let Some(device) = blk_devs.take_one() {
         // TODO: better device_name
-        let device_name = format!("disk{}", i);
+        let device_name = get_device_name(i);
         warn!(
             "Find block device: {} -> {}",
             device.device_name(),
@@ -76,6 +86,6 @@ pub fn init_filesystems(mut blk_devs: AxDeviceContainer<AxBlockDevice>) {
         i += 1;
     }
     info!("{} disks in total", disks.len());
-    root::init_rootfs(disks.remove("disk0").expect("No block device found!"));
+    root::init_rootfs(disks.pop_first().expect("No block device found!").1);
     info!("Initialize device filesystems...");
 }
