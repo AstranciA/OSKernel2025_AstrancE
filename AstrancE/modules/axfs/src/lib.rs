@@ -32,7 +32,7 @@ mod dev;
 pub mod fops;
 mod fs;
 mod mounts;
-mod root;
+pub mod root;
 pub use root::{CURRENT_DIR, CURRENT_DIR_PATH};
 
 use crate::dev::Disk;

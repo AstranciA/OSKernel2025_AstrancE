@@ -47,7 +47,7 @@ struct MountPoint {
     fs: Arc<dyn VfsOps>,
 }
 
-struct RootDirectory {
+pub struct RootDirectory {
     main_fs: Arc<dyn VfsOps>,
     mounts: RwLock<Vec<MountPoint>>,
 }

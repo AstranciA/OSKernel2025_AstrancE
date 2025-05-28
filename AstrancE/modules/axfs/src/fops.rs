@@ -8,10 +8,10 @@ use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use axerrno::{AxError, AxResult, LinuxError, LinuxResult, ax_err, ax_err_type};
-use axfs_vfs::{VfsError, VfsNodeRef};
+use axfs_vfs::{VfsError, VfsNodeAttr, VfsNodeRef};
 use axio::SeekFrom;
 use cap_access::{Cap, WithCap};
-use core::ffi::c_int;
+use core::ffi::{c_char, c_int, c_void};
 use core::fmt;
 use spin::Mutex;
 
@@ -29,7 +29,6 @@ pub struct File {
     pub node: WithCap<VfsNodeRef>,
     is_append: bool,
     offset: u64,
-    xattrs: Mutex<BTreeMap<String, Vec<u8>>>, // extra attr
 }
 
 /// An opened directory object, with open permissions and a cursor for
@@ -37,7 +36,6 @@ pub struct File {
 pub struct Directory {
     node: WithCap<VfsNodeRef>,
     entry_idx: usize,
-    xattrs: Mutex<BTreeMap<String, Vec<u8>>>, // extra attr
 }
 
 /// Options and flags which can be used to configure how a file is opened.
@@ -199,7 +197,6 @@ impl File {
             node: WithCap::new(node, access_cap),
             is_append: opts.append,
             offset: 0,
-            xattrs: Mutex::new(BTreeMap::new()),
         })
     }
 
@@ -291,63 +288,48 @@ impl File {
         self.access_node(Cap::empty())?.get_attr()
     }
 
-    ///Gets the file extra attributes
-    pub fn get_xattr(&self, name: &str, buf: &mut [u8], size: usize) -> Result<usize, LinuxError> {
-        let xattrs = self.xattrs.lock();
-        let val = xattrs.get(name).ok_or(LinuxError::ENODATA)?; // Attribute not found
-        if val.len() > size {
-            return Err(LinuxError::ERANGE); // Buffer too small
-        }
-        if val.len() > buf.len() {
-            return Err(LinuxError::ERANGE); // Provided buffer slice too small
-        }
-        // Copy data into the provided buffer
-        buf[..val.len()].copy_from_slice(val);
-        Ok(val.len())
+    pub fn set_atime(&self, atime:u32,  atime_n:u32) -> AxResult<usize> {
+        self.access_node(Cap::WRITE)?.set_atime(atime,atime_n)
+    }
+    pub fn set_mtime(&self, mtime:u32, mtime_n:u32) -> AxResult<usize>{
+        self.access_node(Cap::WRITE)?.set_mtime(mtime,mtime_n)
+    }
+    ///do something for the file extra attributes
+    pub fn get_xattr(
+        &self,
+        name: *const c_char,
+        name_len: usize,
+        buf: *mut c_void,
+        buf_size: usize,
+        data_size: *mut usize,
+    ) -> AxResult<usize>  {
+        self.access_node(Cap::empty())?.get_xattr(name, name_len, buf, buf_size, data_size)
     }
     pub fn set_xattr(
-        &mut self,
-        name: &str,
-        value: &[u8],
-        size: usize,
-    ) -> Result<usize, LinuxError> {
-        if size > value.len() {
-            return Err(LinuxError::EINVAL); // Size exceeds provided buffer length
-        }
-
-        let slice = &value[..size]; // Take only the portion up to `size`
-        let mut xattrs = self.xattrs.lock();
-        xattrs.insert(name.to_string(), slice.to_vec());
-        Ok(size)
+        &self,
+        name: *const c_char,
+        name_len: usize,
+        data: *mut c_void,
+        data_size: usize,
+    ) -> AxResult<usize>{
+        self.access_node(Cap::WRITE)?.set_xattr(name, name_len, data, data_size)
     }
 
-    //TODO：fix the lxattr
+    pub fn list_xattr(
+        &self,
+        list: *mut c_char,
+        size: usize,
+        ret_size: *mut usize,
+    ) -> AxResult<usize> {
+        self.access_node(Cap::WRITE)?.list_xattr(list, size, ret_size)
+    }
 
-    // pub fn list_xattr(&self, buf: *mut u8) -> Result<usize, i32> {
-    //     let file = self;
-    //     let xattrs = file.xattrs.lock();
-    //     let mut offset = 0;
-    //     for key in xattrs.keys() {
-    //         let bytes = key.as_bytes();
-    //         if offset + bytes.len() + 1 > buf.len() {
-    //             return Err(-1)?;
-    //         }
-    //         buf[offset..offset + bytes.len()].copy_from_slice(bytes);
-    //         buf[offset + bytes.len()] = 0;
-    //         offset += bytes.len() + 1;
-    //     }
-    //     Ok(offset)
-    // }
-    pub fn remove_xattr(&mut self, name: &str) -> Result<usize, LinuxError> {
-        let mut xattrs = self.xattrs.lock();
-        if xattrs.is_empty() {
-            Ok(0) // Success: no attributes exist, treat as removed
-        } else if xattrs.remove(name).is_some() {
-            Ok(0) // Success: attribute removed
-        } else {
-            debug!("remove xattr at bottoum is failed");
-            Err(LinuxError::ENODATA) // Attribute not found
-        }
+    pub fn remove_xattr(
+        &self,
+        name: *const c_char,
+        name_len: usize,
+    ) -> AxResult<usize> {
+      self.access_node(Cap::WRITE)?.remove_xattr(name, name_len)
     }
 }
 
@@ -383,7 +365,6 @@ impl Directory {
             // directories that don't have this permission.
             node: WithCap::new(node, cap),
             entry_idx: 0,
-            xattrs: Default::default(),
         })
     }
 
@@ -459,63 +440,42 @@ impl Directory {
         self.access_node(Cap::empty())?.get_attr()
     }
 
-    ///Gets the dir extra attributes
-    pub fn get_xattr(&self, name: &str, buf: &mut [u8], size: usize) -> Result<usize, LinuxError> {
-        let xattrs = self.xattrs.lock();
-        let val = xattrs.get(name).ok_or(LinuxError::ENODATA)?; // Attribute not found
-        if val.len() > size {
-            return Err(LinuxError::ERANGE); // Buffer too small
-        }
-        if val.len() > buf.len() {
-            return Err(LinuxError::ERANGE); // Provided buffer slice too small
-        }
-        // Copy data into the provided buffer
-        buf[..val.len()].copy_from_slice(val);
-        Ok(val.len())
+    ///do something for the dir extra attributes
+    pub fn get_xattr(
+        &self,
+        name: *const c_char,
+        name_len: usize,
+        buf: *mut c_void,
+        buf_size: usize,
+        data_size: *mut usize,
+    ) -> AxResult<usize>  {
+        self.access_node(Cap::empty())?.get_xattr(name, name_len, buf, buf_size, data_size)
     }
     pub fn set_xattr(
-        &mut self,
-        name: &str,
-        value: &[u8],
-        size: usize,
-    ) -> Result<usize, LinuxError> {
-        if size > value.len() {
-            return Err(LinuxError::EINVAL); // Size exceeds provided buffer length
-        }
-
-        let slice = &value[..size]; // Take only the portion up to `size`
-        let mut xattrs = self.xattrs.lock();
-        xattrs.insert(name.to_string(), slice.to_vec());
-        Ok(size)
+        &self,
+        name: *const c_char,
+        name_len: usize,
+        data: *mut c_void,
+        data_size: usize,
+    ) -> AxResult<usize>{
+        self.access_node(Cap::WRITE)?.set_xattr(name, name_len, data, data_size)
     }
 
-    //TODO：fix the lxattr
+    pub fn list_xattr(
+        &self,
+        list: *mut c_char,
+        size: usize,
+        ret_size: *mut usize,
+    ) -> AxResult<usize> {
+        self.access_node(Cap::WRITE)?.list_xattr(list, size, ret_size)
+    }
 
-    // pub fn list_xattr(&self, buf: *mut u8) -> Result<usize, i32> {
-    //     let file = self;
-    //     let xattrs = file.xattrs.lock();
-    //     let mut offset = 0;
-    //     for key in xattrs.keys() {
-    //         let bytes = key.as_bytes();
-    //         if offset + bytes.len() + 1 > buf.len() {
-    //             return Err(-1)?;
-    //         }
-    //         buf[offset..offset + bytes.len()].copy_from_slice(bytes);
-    //         buf[offset + bytes.len()] = 0;
-    //         offset += bytes.len() + 1;
-    //     }
-    //     Ok(offset)
-    // }
-    pub fn remove_xattr(&mut self, name: &str) -> Result<usize, LinuxError> {
-        let mut xattrs = self.xattrs.lock();
-        if xattrs.is_empty() {
-            Ok(0) // Success: no attributes exist, treat as removed
-        } else if xattrs.remove(name).is_some() {
-            Ok(0) // Success: attribute removed
-        } else {
-            debug!("remove xattr at bottoum is failed");
-            Err(LinuxError::ENODATA) // Attribute not found
-        }
+    pub fn remove_xattr(
+        &self,
+        name: *const c_char,
+        name_len: usize,
+    ) -> AxResult<usize> {
+        self.access_node(Cap::WRITE)?.remove_xattr(name, name_len)
     }
 }
 
