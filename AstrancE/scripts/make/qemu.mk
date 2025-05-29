@@ -49,9 +49,37 @@ qemu_args-loongarch64 := \
 
 qemu_args-y := -m $(MEM) -smp $(SMP) $(qemu_args-$(ARCH))
 
-qemu_args-$(BLK) += \
-  -device virtio-blk-$(vdev-suffix),drive=disk0 \
-  -drive id=disk0,if=none,format=raw,file=$(DISK_IMG)
+#qemu_args-$(BLK) += \
+  #-device virtio-blk-$(vdev-suffix),drive=disk0 \
+  #-drive id=disk0,if=none,format=raw,file=$(DISK_IMG)
+# 解析 DISK_IMG 为列表形式（用逗号分隔的字符串转为列表）
+DISK_LIST := $(subst ,,$(shell echo $(DISK_IMG) | tr ',' ' '))
+
+# 检查 DISK_LIST 长度是否大于 0 且 BLK 为 y 时才添加设备参数
+ifneq ($(DISK_LIST),)
+ifneq ($(BLK),n)
+  # 定义一个计数器和挂载点，用于给每个磁盘分配唯一的 id 和设备
+  DISK_COUNT := 0
+  ROOTFS_ID := disk$(ROOTFS_DISK)
+
+  # 使用 shell 循环处理每个磁盘镜像路径
+  define add_disk
+    qemu_args-$(BLK) += -device virtio-blk-$(vdev-suffix),drive=disk$(DISK_COUNT) \
+                        -drive id=disk$(DISK_COUNT),if=none,format=raw,file=$(strip $(1))
+    ifeq (disk$(DISK_COUNT),$(ROOTFS_ID))
+      # 如果当前磁盘是 rootfs，则添加 root=/dev/vdX 和相关启动参数
+      # 这里假设使用 virtio-blk 设备命名为 /dev/vda, /dev/vdb, ...
+      DISK_LETTER := $(shell printf "\\x$(shell printf %x $$(($(DISK_COUNT) + 97)))" | tr '[:upper:]' '[:lower:]')
+      qemu_args-$(BLK) += -append "root=/dev/vd$(DISK_LETTER) rw rootwait"
+    endif
+    DISK_COUNT := $(shell expr $(DISK_COUNT) + 1)
+  endef
+
+  # 调用 foreach 为每个磁盘镜像添加参数
+  $(foreach disk,$(DISK_LIST),$(eval $(call add_disk,$(disk))))
+endif
+endif
+
 
 qemu_args-$(NET) += \
   -device virtio-net-$(vdev-suffix),netdev=net0

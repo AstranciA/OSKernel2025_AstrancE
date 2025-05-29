@@ -18,6 +18,7 @@ lwext4_rs = ["dep:lwext4_rust"]
 fatfs = ["dep:fatfs"]
 myfs = ["dep:crate_interface"]
 use-ramdisk = []
+dyn = ["axdriver/dyn"]
 
 default = ["devfs", "ramfs", "fatfs", "procfs", "sysfs"]
 
@@ -25,6 +26,7 @@ default = ["devfs", "ramfs", "fatfs", "procfs", "sysfs"]
 log = "=0.4.21"
 cfg-if = "1.0"
 lazyinit = "0.2"
+lazy_static = { version = "1.4", features = ["spin_no_std"] }
 cap_access = "0.1"
 axio = { version = "0.1.1", features = ["alloc"] }
 axerrno = "0.1"
@@ -36,7 +38,7 @@ crate_interface = { version = "0.1", optional = true }
 axsync = { workspace = true }
 axdriver = { workspace = true, features = ["block"] }
 axdriver_block = { git = "https://github.com/arceos-org/axdriver_crates.git", tag = "v0.1.2" }
-lwext4_rust = { workspace = true,  optional = true }
+lwext4_rust = { workspace = true,  optional = true , features = ["print"] }
 axns = { workspace = true }
 
 [dependencies.fatfs]

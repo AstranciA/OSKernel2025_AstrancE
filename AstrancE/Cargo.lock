@@ -420,6 +420,7 @@ dependencies = [
  "cfg-if",
  "crate_interface",
  "fatfs",
+ "lazy_static",
  "lazyinit",
  "log",
  "lwext4_rust",

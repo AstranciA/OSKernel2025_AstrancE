@@ -2,18 +2,21 @@
 //!
 //! TODO: it doesn't work very well if the mount points have containment relationships.
 
+use crate::DISKS;
 use crate::fs::fatfs::FatFileSystem;
 use crate::fs::lwext4_rust::Ext4FileSystem;
 use crate::{
-    api::{self, FileType},
+    api::FileType,
     dev::Disk,
     fs::{self},
     mounts,
 };
-use alloc::{string::String, sync::Arc, vec::Vec};
+use alloc::string::String;
+use alloc::{sync::Arc, vec::Vec};
 use axdriver::AxBlockDevice;
 use axerrno::{AxError, AxResult, ax_err};
 use axfs_devfs::DeviceFileSystem;
+use axfs_vfs::path::canonicalize;
 use axfs_vfs::{VfsNodeAttr, VfsNodeOps, VfsNodeRef, VfsNodeType, VfsOps, VfsResult};
 use axio::Read;
 use axns::{ResArc, def_resource};
@@ -103,7 +106,6 @@ impl RootDirectory {
     where
         F: FnOnce(Arc<dyn VfsOps>, &str) -> AxResult<T>,
     {
-        debug!("lookup at root: {}", path);
         let path = path.trim_matches('/');
         if let Some(rest) = path.strip_prefix("./") {
             return self.lookup_mounted_fs(rest, f);
@@ -125,6 +127,11 @@ impl RootDirectory {
         if max_len == 0 {
             f(self.main_fs.clone(), path) // not matched any mount point
         } else {
+            debug!(
+                "find fs at {:?}, lookup: {}",
+                &path[..max_len],
+                &path[max_len..]
+            );
             f(self.mounts.read()[idx].fs.clone(), &path[max_len..]) // matched at `idx`
         }
     }
@@ -176,20 +183,18 @@ impl VfsNodeOps for RootDirectory {
     }
 }
 //disk: crate::dev::Disk
-pub(crate) fn init_rootfs(disk: crate::dev::Disk) {
-    // let demo = axfs_devfs::blkdev::Blkdev::new(dev,8,0);
-    // disk = Disk::new(demo.get_dev());
+pub(crate) fn init_rootfs(root_disk: crate::dev::Disk) {
     cfg_if::cfg_if! {
         if #[cfg(feature = "myfs")] { // override the default filesystem
-            let main_fs = fs::myfs::new_myfs(disk);
+            let main_fs = fs::myfs::new_myfs(root_disk);
         } else if #[cfg(feature = "lwext4_rs")] {
             static EXT4_FS: LazyInit<Arc<fs::lwext4_rust::Ext4FileSystem<Disk>>> = LazyInit::new();
-            EXT4_FS.init_once(Arc::new(fs::lwext4_rust::Ext4FileSystem::new(disk)));
+            EXT4_FS.init_once(Arc::new(fs::lwext4_rust::Ext4FileSystem::new(root_disk, "root", "/")));
             let main_fs = EXT4_FS.clone();
             // let dev_fs =  EXT4_FS.clone();
         } else if #[cfg(feature = "fatfs")] {
             static FAT_FS: LazyInit<Arc<fs::fatfs::FatFileSystem>> = LazyInit::new();
-            FAT_FS.init_once(Arc::new(fs::fatfs::FatFileSystem::new(disk)));
+            FAT_FS.init_once(Arc::new(fs::fatfs::FatFileSystem::new(root_disk)));
             FAT_FS.init();
             let main_fs = FAT_FS.clone();
         }
@@ -198,9 +203,9 @@ pub(crate) fn init_rootfs(disk: crate::dev::Disk) {
     let root_dir = RootDirectory::new(main_fs);
 
     #[cfg(feature = "devfs")]
-    root_dir
-        .mount("/dev", mounts::devfs())
-        .expect("failed to mount devfs at /dev");
+        root_dir
+            .mount("/dev", mounts::devfs())
+            .expect("failed to mount devfs at /dev");
     #[cfg(feature = "ramfs")]
     root_dir
         .mount("/tmp", mounts::ramfs())

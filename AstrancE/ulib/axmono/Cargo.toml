@@ -28,7 +28,7 @@ axconfig = { workspace = true }
 axhal = { workspace = true }
 axlog = { workspace = true }
 arceos_posix_api = { workspace = true, features = ["uspace"] }
-axfs = { workspace = true }
+axfs = { workspace = true , features = ["dyn"]}
 axmm = { workspace = true, optional = true }
 axtask = { workspace = true, optional = true }
 axsync = { workspace = true }
