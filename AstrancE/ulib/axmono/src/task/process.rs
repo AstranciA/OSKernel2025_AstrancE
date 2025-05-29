@@ -22,7 +22,6 @@ use axprocess::Pid;
 use axsignal::{Signal, SignalContext};
 use axsync::Mutex;
 use axtask::{AxTaskRef, TaskExtRef, WaitQueue, current};
-use core::ffi::c_int;
 use memory_addr::VirtAddrRange;
 use spin::RwLock;
 

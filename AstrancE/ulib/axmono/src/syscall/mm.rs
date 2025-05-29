@@ -12,7 +12,7 @@ pub(crate) fn sys_brk(new_heap_top: usize) -> LinuxResult<isize> {
         aspace.set_heap_top(va!(new_heap_top));
     }
     // FIXME: return old_top or new_top????
-    //Ok(old_top.as_usize() as isize)
+    // Ok(old_top.as_usize() as isize)
     Ok(aspace.heap().top().as_usize() as isize)
 }
 

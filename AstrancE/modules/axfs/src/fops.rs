@@ -433,6 +433,14 @@ impl Directory {
         crate::root::remove_dir(self.access_at(path)?, path)
     }
 
+    pub fn get_entry_index(&self) -> usize {
+        self.entry_idx
+    }
+    /// 设置读取目录项的进度索引
+    pub fn set_entry_index(&mut self, index: usize) {
+        self.entry_idx = index;
+    }
+
     /// Reads directory entries starts from the current position into the
     /// given buffer. Returns the number of entries read.
     ///
