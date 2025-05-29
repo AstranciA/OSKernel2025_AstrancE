@@ -1,12 +1,12 @@
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use axtask::yield_now;
-use core::ffi::{c_int, c_short};
+use core::ffi::{c_char, c_int, c_short, c_void};
 
 use crate::ctypes;
 use crate::imp::stdio::{stdin, stdout};
 use axerrno::{LinuxError, LinuxResult, ax_err};
-use axfs_vfs::VfsResult;
+use axfs_vfs::{VfsResult, VfsNodeAttr, VfsNodeOps};
 use axio::PollState;
 use axns::{ResArc, def_resource};
 use flatten_objects::FlattenObjects;
@@ -19,24 +19,41 @@ pub trait FileLike: Send + Sync {
     fn read(&self, buf: &mut [u8]) -> LinuxResult<usize>;
     fn write(&self, buf: &[u8]) -> LinuxResult<usize>;
     fn stat(&self) -> LinuxResult<ctypes::stat>;
+
     fn into_any(self: Arc<Self>) -> Arc<dyn core::any::Any + Send + Sync>;
     fn poll(&self) -> LinuxResult<PollState>;
     fn set_nonblocking(&self, nonblocking: bool) -> LinuxResult;
+
     fn fgetxattr(
         &self,
-        name: &str,
-        value: &mut [u8],
-        size: usize,
-        flags: usize,
+        name: *const c_char,
+        buf: *mut c_void,
+        buf_size: usize,
     ) -> LinuxResult<usize> {
         warn!("Unsupport fgetxattr for this type");
         Ok(0)
     }
-    fn fsetxattr(&self, name: &str, value: &[u8], size: usize, flags: usize) -> LinuxResult<usize> {
+    fn flistxattr(
+        &self,
+        list: *mut c_char,
+        size: usize,
+    )-> LinuxResult<usize>{
+        warn!("Unsupport fgetxattr for this type");
+        Ok(0)
+    }
+    fn fsetxattr(
+        &self,
+        name: *const c_char,
+        data: *mut c_void,
+        data_size: usize,
+        flags: usize) -> LinuxResult<usize> {
         warn!("Unsupport fsetxattr for this type");
         Ok(0)
     }
-    fn fremovexattr(&self, name: &str) -> LinuxResult<usize> {
+    fn fremovexattr(
+        &self,
+        name: *const c_char,
+    ) -> LinuxResult<usize> {
         warn!("Unsupport fremovexattr for this type");
         Ok(0)
     }
@@ -45,6 +62,14 @@ pub trait FileLike: Send + Sync {
         Ok(0)
     }
 
+    fn set_mtime(&self,mtime:u32,mtime_n:u32) -> LinuxResult<usize>{
+        warn!("Unsupport set_mtime for this type");
+        Ok(0)
+    }
+    fn set_atime(&self, atime:u32,atime_n:u32) -> LinuxResult<usize>{
+        warn!("Unsupport set_atime for this type");
+        Ok(0)
+    }
 }
 
 def_resource! {

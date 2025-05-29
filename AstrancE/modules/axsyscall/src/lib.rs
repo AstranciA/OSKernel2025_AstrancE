@@ -10,13 +10,17 @@ use syscall_imp::{
     sys::sys_uname,
 };
 mod syscall_imp;
-use arceos_posix_api::ctypes;
-use arceos_posix_api::ctypes::pid_t;
+use arceos_posix_api::{ctypes, sys_listxattr};
+use arceos_posix_api::ctypes::{pid_t, timespec, timeval};
 use core::ffi::*;
+use core::ptr;
+use syscalls::Sysno::gettimeofday;
+use axlog::debug;
 
 pub mod result;
-use crate::syscall_imp::fs::sys_fsetxattr;
+use crate::syscall_imp::fs::{sys_flistxattr, sys_fsetxattr, sys_utimesat};
 pub use result::{SyscallResult, ToLinuxResult};
+use crate::syscall_imp::time::sys_get_time_of_day;
 
 #[macro_export]
 macro_rules! syscall_handler_def {
@@ -146,8 +150,7 @@ syscall_handler_def!(
         fstatat => [dir_fd, pathname, buf, flags, ..] {
             unsafe { apply!(syscall_imp::fs::sys_fstatat, dir_fd, pathname, buf, flags) }
         }
-
-
+    
         #[cfg(all(feature = "fs", feature = "fd"))]
         lseek => [fd, offset, whence, ..] {
             apply!(syscall_imp::fs::sys_lseek, fd, offset, whence)
@@ -186,15 +189,34 @@ syscall_handler_def!(
             let fds = unsafe { core::slice::from_raw_parts_mut(fds as *mut c_int, 2) };
             syscall_imp::pipe::sys_pipe(fds)
         }
-
+         #[cfg(all(feature = "fs", feature = "fd"))]
         fgetxattr =>[fd, name, buf, sizes,..]{
-            syscall_imp::fs::sys_fgetxattr(fd as c_int,name as *const c_char ,buf as *mut c_char, sizes as c_int)
+            syscall_imp::fs::sys_fgetxattr(fd as c_int,name as *const c_char ,buf as *mut c_void, sizes as usize)
         }
+         #[cfg(all(feature = "fs", feature = "fd"))]
         fsetxattr =>[fd, name, buf, sizes, flag,..]{
             sys_fsetxattr(fd as c_int, name as _, buf as _, sizes as _, flag as _)
         }
+        #[cfg(all(feature = "fs", feature = "fd"))]
+        flistxattr=>[fd,list,size,..]{
+            sys_flistxattr(fd as c_int, list as _, size as _)
+        }
+        #[cfg(all(feature = "fs", feature = "fd"))]
         fremovexattr =>[fd, name,..]{
             syscall_imp::fs::sys_fremovexattr(fd as c_int ,name as *const c_char)
+        }
+        #[cfg(all(feature = "fs", feature = "fd"))]
+        utimensat =>[dirfd ,path ,times, flags,..]{
+            ///Now it can NOT change atime_nec and mtime_nec and support large number like 1LL<<32
+            let mut now: timeval = timeval{tv_sec:0, tv_usec:0 };
+            sys_get_time_of_day(&mut now).unwrap();
+            sys_utimesat(dirfd as _, path as _, times as _, now as _, flags as _)
+        }
+        mount => [src, mnt, fstype, mntflag,..]{
+            syscall_imp::fs::sys_mount(src as _,mnt as _,fstype as _,mntflag)
+        }
+        umount2=> [mnt,..]{
+            syscall_imp::fs::sys_umount2(mnt as _)
         }
         // 进程控制相关系统调用
         /*
@@ -255,7 +277,9 @@ syscall_handler_def!(
         }
         // 其他系统调用
         uname => [buf, ..] apply!(sys_uname, buf),
-
+        ioctl=>_{
+            Ok(0)
+        }
         //网络相关
         #[cfg(feature = "net")]
         socket => [domain, socktype, protocol, ..] {

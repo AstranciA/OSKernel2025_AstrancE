@@ -46,9 +46,9 @@ pub use imp::fd_ops::{
 };
 #[cfg(feature = "fs")]
 pub use imp::fs::{
-    Directory, File, sys_fgetxattr, sys_fremovexattr, sys_fsetxattr, sys_fstat, sys_fstatat,
-    sys_getcwd, sys_getdents, sys_lseek, sys_lstat, sys_mkdirat, sys_open, sys_openat, sys_rename,
-    sys_stat, sys_unlink, sys_unlinkat,
+    Directory, File, sys_fstat, sys_fstatat, sys_getcwd, sys_getdents, sys_lseek, sys_lstat,
+    sys_mkdirat, sys_open, sys_openat, sys_rename, sys_stat, sys_unlink, sys_unlinkat,
+    sys_fgetxattr,sys_fsetxattr,sys_fremovexattr,sys_listxattr,sys_mount,sys_umount2,sys_utimensat
 };
 #[cfg(feature = "select")]
 pub use imp::io_mpx::sys_select;

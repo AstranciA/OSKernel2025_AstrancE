@@ -39,7 +39,7 @@ pub mod fops;
 pub mod fs;
 mod mounts;
 pub mod path;
-mod root;
+pub mod root;
 use api::create_dir;
 use axsync::Mutex;
 use lazyinit::LazyInit;

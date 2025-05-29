@@ -1,13 +1,13 @@
 use crate::alloc::string::String;
 use alloc::string::ToString;
 use alloc::sync::Arc;
+use alloc::vec::Vec;
+use core::ffi::{c_char, c_void};
 use axerrno::AxError;
 use axfs_vfs::{VfsDirEntry, VfsError, VfsNodePerm, VfsResult};
 use axfs_vfs::{VfsNodeAttr, VfsNodeOps, VfsNodeRef, VfsNodeType, VfsOps};
 use axsync::Mutex;
-use lwext4_rust::bindings::{
-    O_CREAT, O_RDONLY, O_RDWR, O_TRUNC, O_WRONLY, SEEK_CUR, SEEK_END, SEEK_SET,
-};
+use lwext4_rust::bindings::{ext4_getxattr, ext4_removexattr, O_CREAT, O_RDONLY, O_RDWR, O_TRUNC, O_WRONLY, SEEK_CUR, SEEK_END, SEEK_SET};
 use lwext4_rust::{Ext4BlockWrapper, Ext4File, InodeTypes, KernelDevOp};
 
 use crate::dev::Disk;
@@ -176,24 +176,102 @@ impl VfsNodeOps for FileWrapper {
             blocks,
         );
 
-        Ok(VfsNodeAttr::new(
-            0,
-            perm,
-            vtype,
-            size,
-            blocks,
-            inode.st_ino(),
-            inode.nlink(),
-            inode.uid(),
-            inode.gid(),
-            inode.nblk_lo(),
-            inode.atime(),
-            inode.mtime(),
-            inode.ctime(),
-            inode.atime_ex(),
-            inode.mtime_ex(),
-            inode.ctime_ex(),
-        ))
+        let attr:VfsNodeAttr = if vtype == VfsNodeType::Dir {
+            VfsNodeAttr::new(
+                0,
+                perm,
+                vtype,
+                size,
+                blocks,
+                inode.st_ino(),
+                inode.nlink(),
+                inode.uid(),
+                inode.gid(),
+                inode.nblk_lo(),
+                0, 0, 0,
+                0, 0, 0,
+            )
+        } else{
+            VfsNodeAttr::new(
+                0,
+                perm,
+                vtype,
+                size,
+                blocks,
+                inode.st_ino(),
+                inode.nlink(),
+                inode.uid(),
+                inode.gid(),
+                inode.nblk_lo(),
+                inode.atime(),
+                inode.mtime(),
+                inode.ctime(),
+                inode.atime_ex(),
+                inode.mtime_ex(),
+                inode.ctime_ex(),
+            )
+        };
+        Ok(attr)
+
+    }
+
+    fn set_atime(&self, atime: u32, atime_n: u32) -> VfsResult<usize> {
+        let file = self.0.lock();
+        file.set_atime(atime, atime_n)
+            .map_err(|e| <i32 as TryInto<AxError>>::try_into(e).unwrap())?;
+        Ok(0)
+    }
+     fn set_mtime(&self, mtime: u32, mtime_n: u32) -> VfsResult<usize> {
+         let file = self.0.lock();
+         file.set_mtime(mtime, mtime_n)
+             .map_err(|e| <i32 as TryInto<AxError>>::try_into(e).unwrap())?;
+         Ok(0)
+     }
+    fn get_xattr(
+        &self,
+        name: *const c_char,
+        name_len: usize,
+        buf: *mut c_void,
+        buf_size: usize,
+        data_size: *mut usize
+    ) -> VfsResult<usize> {
+        let file = self.0.lock();
+        file.get_xattr(name, name_len, buf, buf_size, data_size)
+            .map_err(|e| <i32 as TryInto<AxError>>::try_into(e).unwrap())?;
+        Ok(0)
+    }
+    fn set_xattr(
+        &self,
+        name: *const c_char,
+        name_len: usize,
+        data: *mut c_void,
+        data_size: usize,
+    )->VfsResult<usize>{
+        let file = self.0.lock();
+        file.set_xattr(name,name_len,data,data_size)
+            .map_err(|e| <i32 as TryInto<AxError>>::try_into(e).unwrap())?;
+        Ok(0)
+    }
+    fn list_xattr(
+        &self,
+        list: *mut c_char,
+        size: usize,
+        ret_size: *mut usize,
+    )->VfsResult<usize>{
+        let file = self.0.lock();
+        let ret = file.list_xattr(list, size, ret_size)
+            .map_err(|e| <i32 as TryInto<AxError>>::try_into(e).unwrap())?;
+        Ok(ret)
+    }
+    fn remove_xattr(
+        &self,
+        name: *const c_char,
+        name_len: usize,
+    )->VfsResult<usize>{
+        let file = self.0.lock();
+        file.remove_xattr(name, name_len)
+            .map_err(|e| <i32 as TryInto<AxError>>::try_into(e).unwrap())?;
+        Ok(0)
     }
 
     fn create(&self, path: &str, ty: VfsNodeType) -> VfsResult {

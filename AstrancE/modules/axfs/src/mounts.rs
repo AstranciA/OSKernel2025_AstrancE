@@ -15,7 +15,6 @@ pub(crate) fn devfs() -> Arc<fs::devfs::DeviceFileSystem> {
 
     let devfs = fs::devfs::DeviceFileSystem::new();
     // let sda1_dir = devfs.mkdir("sda1");
-
     // devfs.add("null", Arc::new(null));
     // devfs.add("zero", Arc::new(zero));
     devfs.add("null", null.clone());

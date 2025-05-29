@@ -1,11 +1,10 @@
 use crate::{SyscallResult, ToLinuxResult, result};
-use arceos_posix_api::ctypes::{
-    blkcnt_t, blksize_t, dev_t, gid_t, ino_t, mode_t, nlink_t, off_t, time_t, timespec, uid_t,
-};
+use arceos_posix_api::ctypes::{blkcnt_t, blksize_t, dev_t, gid_t, ino_t, mode_t, nlink_t, off_t, time_t, timespec, timeval, uid_t};
 use arceos_posix_api::{self as api, char_ptr_to_str, ctypes};
 use axfs::api::set_current_dir;
 use axlog::debug;
-use core::ffi::{c_char, c_int, c_long, c_longlong};
+use core::ffi::{c_char, c_int, c_long, c_longlong, c_void};
+use crate::syscall_imp::time::sys_get_time_of_day;
 
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
@@ -17,9 +16,9 @@ pub struct test_stat {
     pub st_uid: uid_t,
     pub st_gid: gid_t,
     pub st_rdev: dev_t,
+    pub __pad1: u64,
     pub st_size: off_t,
     pub st_blksize: blksize_t,
-    pub __pad2: i32,
     pub st_blocks: blkcnt_t,
     pub st_atime_sec: c_long,
     pub st_atime_nsec: c_long,
@@ -39,6 +38,7 @@ impl From<ctypes::stat> for test_stat {
             st_uid: original.st_uid,
             st_gid: original.st_gid,
             st_rdev: original.st_rdev,
+            __pad1: 0,
             st_size: original.st_size,
             st_blksize: original.st_blksize,
             st_blocks: original.st_blocks,
@@ -48,7 +48,6 @@ impl From<ctypes::stat> for test_stat {
             st_atime_nsec: original.st_atime.tv_nsec as c_long,
             st_mtime_nsec: original.st_mtime.tv_nsec as c_long,
             st_ctime_nsec: original.st_ctime.tv_nsec as c_long,
-            ..Default::default()
         }
     }
 }
@@ -68,9 +67,18 @@ pub fn sys_lseek(fd: c_int, offset: ctypes::off_t, whence: c_int) -> SyscallResu
     (api::sys_lseek(fd, offset, whence) as isize).to_linux_result()
 }
 
+// #[inline]
+// pub unsafe fn sys_stat(path: *const c_char, buf: *mut ctypes::stat) -> SyscallResult {
+//     api::sys_stat(path, buf).to_linux_result()
+// }
+
+
 #[inline]
-pub unsafe fn sys_stat(path: *const c_char, buf: *mut ctypes::stat) -> SyscallResult {
-    api::sys_stat(path, buf).to_linux_result()
+pub unsafe fn sys_stat(path: *const c_char, buf: *mut test_stat) -> SyscallResult {
+    let mut stat_buf = ctypes::stat::default();
+    let result = api::sys_stat(path, &mut stat_buf as *mut _).to_linux_result();
+    *buf = test_stat::from(stat_buf);
+    result
 }
 
 #[inline]
@@ -78,13 +86,13 @@ pub unsafe fn sys_fstat(fd: c_int, buf: *mut test_stat) -> SyscallResult {
     let mut stat_buf = ctypes::stat::default();
     let result = unsafe { api::sys_fstat(fd, &mut stat_buf as *mut _) }.to_linux_result();
     *buf = test_stat::from(stat_buf);
-    let stat = &*buf;
-    debug! {
-        "!!!atime: {:?}, ctime: {:?}, mtime: {:?}",
-        stat.st_atime_sec,
-        stat.st_ctime_sec,
-        stat.st_mtime_sec,
-    };
+    // let stat = &*buf;
+    // debug!{
+    //         "!!!atime: {:?}, ctime: {:?}, mtime: {:?}",
+    //         stat.st_atime_sec,
+    //         stat.st_ctime_sec,
+    //         stat.st_mtime_sec,
+    //     };
     result
 }
 
@@ -147,20 +155,51 @@ pub fn sys_unlinkat(dir_fd: c_int, path: *const c_char) -> SyscallResult {
     api::sys_unlinkat(dir_fd, path)
 }
 
-pub fn sys_fgetxattr(fd: c_int, name: *const c_char, buf: *mut u8, sizes: c_int) -> SyscallResult {
-    api::sys_fgetxattr(fd, name, buf, sizes).to_linux_result()
-}
+pub fn sys_fgetxattr(
+    fd: c_int,
+    name: *const c_char,
+    buf: *mut c_void,
+    sizes: usize
+) -> SyscallResult { api::sys_fgetxattr(fd, name, buf, sizes).to_linux_result()}
 
 pub fn sys_fsetxattr(
     fd: c_int,
     name: *const c_char,
-    buf: *mut u8,
-    size: c_int,
-    flags: c_int,
+    buf: *mut c_void,
+    size: usize,
+    flags: usize,
 ) -> SyscallResult {
     api::sys_fsetxattr(fd, name, buf, size, flags).to_linux_result()
 }
 
-pub fn sys_fremovexattr(fd: c_int, name: *const c_char) -> SyscallResult {
+pub fn sys_flistxattr(
+    fd: c_int,
+    list: *mut c_char,
+    size: usize,
+)->SyscallResult { api::sys_listxattr(fd, list, size).to_linux_result()}
+
+pub fn sys_fremovexattr(
+    fd: c_int,
+    name: *const c_char
+) -> SyscallResult {
     api::sys_fremovexattr(fd, name).to_linux_result()
 }
+
+pub fn sys_mount(src: *const c_char, mnt: *const c_char, fstype: *const c_char, mntflag: usize) -> SyscallResult {
+    api::sys_mount(src, mnt, fstype, mntflag)
+}
+
+pub fn sys_umount2(mnt: *const c_char) -> SyscallResult {
+    api::sys_umount2(mnt)
+}
+
+pub fn sys_utimesat(
+    dirfd: c_int,
+    path: *const c_char,
+    times:*const timespec,
+    now: timeval,
+    flags: c_int
+) -> SyscallResult {
+   api::sys_utimensat(dirfd,path,times,now,flags)
+}
+
