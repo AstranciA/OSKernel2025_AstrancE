@@ -30,7 +30,7 @@ lazy_static = { version = "1.4", features = ["spin_no_std"] }
 cap_access = "0.1"
 axio = { version = "0.1.1", features = ["alloc"] }
 axerrno = "0.1"
-axfs_vfs = "0.1"
+axfs_vfs = { workspace = true }
 spin = "0.9"
 axfs_devfs = { workspace = true, optional = true }
 axfs_ramfs = { workspace = true, optional = true }

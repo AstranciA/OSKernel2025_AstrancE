@@ -30,6 +30,49 @@ pub fn sys_read(fd: c_int, buf: *mut c_void, count: usize) -> ctypes::ssize_t {
     })
 }
 
+/// Read data into multiple buffers from the file indicated by `fd`.
+///
+/// Return the total number of bytes read if successful.
+pub unsafe fn sys_readv(fd: c_int, iov: *const ctypes::iovec, iocnt: c_int) -> ctypes::ssize_t {
+    debug!("sys_readv <= fd: {}", fd);
+    syscall_body!(sys_readv, {
+        if !(0..=1024).contains(&iocnt) {
+            return Err(LinuxError::EINVAL);
+        }
+
+        let iovs = unsafe { core::slice::from_raw_parts(iov, iocnt as usize) };
+        let mut ret = 0;
+        for iov in iovs.iter() {
+            if iov.iov_len == 0 {
+                debug!("buffer is empty!");
+                continue; // 跳过空缓冲区
+            }
+            if iov.iov_base.is_null() {
+                return Err(LinuxError::EFAULT); // 无效指针
+            }
+
+            let dst = unsafe { core::slice::from_raw_parts_mut(iov.iov_base as *mut u8, iov.iov_len) };
+            #[cfg(feature = "fd")]
+            let result = get_file_like(fd)?.read(dst)?;
+            #[cfg(not(feature = "fd"))]
+            let result = match fd {
+                0 => super::stdio::stdin().read(dst)?,
+                1 | 2 => return Err(LinuxError::EPERM),
+                _ => return Err(LinuxError::EBADF),
+            };
+
+            ret += result as isize;
+
+            if result < iov.iov_len {
+                break; // 如果读取的字节数少于缓冲区大小，停止读取
+            }
+        }
+
+        Ok(ret)
+    })
+}
+
+
 fn write_impl(fd: c_int, buf: *const c_void, count: usize) -> LinuxResult<ctypes::ssize_t> {
     if buf.is_null() {
         return Err(LinuxError::EFAULT);

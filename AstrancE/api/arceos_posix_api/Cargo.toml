@@ -44,7 +44,7 @@ axtask = { workspace = true, optional = true }
 axfs = { workspace = true, optional = true }
 axnet = { workspace = true, optional = true }
 axns = { workspace = true, optional = true }
-axfs_vfs = { version = "0.1", optional = true }
+axfs_vfs = { workspace = true, optional = true }
 
 # Other crates
 axio = "0.1"

@@ -74,9 +74,9 @@ pub fn sys_waitpid(pid: i32, exit_code_ptr: UserPtr<i32>, options: u32) -> Linux
     } else {
         WaitPid::Pgid(-pid as _)
     };
-
-    let children = process
-        .children()
+    let pch = process.children();
+    error!("children {:?}",pch.len());
+    let children = pch
         .into_iter()
         .filter(|child| pid.apply(child))
         .filter(|child| {
@@ -87,7 +87,9 @@ pub fn sys_waitpid(pid: i32, exit_code_ptr: UserPtr<i32>, options: u32) -> Linux
         .collect::<Vec<_>>();
     if children.is_empty() {
         return Err(LinuxError::ECHILD);
+        // return  Ok(0);
     }
+    
 
     let exit_code = exit_code_ptr.nullable(UserPtr::get)?;
     loop {

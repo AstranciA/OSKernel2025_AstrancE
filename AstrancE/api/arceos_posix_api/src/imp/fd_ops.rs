@@ -40,6 +40,11 @@ pub trait FileLike: Send + Sync {
         warn!("Unsupport fremovexattr for this type");
         Ok(0)
     }
+    fn ioctl(&self, op: usize,arg1:usize,arg2:usize,arg3:usize,arg4:usize) -> LinuxResult<usize>{
+        warn!("Unsupport ioctl for this type");
+        Ok(0)
+    }
+
 }
 
 def_resource! {

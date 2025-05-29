@@ -306,16 +306,28 @@ impl TryFrom<sigaction> for SigAction {
          *};
          */
         let flags = SigFlags::from_bits_retain(act.sa_flags as usize);
-        error!("flags: {flags:?}");
-
+        debug!("flags: {flags:?}");
         let mask = act.sa_mask.into();
-
-        let handler = if flags.contains(SigFlags::SIG_INFO) {
-            SigHandler::Handler(act.sa_handler.ok_or(SignalError::InvalidAction)?)
+        warn!("act: {act:?}");
+        let handler = if let Some(sa_handler) = act.sa_handler {
+             if flags.contains(SigFlags::SIG_INFO) {
+                SigHandler::Handler(sa_handler)
+            } else {
+                SigHandler::Action(sa_handler)
+            }
         } else {
-            SigHandler::Action(act.sa_handler.ok_or(SignalError::InvalidAction)?)
-        };
+            // FIXME: using kernel provided default
 
+            #[cfg(feature = "default_handler")]
+            {
+                SigHandler::Default(default_signal_handler)
+            }
+            #[cfg(not(feature = "default_handler"))]     
+            {
+                SigHandler::Default(|signal , _| error!("Unassigned default handler for signal {signal:?}"))
+            }
+        };
+        
         Ok(Self {
             handler,
             mask,
