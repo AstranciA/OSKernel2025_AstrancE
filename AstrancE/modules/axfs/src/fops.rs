@@ -289,10 +289,12 @@ impl File {
     }
 
     pub fn set_atime(&self, atime:u32,  atime_n:u32) -> AxResult<usize> {
-        self.access_node(Cap::WRITE)?.set_atime(atime,atime_n)
+        self.access_node(Cap::WRITE)?.set_atime(atime,atime_n)?;
+        Ok(0)
     }
     pub fn set_mtime(&self, mtime:u32, mtime_n:u32) -> AxResult<usize>{
-        self.access_node(Cap::WRITE)?.set_mtime(mtime,mtime_n)
+        self.access_node(Cap::WRITE)?.set_mtime(mtime,mtime_n)?;
+        Ok(0)
     }
     ///do something for the file extra attributes
     pub fn get_xattr(

@@ -202,13 +202,15 @@ impl VfsNodeOps for FileWrapper {
 
     fn set_atime(&self, atime: u32, atime_n: u32) -> VfsResult<usize> {
         let file = self.0.lock();
-        let ret = file.set_atime(atime, atime_n).unwrap();
-        Ok(ret)
+        file.set_atime(atime, atime_n)
+            .map_err(|e| <i32 as TryInto<AxError>>::try_into(e).unwrap())?;
+        Ok(0)
     }
      fn set_mtime(&self, mtime: u32, mtime_n: u32) -> VfsResult<usize> {
          let file = self.0.lock();
-         let ret = file.set_mtime(mtime, mtime_n).unwrap();
-         Ok(ret)
+         file.set_mtime(mtime, mtime_n)
+             .map_err(|e| <i32 as TryInto<AxError>>::try_into(e).unwrap())?;
+         Ok(0)
      }
     fn get_xattr(
         &self,
@@ -216,10 +218,12 @@ impl VfsNodeOps for FileWrapper {
         name_len: usize,
         buf: *mut c_void,
         buf_size: usize,
-        data_size: *mut usize) -> VfsResult<usize> {
+        data_size: *mut usize
+    ) -> VfsResult<usize> {
         let file = self.0.lock();
-        let ret = file.get_xattr(name, name_len, buf, buf_size, data_size).unwrap();
-        Ok(ret)
+        file.get_xattr(name, name_len, buf, buf_size, data_size)
+            .map_err(|e| <i32 as TryInto<AxError>>::try_into(e).unwrap())?;
+        Ok(0)
     }
     fn set_xattr(
         &self,
@@ -229,8 +233,9 @@ impl VfsNodeOps for FileWrapper {
         data_size: usize,
     )->VfsResult<usize>{
         let file = self.0.lock();
-        let ret = file.set_xattr(name,name_len,data,data_size).unwrap();
-        Ok(ret)
+        file.set_xattr(name,name_len,data,data_size)
+            .map_err(|e| <i32 as TryInto<AxError>>::try_into(e).unwrap())?;
+        Ok(0)
     }
     fn list_xattr(
         &self,
@@ -239,7 +244,8 @@ impl VfsNodeOps for FileWrapper {
         ret_size: *mut usize,
     )->VfsResult<usize>{
         let file = self.0.lock();
-        let ret = file.list_xattr(list, size, ret_size).unwrap();
+        let ret = file.list_xattr(list, size, ret_size)
+            .map_err(|e| <i32 as TryInto<AxError>>::try_into(e).unwrap())?;
         Ok(ret)
     }
     fn remove_xattr(
@@ -248,8 +254,9 @@ impl VfsNodeOps for FileWrapper {
         name_len: usize,
     )->VfsResult<usize>{
         let file = self.0.lock();
-        let ret = file.remove_xattr(name, name_len).unwrap();
-        Ok(ret)
+        file.remove_xattr(name, name_len)
+            .map_err(|e| <i32 as TryInto<AxError>>::try_into(e).unwrap())?;
+        Ok(0)
     }
 
     fn create(&self, path: &str, ty: VfsNodeType) -> VfsResult {

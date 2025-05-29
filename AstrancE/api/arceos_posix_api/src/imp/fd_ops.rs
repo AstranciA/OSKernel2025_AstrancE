@@ -58,10 +58,11 @@ pub trait FileLike: Send + Sync {
         Ok(0)
     }
     fn set_mtime(&self,mtime:u32,mtime_n:u32) -> LinuxResult<usize>{
-        warn!("Unsupport set_stat for this type");
-        Ok(0)}
+        warn!("Unsupport set_mtime for this type");
+        Ok(0)
+    }
     fn set_atime(&self, atime:u32,atime_n:u32) -> LinuxResult<usize>{
-        warn!("Unsupport set_stat for this type");
+        warn!("Unsupport set_atime for this type");
         Ok(0)
     }
 }

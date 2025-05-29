@@ -201,10 +201,8 @@
     <list default="true" id="7c2d0aa3-ed80-457d-a6b3-f7e100db3c2a" name="Changes" comment="mmap first">
       <change afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_devfs/src/chrdev.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/api/arceos_posix_api/src/imp/fd_ops.rs" beforeDir="false" afterPath="$PROJECT_DIR$/api/arceos_posix_api/src/imp/fd_ops.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/api/arceos_posix_api/src/imp/fs.rs" beforeDir="false" afterPath="$PROJECT_DIR$/api/arceos_posix_api/src/imp/fs.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/api/arceos_posix_api/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/api/arceos_posix_api/src/lib.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/axdriver_crates" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axdriver_crates" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/axdriver_crates/axdriver_base/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axdriver_crates/axdriver_base/Cargo.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/axdriver_crates/axdriver_block/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axdriver_crates/axdriver_block/src/lib.rs" afterDir="false" />
@@ -225,12 +223,7 @@
       <change beforePath="$PROJECT_DIR$/crates/lwext4_rust/src/file.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust/src/file.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/axfs/src/fops.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axfs/src/fops.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/axfs/src/fs/lwext4_rust.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axfs/src/fs/lwext4_rust.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/axfs/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axfs/src/lib.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/axfs/src/mounts.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axfs/src/mounts.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/axfs/src/root.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axfs/src/root.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/modules/axsyscall/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axsyscall/src/lib.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/axsyscall/src/syscall_imp/fs.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axsyscall/src/syscall_imp/fs.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/axsyscall/src/syscall_imp/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axsyscall/src/syscall_imp/mod.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -311,7 +304,7 @@
       <window_info id="Merge Requests" />
       <window_info id="Backup and Sync History" />
       <window_info id="Commit_Guest" show_stripe_button="false" />
-      <window_info active="true" content_ui="combo" id="Project" order="0" sideWeight="0.87625" visible="true" weight="0.12050781" />
+      <window_info active="true" content_ui="combo" id="Project" order="0" sideWeight="0.87625" visible="true" weight="0.109154925" />
       <window_info id="Commit" order="1" weight="0.16067708" />
       <window_info id="Structure" order="2" sideWeight="0.12375" side_tool="true" weight="0.12050781" />
       <window_info id="Pull Requests" order="3" weight="0.16425215" />
@@ -320,10 +313,10 @@
       <window_info anchor="bottom" id="Debug" />
       <window_info anchor="bottom" id="File Transfer" />
       <window_info anchor="bottom" id="Services" order="0" weight="0.1914524" />
-      <window_info anchor="bottom" id="Version Control" order="1" weight="0.17685893" />
+      <window_info anchor="bottom" id="Version Control" order="1" weight="0.3279454" />
       <window_info anchor="bottom" id="Problems" order="2" />
       <window_info anchor="bottom" id="Problems View" order="3" weight="0.46013135" />
-      <window_info active="true" anchor="bottom" id="Terminal" order="4" visible="true" weight="0.10597637" />
+      <window_info active="true" anchor="bottom" id="Terminal" order="4" visible="true" weight="0.14629763" />
       <window_info anchor="bottom" id="Find" order="5" weight="0.63685346" />
       <window_info anchor="bottom" id="Build" order="6" weight="0.14474976" />
       <window_info anchor="bottom" id="Run" order="7" weight="0.6487051" />
@@ -438,6 +431,7 @@
       <workItem from="1745394975032" duration="9068000" />
       <workItem from="1748274395283" duration="6130000" />
       <workItem from="1748354691725" duration="4419000" />
+      <workItem from="1748497555307" duration="5551000" />
     </task>
     <task id="LOCAL-00001" summary="Changes">
       <option name="closed" value="true" />

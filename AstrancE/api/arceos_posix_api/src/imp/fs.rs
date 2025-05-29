@@ -88,11 +88,11 @@ impl FileLike for File {
     }
 
     fn set_atime(&self, atime:u32,atime_n:u32) -> LinuxResult<usize> {
-        self.inner.lock().set_atime(atime,atime_n)?;
+        self.inner.lock().set_atime(atime,atime_n).map_err(|_| LinuxError::EIO)?;
         Ok(0)
     }
     fn set_mtime(&self,mtime:u32,mtime_n:u32) -> LinuxResult<usize> {
-        self.inner.lock().set_mtime(mtime,mtime_n)?;
+        self.inner.lock().set_mtime(mtime,mtime_n).map_err(|_| LinuxError::EIO)?;
         Ok(0)
     }
     fn into_any(self: Arc<Self>) -> Arc<dyn core::any::Any + Send + Sync> {
@@ -847,71 +847,114 @@ pub fn sys_umount2(mnt: *const c_char) -> LinuxResult<isize> {
     Ok(0)
 }
 
-pub fn parse_time(ts: &timespec, now: timeval) -> Option<(u32, u32)> {
+pub fn parse_time(ts: &timespec, now: timeval) -> Result<Option<(u32, u32)>, LinuxError> {
     match ts.tv_nsec {
-        x if x == UTIME_NOW => Some((now.tv_sec as _, now.tv_usec as _)),
-        x if x == UTIME_OMIT => None,
-        _ => Some((ts.tv_sec as _, ts.tv_nsec as _)),
+        x if x == UTIME_NOW as i64 => {
+            let nsec = (now.tv_usec as i64) * 1000;
+            // 检查 tv_sec 和 nsec 是否在 u32 范围内
+            if now.tv_sec < 0 || now.tv_sec > u32::MAX as i64 || nsec < 0 || nsec > u32::MAX as i64 {
+                return Err(LinuxError::EINVAL);
+            }
+            Ok(Some((now.tv_sec as u32, nsec as u32)))
+        },
+        x if x == UTIME_OMIT as i64 => Ok(None),
+        _ => {
+            if ts.tv_nsec < 0 || ts.tv_nsec >= 1_000_000_000 {
+                return Err(LinuxError::EINVAL);
+            }
+            // 检查 tv_sec 和 tv_nsec 是否在 u32 范围内
+            if ts.tv_sec < 0 || ts.tv_sec > u32::MAX as i64 || ts.tv_nsec > u32::MAX as i64 {
+                return Err(LinuxError::EINVAL);
+            }
+            Ok(Some((ts.tv_sec as u32, ts.tv_nsec as u32)))
+        },
     }
 }
 fn extract_times(
     times: *const timespec,
     now: timeval,
-) -> (Option<(u32, u32)>, Option<(u32, u32)>) {
+) -> Result<(Option<(u32, u32)>, Option<(u32, u32)>), LinuxError> {
     if !times.is_null() {
         unsafe {
-            (
-                parse_time(&*times, now),
-                parse_time(&*times.add(1), now),
-            )
+            let atime_result = parse_time(&*times, now)?;
+            let mtime_result = parse_time(&*times.add(1), now)?;
+            Ok((atime_result, mtime_result))
         }
     } else {
         let now_ts = timespec {
             tv_sec: now.tv_sec,
-            tv_nsec: now.tv_usec,
+            tv_nsec: (now.tv_usec as i64) * 1000, // 微秒转纳秒
         };
-        (
-            parse_time(&now_ts, now),
-            parse_time(&now_ts, now),
-        )
+        if now_ts.tv_nsec < 0 || now_ts.tv_nsec >= 1_000_000_000 {
+            return Err(LinuxError::EINVAL);
+        }
+        let result = parse_time(&now_ts, now)?;
+        Ok((result, result))
     }
 }
+
 pub fn sys_utimensat(
     dirfd: c_int,
     path: *const c_char,
-    times:*const timespec,
-    now : timeval,
+    times: *const timespec,
+    now: timeval,
     flags: c_int
 ) -> LinuxResult<isize> {
-    debug!("syscall sys_utimesat<={},{:?},{:?}",dirfd,path,times);
-    let (atime_opt, mtime_opt) = extract_times(times, now);
-    let pathname = char_ptr_to_str(path)?;
-    if dirfd == AT_FDCWD as _{
-        let dir = CURRENT_DIR.lock().clone();
-        let file = dir.lookup(pathname)?;
+    debug!("syscall sys_utimensat<={},{:?},{:?}", dirfd, path, times);
+    let (atime_opt, mtime_opt) = extract_times(times, now)?;
+    if !path.is_null() {
+        let pathname = char_ptr_to_str(path).map_err(|_| LinuxError::EBADF)?;
+        if dirfd == AT_FDCWD as i32 {
+            let dir = CURRENT_DIR.lock().clone();
+            let file = dir.lookup(pathname).map_err(|e| {
+                debug!("lookup failed: {:?}", e);
+                match e {
+                    _ => LinuxError::ENOTDIR,
+                }
+            })?;
+            if let Some((sec, nsec)) = atime_opt {
+                file.set_atime(sec, nsec).map_err(|_| LinuxError::EIO)?;
+            }
+            if let Some((sec, nsec)) = mtime_opt {
+                file.set_mtime(sec, nsec).map_err(|_| LinuxError::EIO)?;
+            }
+            return Ok(0);
+        }
+        if dirfd < 0 {
+            return Err(LinuxError::EBADF);
+        }
+        let dir: Arc<Directory> = Directory::from_fd(dirfd).map_err(|_| LinuxError::EBADF)?;
+        let file: File = File::new(
+            dir.inner
+                .lock()
+                .open_file_at(pathname, &flags_to_options(flags, 0))
+                .map_err(|e| {
+                    debug!("open_file_at failed: {:?}", e);
+                    match e {
+                        _ => LinuxError::ENOENT,
+                    }
+                })?,
+                pathname.into(),
+            );
         if let Some((sec, nsec)) = atime_opt {
-            file.set_atime(sec, nsec)?;
+            file.set_atime(sec, nsec).map_err(|_| LinuxError::EIO)?;
         }
         if let Some((sec, nsec)) = mtime_opt {
-            file.set_mtime(sec , nsec )?;
+            file.set_mtime(sec, nsec).map_err(|_| LinuxError::EIO)?;
         }
-        return Ok(0);
+        Ok(0)
+    } else {
+        if dirfd < 0 {
+            return Err(LinuxError::EBADF);
+        }
+        let file = get_file_like(dirfd).map_err(|_| LinuxError::EBADF)?;
+        // if let Some((sec, nsec)) = atime_opt {
+        //     file.set_atime(sec, nsec).map_err(|_| LinuxError::EIO)?;
+        // }
+        // if let Some((sec, nsec)) = mtime_opt {
+        //     file.set_mtime(sec, nsec).map_err(|_| LinuxError::EIO)?;
+        // }
+        Ok(0)
     }
-    let dir: Arc<Directory> = Directory::from_fd(dirfd)?;
-    let file: File = File::new(
-        dir.inner
-            .lock()
-            .open_file_at(pathname, &flags_to_options(flags, 0))?,
-        pathname.into(),
-    );
-    if let Some((sec, nsec)) = atime_opt {
-        file.set_atime(sec, nsec)?;
-    }
-    if let Some((sec, nsec)) = mtime_opt {
-        file.set_mtime(sec , nsec)?;
-    }
-    Ok(0)
 }
-
-
 

@@ -198,9 +198,10 @@ syscall_handler_def!(
         }
         #[cfg(all(feature = "fs", feature = "fd"))]
         utimensat =>[dirfd ,path ,times, flags,..]{
-            let mut now= timeval{tv_sec:0,tv_usec:0 };
+            ///Now it can NOT change atime_nec and mtime_nec and support large number like 1LL<<32
+            let mut now: timeval = timeval{tv_sec:0, tv_usec:0 };
             sys_get_time_of_day(&mut now).unwrap();
-            sys_utimesat(dirfd as _, path as _, times as _, now, flags as _)
+            sys_utimesat(dirfd as _, path as _, times as _, now as _, flags as _)
         }
         mount => [src, mnt, fstype, mntflag,..]{
             syscall_imp::fs::sys_mount(src as _,mnt as _,fstype as _,mntflag)
