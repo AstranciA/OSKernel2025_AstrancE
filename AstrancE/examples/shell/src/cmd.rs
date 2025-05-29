@@ -1,9 +1,9 @@
 use std::fs::{self, File, FileType};
 use std::io::{self, prelude::*};
-use std::{string::String, vec::Vec};
 use std::os::arceos::modules::axlog::error;
 #[cfg(all(not(feature = "axstd"), unix))]
 use std::os::unix::fs::{FileTypeExt, PermissionsExt};
+use std::{string::String, vec::Vec};
 
 use crate::path_to_str;
 

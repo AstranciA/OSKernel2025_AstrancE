@@ -173,11 +173,7 @@ impl Backend {
                     PageSize::Size4K.into(),
                 )
             };
-            return aspace.remap(
-                vaddr,
-                frame,
-                orig_flags,
-            );
+            return aspace.remap(vaddr, frame, orig_flags);
 
             /*
              *let result = pt

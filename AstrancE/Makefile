@@ -21,6 +21,7 @@
 #     - `BUS`: Device bus type: mmio, pci
 #     - `MEM`: Memory size (default is 128M)
 #     - `DISK_IMG`: Path to the virtual disk image
+#     - `ROOTFS_DISK`: Index of the rootfs
 #     - `ACCEL`: Enable hardware acceleration (KVM on linux)
 #     - `QEMU_LOG`: Enable QEMU logging (log file is "qemu.log")
 #     - `NET_DUMP`: Enable network packet dump (log file is "netdump.pcap")
@@ -58,6 +59,7 @@ MEM ?= 128M
 ACCEL ?=
 
 DISK_IMG ?= disk.img
+ROOTFS_DISK ?= 0
 QEMU_LOG ?= n
 NET_DUMP ?= n
 NET_DEV ?= user

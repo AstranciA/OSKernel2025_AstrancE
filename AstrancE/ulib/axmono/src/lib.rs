@@ -14,8 +14,10 @@ extern crate axlog;
 
 extern crate axsyscall;
 pub mod ctypes;
-pub mod utils;
 pub mod ptr;
+pub mod utils;
+
+//mod dynamic;
 use core::clone;
 
 use axerrno::AxResult;
@@ -37,7 +39,6 @@ pub mod task;
 
 #[cfg(feature = "mm")]
 pub mod mm;
-
 
 #[cfg(any(feature = "mm", feature = "process"))]
 /// If the target architecture requires it, the kernel portion of the address

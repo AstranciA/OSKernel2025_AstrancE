@@ -83,13 +83,19 @@ impl FileLike for File {
     fn set_nonblocking(&self, _nonblocking: bool) -> LinuxResult {
         Ok(())
     }
-    fn fgetxattr(&self, name: &str, value: &mut [u8], size: usize, flags: usize)-> LinuxResult<usize>{
+    fn fgetxattr(
+        &self,
+        name: &str,
+        value: &mut [u8],
+        size: usize,
+        flags: usize,
+    ) -> LinuxResult<usize> {
         Ok(self.inner.lock().get_xattr(name, value, size)?)
     }
-    fn fsetxattr(&self, name: &str, value: &[u8], size: usize, flags: usize) -> LinuxResult<usize>{
+    fn fsetxattr(&self, name: &str, value: &[u8], size: usize, flags: usize) -> LinuxResult<usize> {
         Ok(self.inner.lock().set_xattr(name, value, size)?)
     }
-    fn fremovexattr(&self, name: &str) -> LinuxResult<usize>{
+    fn fremovexattr(&self, name: &str) -> LinuxResult<usize> {
         debug!("This error?");
         Ok(self.inner.lock().remove_xattr(name)?)
     }
@@ -99,7 +105,7 @@ fn attr2stat(metadata: VfsNodeAttr) -> ctypes::stat {
     let ty = metadata.file_type() as u8;
     let perm = metadata.perm().bits() as u32;
     let st_mode = ((ty as u32) << 12) | perm;
-    debug!("!!!!mode is {}",st_mode);
+    debug!("!!!!mode is {}", st_mode);
     ctypes::stat {
         st_dev: metadata.dev() as _,
         st_ino: metadata.st_ino() as _,
@@ -110,17 +116,17 @@ fn attr2stat(metadata: VfsNodeAttr) -> ctypes::stat {
         st_size: metadata.size() as _,
         st_blksize: 512,
         st_blocks: metadata.blocks() as _,
-        st_atime:timespec{
+        st_atime: timespec {
             tv_sec: metadata.atime() as time_t,
-            tv_nsec: metadata.atime_nse() as core::ffi::c_long
+            tv_nsec: metadata.atime_nse() as core::ffi::c_long,
         },
-        st_ctime:timespec{
+        st_ctime: timespec {
             tv_sec: metadata.ctime() as time_t,
-            tv_nsec: metadata.ctime_nse() as core::ffi::c_long
+            tv_nsec: metadata.ctime_nse() as core::ffi::c_long,
         },
-        st_mtime:timespec{
+        st_mtime: timespec {
             tv_sec: metadata.mtime() as time_t,
-            tv_nsec: metadata.mtime_nse() as core::ffi::c_long
+            tv_nsec: metadata.mtime_nse() as core::ffi::c_long,
         },
         ..Default::default()
     }
@@ -405,14 +411,21 @@ pub fn sys_fgetxattr(fd: c_int, name: *const c_char, buf: *mut u8, sizes: c_int)
         }
         let sizes_usize = sizes as usize;
         let buf_slice = unsafe { core::slice::from_raw_parts_mut(buf, sizes_usize) };
-        file.fgetxattr(attr_name, buf_slice, sizes_usize, 0).map_err(|e| {
-            debug!("Failed to get xattr: {:?}", e);
-            e
-        })
+        file.fgetxattr(attr_name, buf_slice, sizes_usize, 0)
+            .map_err(|e| {
+                debug!("Failed to get xattr: {:?}", e);
+                e
+            })
     })
 }
 ///write the buf into  the xattr by fd
-pub fn sys_fsetxattr(fd: c_int, name: *const c_char, buf: *mut u8, size: c_int, flags: c_int) -> usize {
+pub fn sys_fsetxattr(
+    fd: c_int,
+    name: *const c_char,
+    buf: *mut u8,
+    size: c_int,
+    flags: c_int,
+) -> usize {
     debug!("sys_fsetxattr <= fd: {:?}, buf: {:#x}", fd, buf as usize);
     syscall_body!(sys_fsetxattr, {
         if fd < 0 {
@@ -432,15 +445,19 @@ pub fn sys_fsetxattr(fd: c_int, name: *const c_char, buf: *mut u8, size: c_int, 
         }
         let size_usize = size as usize;
         let value_slice = unsafe { core::slice::from_raw_parts(buf as *const u8, size_usize) };
-        file.fsetxattr(attr_name, value_slice, size_usize, flags as usize).map_err(|e| {
-            debug!("Failed to set xattr: {:?}", e);
-            e
-        })
+        file.fsetxattr(attr_name, value_slice, size_usize, flags as usize)
+            .map_err(|e| {
+                debug!("Failed to set xattr: {:?}", e);
+                e
+            })
     })
 }
 /// remove the axttr by fd
 pub fn sys_fremovexattr(fd: c_int, name: *const c_char) -> usize {
-    debug!("sys_fremovexattr <= fd: {:?}, name: {:#x}", fd, name as usize);
+    debug!(
+        "sys_fremovexattr <= fd: {:?}, name: {:#x}",
+        fd, name as usize
+    );
     syscall_body!(sys_fremovexattr, {
         if fd < 0 {
             debug!("Invalid file descriptor: {}", fd);
@@ -455,7 +472,7 @@ pub fn sys_fremovexattr(fd: c_int, name: *const c_char) -> usize {
             LinuxError::EINVAL
         })?;
         let attr = file.stat();
-        debug!("model: {:?}. name: {:?}",attr.unwrap().st_mode, attr_name);
+        debug!("model: {:?}. name: {:?}", attr.unwrap().st_mode, attr_name);
         file.fremovexattr(attr_name).map_err(|e| {
             debug!("Failed to remove xattr: {:?}", e);
             e // Propagate the specific error (e.g., ENOATTR)
@@ -578,13 +595,19 @@ impl FileLike for Directory {
         Ok(())
     }
 
-    fn fgetxattr(&self, name: &str, value: &mut [u8], size: usize, flags: usize)-> LinuxResult<usize>{
+    fn fgetxattr(
+        &self,
+        name: &str,
+        value: &mut [u8],
+        size: usize,
+        flags: usize,
+    ) -> LinuxResult<usize> {
         Ok(self.inner.lock().get_xattr(name, value, size)?)
     }
-    fn fsetxattr(&self, name: &str, value: &[u8], size: usize, flags: usize) -> LinuxResult<usize>{
+    fn fsetxattr(&self, name: &str, value: &[u8], size: usize, flags: usize) -> LinuxResult<usize> {
         Ok(self.inner.lock().set_xattr(name, value, size)?)
     }
-    fn fremovexattr(&self, name: &str) -> LinuxResult<usize>{
+    fn fremovexattr(&self, name: &str) -> LinuxResult<usize> {
         debug!("This error?");
         Ok(self.inner.lock().remove_xattr(name)?)
     }

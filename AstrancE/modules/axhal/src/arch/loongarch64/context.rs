@@ -200,7 +200,7 @@ impl TrapFrame {
         self.era
     }
 
-    pub fn set_ra(&mut self, ra:usize) {
+    pub fn set_ra(&mut self, ra: usize) {
         self.regs.ra = ra
     }
 

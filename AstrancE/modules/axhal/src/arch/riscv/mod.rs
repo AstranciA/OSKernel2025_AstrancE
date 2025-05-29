@@ -132,7 +132,7 @@ pub unsafe fn exchange_trap_frame(sp: usize) -> usize {
 /// # Safety
 /// - 必须在正确的上下文中调用（如中断处理期间）
 /// - 读取的值可能无效，调用者需确保其有效性
-#[inline(always)]  // 强制内联以减少开销
+#[inline(always)] // 强制内联以减少开销
 pub unsafe fn read_trap_frame() -> usize {
     let value: usize;
     core::arch::asm!(
@@ -142,7 +142,6 @@ pub unsafe fn read_trap_frame() -> usize {
     );
     value
 }
-
 
 /// Initializes CPU states on the current CPU.
 ///

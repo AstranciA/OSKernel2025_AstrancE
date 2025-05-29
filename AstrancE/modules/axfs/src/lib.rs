@@ -25,31 +25,67 @@
 #[macro_use]
 extern crate log;
 extern crate alloc;
-use alloc::sync::Arc;
-mod dev;
-mod fs;
-mod mounts;
-mod root;
-mod blkdev;
-pub mod api;
-pub mod fops;
-pub use root::{CURRENT_DIR, CURRENT_DIR_PATH};
 
+use alloc::{
+    collections::BTreeMap,
+    format,
+    string::{String, ToString},
+    sync::Arc,
+};
+pub mod api;
+mod blkdev;
+mod dev;
+pub mod fops;
+pub mod fs;
+mod mounts;
+pub mod path;
+mod root;
+use api::create_dir;
+use axsync::Mutex;
+use lazyinit::LazyInit;
+pub use root::{CURRENT_DIR, CURRENT_DIR_PATH, ROOT_DIR};
+
+pub use crate::dev::Disk;
 use axdriver::{AxDeviceContainer, prelude::*};
 use axfs_vfs::{VfsNodeOps, VfsOps};
-use crate::dev::Disk;
+
+lazy_static::lazy_static! {
+    pub static ref DISKS: Mutex<BTreeMap<String, Disk>> = Mutex::new(BTreeMap::new());
+}
+
+/// 按字母递增的设备命名
+fn get_device_name(index: u8) -> String {
+    // 确保 index 在合理范围内 (0-25 对应 a-z)
+    let c = b'a' + (index % 26);
+    let mut name = String::with_capacity(3); // "vda" 是3字节
+    name.push_str("vd");
+    name.push(c as char);
+    name
+}
 
 /// Initializes filesystems by block devices.
 pub fn init_filesystems(mut blk_devs: AxDeviceContainer<AxBlockDevice>) {
     info!("Initialize filesystems...");
-    let dev = blk_devs.take_one().expect("No block device found!");
-    info!("  use block device 0: {:?}", dev.device_name());
-    // root::init_rootfs(self::dev::Disk::new(dev));
-    // let disk = Disk::new(dev,1,0);
-    // let devfs = mounts::devfs();
-    // devfs.add("ram1",Arc::new(disk.clone()));
-    // let node = devfs.root_dir().lookup("ram1").unwrap();
-    //let disk = Disk::new(node.get_dev(),1,0);
-    root::init_rootfs(Disk::new(dev,1,0));
+    let root = blk_devs
+        .first()
+        .expect("No block device found!")
+        .device_name();
+    info!("  use block device 0: {:?} as rootfs", root);
+    let mut i = 0;
+    let mut disks = DISKS.lock();
+    while let Some(device) = blk_devs.take_one() {
+        // TODO: better device_name
+        let device_name = get_device_name(i);
+        warn!(
+            "Find block device: {} -> {}",
+            device.device_name(),
+            device_name
+        );
+        //let a = fs::lwext4_rust::Ext4FileSystem::new(Disk::new(device, 1, 0));
+        disks.insert(device_name, Disk::new(device, 1, 0));
+        i += 1;
+    }
+    info!("{} disks in total", disks.len());
+    root::init_rootfs(disks.pop_first().expect("No block device found!").1);
     info!("Initialize device filesystems...");
 }

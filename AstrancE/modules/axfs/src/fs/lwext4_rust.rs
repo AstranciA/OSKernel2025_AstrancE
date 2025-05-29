@@ -1,8 +1,7 @@
-use alloc::string::ToString;
 use crate::alloc::string::String;
+use alloc::string::ToString;
 use alloc::sync::Arc;
-use alloc::vec::Vec;
-use axerrno::{AxError};
+use axerrno::AxError;
 use axfs_vfs::{VfsDirEntry, VfsError, VfsNodePerm, VfsResult};
 use axfs_vfs::{VfsNodeAttr, VfsNodeOps, VfsNodeRef, VfsNodeType, VfsOps};
 use axsync::Mutex;
@@ -18,6 +17,7 @@ pub const BLOCK_SIZE: usize = 512;
 pub struct Ext4FileSystem<T: KernelDevOp<DevType = T>> {
     inner: Ext4BlockWrapper<T>,
     root: VfsNodeRef,
+    //mount_point: BTreeMap<(String, VfsNodeRef)>,
 }
 
 unsafe impl<T: KernelDevOp<DevType = T>> Sync for Ext4FileSystem<T> {}
@@ -48,7 +48,7 @@ impl<T: KernelDevOp<DevType = T>> Ext4FileSystem<T> {
      *}
      */
     //#[cfg(not(feature = "use-ramdisk"))]
-    pub fn new(block_dev: T) -> Self {
+    pub fn new(block_dev: T, name: &str, mount_point: &str) -> Self {
         /*
          *info!(
          *    "Got Disk size:{}, position:{}",
@@ -56,13 +56,21 @@ impl<T: KernelDevOp<DevType = T>> Ext4FileSystem<T> {
          *    disk.position()
          *);
          */
-        let inner =
-            Ext4BlockWrapper::<T>::new(block_dev).expect("failed to initialize EXT4 filesystem");
-        info!("new block device");
-        let root = Arc::new(FileWrapper::new("/", InodeTypes::EXT4_DE_DIR));
-        info!("new block device");
-        Self { inner, root }
+        let inner = Ext4BlockWrapper::<T>::new(block_dev, &name, mount_point)
+            .expect("failed to initialize EXT4 filesystem");
+        let root = Arc::new(FileWrapper::new(mount_point, InodeTypes::EXT4_DE_DIR));
+        Self {
+            inner,
+            root,
+            //mount_point: BTreeMap::new(),
+        }
     }
+
+    pub fn inner(&mut self) -> &mut Ext4BlockWrapper<T> {
+        &mut self.inner
+    }
+
+    //pub fn mount(&mut self, fs: Self, mount_point: &str) { self.mount_point.insert(mount_point.into(), fs); }
 }
 
 /// The [`VfsOps`] trait provides operations on a filesystem.
@@ -74,6 +82,12 @@ impl<T: KernelDevOp<DevType = T>> VfsOps for Ext4FileSystem<T> {
         //let root_dir = unsafe { (*self.root.get()).as_ref().unwrap() };
         Arc::clone(&self.root)
     }
+
+    /*
+     *fn mount(&self, _path: &str, _mount_point: VfsNodeRef) -> VfsResult {
+     *    unimplemented!()
+     *}
+     */
 }
 
 pub struct FileWrapper(Mutex<Ext4File>);

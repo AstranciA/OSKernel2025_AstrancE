@@ -22,6 +22,7 @@ use axprocess::Pid;
 use axsignal::{Signal, SignalContext};
 use axsync::Mutex;
 use axtask::{AxTaskRef, TaskExtRef, WaitQueue, current};
+use core::ffi::c_int;
 use memory_addr::VirtAddrRange;
 use spin::RwLock;
 
@@ -239,6 +240,7 @@ pub fn clone_task(
      *_ctid: usize,
      */
 ) -> LinuxResult<AxTaskRef> {
+    debug!("clone_task with flags: {:?}", flags);
     let curr = current();
     let current_task_ext = curr.task_ext();
     const FLAG_MASK: u32 = 0xff;
@@ -264,12 +266,10 @@ pub fn clone_task(
     let current_pwd = current_dir()?;
     let mut new_task = spawn_user_task_inner(curr.name(), new_uctx, current_pwd);
     let tid = new_task.id().as_u64() as Pid;
+    debug!("new process data");
     let process = if flags.contains(CloneFlags::THREAD) {
         new_task.ctx_mut().set_page_table_root(
-            curr.task_ext()
-                .process_data()
-                .aspace
-                .lock()
+            current_aspace
                 .page_table_root(),
         );
 
@@ -277,14 +277,12 @@ pub fn clone_task(
     } else {
         error!("setting parent");
         let parent = if flags.contains(CloneFlags::PARENT) {
-            error!("setting parent 1");
             curr.task_ext()
                 .thread
                 .process()
                 .parent()
                 .ok_or(LinuxError::EINVAL)?
         } else {
-            error!("setting parent 2");
             curr.task_ext().thread.process().clone()
         };
         let builder = parent.fork(tid);
@@ -431,8 +429,6 @@ pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxR
     let (entry_point, user_stack_base, thread_pointer) =
         map_elf_sections(elf_info, &mut aspace, Some(args_), Some(envs))?;
 
-    let task_ext = unsafe { &mut *(current_task.task_ext_ptr() as *mut TaskExt) };
-
     unsafe { current_task.task_ext().process_data().aspace.force_unlock() };
 
     current_task.set_name(&program_path);
@@ -440,7 +436,11 @@ pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxR
         set_current_dir(pwd.as_str())?;
     }
 
-    debug!("to uspace");
+    debug!(
+        "exec: enter uspace, entry: {:?}, stack: {:?}",
+        entry_point, user_stack_base,
+    );
+
     let mut uctx = UspaceContext::new(entry_point.as_usize(), user_stack_base, 0);
     if let Some(tp) = thread_pointer {
         uctx.set_tp(tp.as_usize());
