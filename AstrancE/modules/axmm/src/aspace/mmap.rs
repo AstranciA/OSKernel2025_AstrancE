@@ -1,11 +1,11 @@
 use alloc::sync::Arc;
 use axerrno::{AxError, AxResult, ax_err};
 use axhal::{
-    mem::MemoryAddr,
+    mem::{MemoryAddr, phys_to_virt},
     paging::{MappingFlags, PageSize},
 };
 use bitflags::bitflags;
-use memory_addr::{VirtAddr, addr_range, va};
+use memory_addr::{PageIter4K, VirtAddr, addr_range, va};
 use memory_set::MemoryArea;
 
 use crate::{
@@ -16,27 +16,23 @@ use crate::{
 
 const MMAP_END: VirtAddr = va!(0x4000_0000);
 
-// From phoenix
 bitflags! {
-    // Defined in <bits/mman-linux.h>
     #[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Hash)]
     pub struct MmapFlags: usize {
-        // Sharing types (must choose one and only one of these).
-        /// Share changes.
+        // Sharing types (must choose one and only one of these)
         const MAP_SHARED = 0x01;
-        /// Changes are private.
         const MAP_PRIVATE = 0x02;
-        /// Share changes and validate
-        const MAP_SHARED_VALIDATE = 0x03;
-        const MAP_TYPE_MASK = 0x03;
-
+        //const MAP_SHARED_VALIDATE = 0x03;
+        //const MAP_TYPE_MASK = 0x0f;
         // Other flags
-        /// Interpret addr exactly.
         const MAP_FIXED = 0x10;
-        /// Don't use a file.
+        const MAP_FIXED_NOREPLACE = 0x100000;
         const MAP_ANONYMOUS = 0x20;
-        /// Don't check for reservations.
-        const MAP_NORESERVE = 0x04000;
+        //const MAP_NORESERVE = 0x04000;
+        const MAP_POPULATE = 0x08000;
+        //const MAP_LOCKED = 0x02000;
+        //const MAP_STACK = 0x20000;
+        //const MAP_HUGETLB = 0x40000;
     }
 }
 
@@ -71,8 +67,8 @@ impl From<MmapPerm> for MappingFlags {
 }
 
 pub trait MmapIO: Send + Sync {
-    fn read(&self, offset: usize, buf: &mut [u8]);
-    fn write(&self, offset: usize, data: &[u8]);
+    fn read(&self, va: usize, buf: &mut [u8]) -> AxResult<usize>;
+    fn write(&self, va: usize, data: &[u8]) -> AxResult<usize>;
     fn flags(&self) -> MmapFlags;
 }
 
@@ -91,9 +87,14 @@ impl AddrSpace {
         mmap_io: Arc<dyn MmapIO>,
         populate: bool,
     ) -> AxResult<VirtAddr> {
+        debug_assert!(start.is_aligned_4k());
+        debug_assert!(size % 4096 == 0);
+
         let start = if flags.contains(MmapFlags::MAP_FIXED) {
-            self.validate_region(start, size)
-                .expect("Invalid mmap address or size");
+            // TODO: check if it's USER
+            self.unmap(start, size)?;
+            start
+        } else if flags.contains(MmapFlags::MAP_FIXED_NOREPLACE) {
             start
         } else {
             #[cfg(feature = "heap")]
@@ -123,16 +124,10 @@ impl AddrSpace {
             }
         };
 
-        debug!("mmap at: [{:#x}, {:#x})", start, start + size);
 
         let mut map_flags: MappingFlags = perm.into();
         map_flags = map_flags | MappingFlags::DEVICE;
-
-        // #[cfg(feature = "COW")]
-        // // TODO: Why check flags here?
-        // if flags.contains(MmapFlags::MAP_PRIVATE) {
-        //     map_flags = (map_flags - MappingFlags::WRITE) | MappingFlags::COW;
-        // }
+        warn!("mmap at: [{:#x}, {:#x}), {map_flags:?}", start, start + size);
 
         let area = MemoryArea::new_mmap(
             start,
@@ -143,10 +138,12 @@ impl AddrSpace {
         );
 
         if populate {
-            todo!("populate from file");
+            for page in PageIter4K::new(area.start(), area.end()).ok_or(AxError::BadAddress)? {
+                self.map_mmap(mmap_io.clone(), page, PageSize::Size4K, map_flags)?;
+            }
         }
         self.areas
-            .map(area, &mut self.pt, false, Some(map_flags))
+            .insert(area, false)
             .map_err(mapping_err_to_ax_err)?;
         Ok(start)
     }
@@ -156,49 +153,31 @@ impl AddrSpace {
         mmio: Arc<dyn MmapIO>,
         vaddr: VirtAddr,
         size: PageSize,
-        orig_flags: MappingFlags,
+        flags: MappingFlags,
     ) -> AxResult {
-        debug_assert!(vaddr.is_aligned_4k());
-        let flags = orig_flags | MappingFlags::READ | MappingFlags::USER;
-        // #[cfg(feature = "COW")]
-        // MappingFlags::mark_cow(&mut flags);
-
+        let vaddr = vaddr.align_down_4k();
+        //warn!("areas: {:#?}", self.areas);
         if let Some(frame) = alloc_frame(true) {
-            if let Err(_) = self
-                .page_table()
-                // READ | WRITE for copying data from file later.
-                .map(
-                    vaddr,
-                    frame.pa,
-                    size,
-                    MappingFlags::READ | MappingFlags::WRITE,
-                )
-                .map(|tlb| tlb.flush())
-            {
-                return ax_err!(BadAddress);
-            }
-
-            let area = match self.areas.find_mut(vaddr) {
-                Some(area) => area,
-                None => return ax_err!(BadAddress),
-            };
+            let area = self.areas.find_mut(vaddr).ok_or(AxError::BadAddress)?;
             debug!(
-                "pa: {:?}, start: {:?}, end: {:?}, flags: {:?}",
+                "{:?}->{:?}, area:{:?}..{:?}, flags: {:?}",
+                vaddr,
                 frame.pa,
                 area.start(),
                 area.end(),
                 flags
             );
+
+            let dst = unsafe {
+                core::slice::from_raw_parts_mut(phys_to_virt(frame.pa).as_mut_ptr(), size.into())
+            };
+            mmio.read(vaddr.as_usize(), dst)?;
             area.insert_frame(vaddr, frame.clone());
 
-            let dst = unsafe { core::slice::from_raw_parts_mut(vaddr.as_mut_ptr(), size.into()) };
-            mmio.read(vaddr - area.start(), dst);
-
             self.page_table()
-                // WRITE for copying data from file later.
-                .remap(vaddr, frame.pa, flags)
-                .map(|(_, tlb)| tlb.flush())
-                .unwrap();
+                .map(vaddr, frame.pa, size, flags)
+                .map(|tlb| tlb.flush())
+                .map_err(|e| AxError::BadAddress)?;
 
             Ok(())
         } else {

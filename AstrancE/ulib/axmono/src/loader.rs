@@ -43,5 +43,5 @@ pub fn load_app_elf(idx: usize) -> ElfFile<'static> {
 pub fn load_elf_from_disk(app_path: &str) -> AxResult<OwnedElfFile> {
     let dir = CURRENT_DIR.lock().clone();
     let content = axfs::api::read_at(&dir, app_path)?;
-    OwnedElfFile::new(content)
+    OwnedElfFile::new(app_path, content)
 }

@@ -67,34 +67,14 @@ syscall_handler_def!(
         brk => [brk, ..] {
             apply!(mm::sys_brk, brk)
         }
-        set_tid_address => args{
+        set_tid_address => args {
                 let tidptr = args[0];
                 let tid: usize = current().task_ext().thread.tid() as _;
                 current().task_ext().thread_data().set_clear_child_tid(tidptr);
                 Ok(tid as isize)
         }
-        mmap => args {
-            let curr = current();
-            let mut aspace = curr.task_ext().process_data().aspace.lock();
-            let perm = MmapPerm::from_bits(args[2]).ok_or(LinuxError::EINVAL)?;
-            let flags = MmapFlags::from_bits(args[3]).ok_or(LinuxError::EINVAL)?;
-            let fd = args[4];
-            let offset = args[5];
-            if let Ok(va) = aspace.mmap(
-                args[0].into(),
-                args[1],
-                perm,
-                flags,
-                Arc::new(MmapIOImpl {
-                    fd: fd as c_int,
-                    file_offset: offset.try_into().unwrap(),
-                    flags
-                }),
-                false,
-            ) {
-                return Ok(va.as_usize() as isize);
-            }
-            Err(LinuxError::EPERM)
+        mmap => [addr, len, prot, flags, fd, off, ..] {
+            apply!(mm::sys_mmap, addr, len, prot, flags, fd, off)
         }
         munmap => args {
             let curr = current();

@@ -86,6 +86,6 @@ pub fn init_filesystems(mut blk_devs: AxDeviceContainer<AxBlockDevice>) {
         i += 1;
     }
     info!("{} disks in total", disks.len());
-    root::init_rootfs(disks.pop_first().expect("No block device found!").1);
+    root::init_rootfs(disks.pop_last().expect("No block device found!").1);
     info!("Initialize device filesystems...");
 }

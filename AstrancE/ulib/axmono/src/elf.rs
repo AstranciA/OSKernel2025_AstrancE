@@ -1,3 +1,4 @@
+use core::ffi::CStr;
 use core::ops::Deref;
 
 use alloc::format;
@@ -9,25 +10,22 @@ use axhal::{
     paging::MappingFlags,
 };
 use kernel_elf_parser::{AuxvEntry, ELFParser};
+use memory_addr::{VirtAddrRange, va_range};
 use xmas_elf::program::Type;
 use xmas_elf::{
     ElfFile,
     header::{self, Header},
-    program::{Flags, ProgramHeader, SegmentData},
+    program::{Flags, SegmentData},
 };
-
-/*
- *const USPACE: [usize; 16 * 1024] = [0; 16 * 1024];
- *const USTACK: [usize; 4 * 1024] = [0; 4 * 1024];
- */
 
 /// 持有ELF文件内容和解析结果的包装类型
 pub struct OwnedElfFile {
     _content: Vec<u8>, // 保持所有权但不直接使用，下划线前缀表示这是一个仅用于所有权的字段
     elf_file: ElfFile<'static>, // 实际上这个'static引用指向_content
+    file_path: String,
 }
 impl OwnedElfFile {
-    pub fn new(content: Vec<u8>) -> AxResult<Self> {
+    pub fn new(app_path: &str, content: Vec<u8>) -> AxResult<Self> {
         // 创建引用content的切片，但绕过生命周期检查
         // 安全性由结构体保证：elf_file不会比_content活得更久
         let slice = unsafe { core::slice::from_raw_parts(content.as_ptr(), content.len()) };
@@ -35,6 +33,7 @@ impl OwnedElfFile {
         Ok(Self {
             _content: content,
             elf_file,
+            file_path: app_path.into(),
         })
     }
 }
@@ -49,6 +48,7 @@ impl Deref for OwnedElfFile {
 
 /// The information of a given ELF file
 pub struct ELFInfo {
+    pub base: VirtAddr,
     /// The entry point of the ELF file
     pub entry: VirtAddr,
     /// The segments of the ELF file
@@ -60,15 +60,27 @@ pub struct ELFInfo {
 }
 
 impl ELFInfo {
-    pub fn new(elf: OwnedElfFile, uspace_base: VirtAddr) -> Self {
+    pub fn new(
+        elf: OwnedElfFile,
+        uspace_base: VirtAddr,
+        interp_base: Option<VirtAddr>,
+        bias: Option<isize>,
+    ) -> AxResult<Self> {
         let elf_header = elf.header;
 
         // will be checked in parser
         //Self::assert_magic(&elf_header);
 
-        Self::check_arch(&elf_header).unwrap();
-        let elf_parser =
-            kernel_elf_parser::ELFParser::new(&elf, 0, None, uspace_base.as_usize()).unwrap();
+        Self::check_arch(&elf_header)
+            .inspect_err(|e| error!("{}", *e))
+            .map_err(|_| AxError::Unsupported)?;
+        let elf_parser = kernel_elf_parser::ELFParser::new(
+            &elf,
+            interp_base.map(|va| va.as_usize()).unwrap_or(0),
+            bias,
+            uspace_base.as_usize(),
+        )
+        .map_err(|_| AxError::InvalidData)?;
 
         let elf_offset = elf_parser.base();
 
@@ -95,6 +107,7 @@ impl ELFInfo {
                     SegmentData::Undefined(data) => data,
                     _ => panic!("failed to get ELF segment data"),
                 };
+                warn!("{:x}, {:x}, {:?}", st_va, ed_vaddr_align, ph.virtual_addr());
 
                 ELFSegment {
                     flags,
@@ -108,12 +121,13 @@ impl ELFInfo {
             .collect();
 
         info!("{:x}, {:x}", elf.header.pt2.entry_point(), elf_offset);
-        ELFInfo {
+        Ok(ELFInfo {
+            base: elf_offset.into(),
             entry: VirtAddr::from(elf.header.pt2.entry_point() as usize + elf_offset),
             segments,
             auxv: elf_parser.auxv_vector(PAGE_SIZE_4K),
             _elf: elf,
-        }
+        })
     }
 
     pub fn assert_magic(elf_header: &Header) {
@@ -143,6 +157,10 @@ impl ELFInfo {
         }
         Ok(())
     }
+
+    pub fn path(&self) -> String {
+        self._elf.file_path.clone()
+    }
 }
 pub struct ELFSegment {
     pub start_va: VirtAddr,
@@ -167,4 +185,88 @@ impl ELFSegment {
         }
         ret
     }
+}
+
+/// 通过分析主程序和解释器的内存布局来确定安全的解释器基址
+pub(crate) fn find_safe_base_address(prog_max: VirtAddr) -> VirtAddr {
+    // 尝试在主程序之后找一个合适的位置
+    let aligned_prog_max = prog_max.align_up_4k(); // 4KB页对齐
+    let safe_base = aligned_prog_max + PAGE_SIZE_4K; // 额外增加4K间距
+
+    safe_base
+}
+
+// 检查两个ELF信息的段是否有重叠
+pub(crate) fn check_segments_overlap(interp_info: &ELFInfo, elf_info: &ELFInfo) -> bool {
+    for i_seg in &interp_info.segments {
+        if i_seg.type_ != xmas_elf::program::Type::Load {
+            continue;
+        }
+
+        let i_start = i_seg.start_va;
+        let i_end = i_start + i_seg.size;
+
+        for m_seg in &elf_info.segments {
+            if m_seg.type_ != xmas_elf::program::Type::Load {
+                continue;
+            }
+
+            let m_start = m_seg.start_va;
+            let m_end = m_start + m_seg.size;
+
+            // 检查区间是否重叠
+            if i_start < m_end && m_start < i_end {
+                return true;
+            }
+        }
+    }
+
+    false
+}
+// 获取程序的地址范围
+pub(crate) fn get_program_address_range(elf_file: &ElfFile) -> VirtAddrRange {
+    let mut min_addr = usize::MAX;
+    let mut max_addr = 0;
+
+    for ph in elf_file.program_iter() {
+        if let Ok(typ) = ph.get_type() {
+            if typ == xmas_elf::program::Type::Load {
+                let start = ph.virtual_addr() as usize;
+                let end = start + ph.mem_size() as usize;
+
+                if start < min_addr {
+                    min_addr = start;
+                }
+
+                if end > max_addr {
+                    max_addr = end;
+                }
+            }
+        }
+    }
+    va_range!(min_addr..max_addr)
+}
+// 获取ELF文件的内存大小
+pub(crate) fn get_elf_memory_size(elf_file: &ElfFile) -> (usize, usize) {
+    let mut min_addr = usize::MAX;
+    let mut max_addr = 0;
+
+    for ph in elf_file.program_iter() {
+        if let Ok(typ) = ph.get_type() {
+            if typ == xmas_elf::program::Type::Load {
+                let vaddr = ph.virtual_addr() as usize;
+                let memsz = ph.mem_size() as usize;
+                let end = vaddr + memsz;
+
+                if vaddr < min_addr {
+                    min_addr = vaddr;
+                }
+                if end > max_addr {
+                    max_addr = end;
+                }
+            }
+        }
+    }
+
+    (min_addr, max_addr - min_addr)
 }

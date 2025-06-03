@@ -17,7 +17,7 @@ pub mod ctypes;
 pub mod ptr;
 pub mod utils;
 
-//mod dynamic;
+mod dynamic;
 use core::clone;
 
 use axerrno::AxResult;

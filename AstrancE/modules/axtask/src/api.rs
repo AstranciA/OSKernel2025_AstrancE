@@ -1,5 +1,7 @@
 //! Task APIs for multi-task configuration.
 
+use core::ops::DerefMut;
+
 use alloc::{
     string::String,
     sync::{Arc, Weak},

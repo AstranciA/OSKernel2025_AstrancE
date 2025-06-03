@@ -417,7 +417,7 @@ impl SignalContext {
     /// 向进程发送信号
     pub fn send_signal(&mut self, sig: SignalSet) {
         // 如果信号未被阻塞，则加入待处理队列
-        warn!(
+        trace!(
             "send signal: {:?}, pending: {:?}, blocked: {:?}",
             sig, self.pending, self.blocked
         );
@@ -437,7 +437,7 @@ impl SignalContext {
     }
     /// 设置信号处理动作，返回之前的动作
     pub fn set_action(&mut self, sig: Signal, act: SigAction) -> SigAction {
-        warn!("set action: {act:?}");
+        trace!("set action: {act:?}");
         let old_act = self.actions[sig as usize];
         self.actions[sig as usize] = act;
         old_act
