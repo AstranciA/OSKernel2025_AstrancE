@@ -13,7 +13,7 @@ use axhal::{
     time::{NANOS_PER_MICROS, NANOS_PER_SEC, monotonic_time_nanos},
     trap::{POST_TRAP, PRE_TRAP, register_trap_handler},
 };
-use axprocess::{Pid, Process, ProcessGroup, Session, Thread, init_proc};
+use axprocess::{Pid, Process, ProcessGroup, Session, Thread};
 use axsignal::{SignalContext, SignalSet, SignalStackType};
 use core::{
     alloc::Layout,
@@ -162,7 +162,7 @@ pub fn spawn_user_task(
     aspace: Arc<Mutex<AddrSpace>>,
     uctx: UspaceContext,
     pwd: String,
-    as_root_process: bool,
+    parent: Option<Arc<Process>>,
 ) -> AxTaskRef {
     let mut task = spawn_user_task_inner(exe_path, uctx, pwd);
     task.ctx_mut()
@@ -185,11 +185,7 @@ pub fn spawn_user_task(
      *};
      */
     let process_data = ProcessData::new(exe_path.into(), aspace, spawn_signal_ctx(), None);
-    let parent = if as_root_process {
-        Process::new_init(tid).build()
-    } else {
-        init_proc()
-    };
+    let parent = parent.unwrap_or(init_proc());
     let process = parent.fork(tid).data(process_data).build();
 
     let thread_data = ThreadData {
@@ -201,6 +197,10 @@ pub fn spawn_user_task(
 
     task.task_ext().process_data().ns_init_new();
     task.into_arc()
+}
+
+pub fn init_proc() -> Arc<Process>{
+    axprocess::init_proc()
 }
 
 pub unsafe fn write_trapframe_to_kstack(kstack_top: usize, trap_frame: &TrapFrame) {
@@ -327,6 +327,7 @@ pub fn yield_with_time_stat() {
     yield_now();
     time_stat_from_old_task();
 }
+
 #[register_trap_handler(PRE_TRAP)]
 fn pre_trap_handler(trap_frame: &mut TrapFrame, from_user: bool) -> bool {
     if from_user {
