@@ -234,7 +234,7 @@ pub(crate) fn handle_pending_signals(current_tf: &TrapFrame) {
 pub(crate) fn sys_sigreturn() -> LinuxResult<isize> {
     let curr = current();
     let mut sigctx = curr.task_ext().process_data().signal.lock();
-    let (sscratch, tf) = sigctx.unload().unwrap();
+    let (sscratch, mut tf) = sigctx.unload().unwrap();
     // 交换回tf, 返回a0以防止覆盖
     unsafe { write_trapframe_to_kstack(curr.get_kernel_stack_top().unwrap(), &tf) };
     unsafe { axhal::arch::exchange_trap_frame(sscratch) };

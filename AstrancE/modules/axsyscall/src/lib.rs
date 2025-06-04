@@ -349,5 +349,4 @@ syscall_handler_def!(
         getpeername => [fd, addr, addrlen, ..] {
             unsafe { apply!(syscall_imp::net::sys_getpeername, fd, addr, addrlen) }
         }
-
 );
