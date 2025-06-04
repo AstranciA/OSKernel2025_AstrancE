@@ -29,6 +29,7 @@ use axtask::{AxTaskRef, TaskExtRef, WaitQueue, current};
 use core::ffi::c_int;
 use memory_addr::VirtAddrRange;
 use spin::RwLock;
+use xmas_elf::program;
 
 use crate::{
     copy_from_kernel,
@@ -376,11 +377,7 @@ pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxR
     );
     let mut args_ = vec![];
     let (oldpwd, pwd) = get_pwd_from_envs(envs);
-    let mut program_path = if let Some(ref pwd) = pwd {
-        pwd.clone() + "/" + program_name
-    } else {
-        program_name.to_string()
-    };
+    let mut program_path = axfs::path::canonicalize(program_name, pwd.as_ref().map(|s| s.as_str()));
 
     // 读取文件头部以检测类型
     let mut buffer: [u8; 64] = [0; 64];
@@ -428,7 +425,7 @@ pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxR
 
     // 使用之前定义的 load_elf_to_mem 函数加载 ELF 文件到内存
     let (entry_point, user_stack_base, thread_pointer) =
-        load_elf_to_mem(elf_file,&mut aspace, Some(args_), Some(envs))?;
+        load_elf_to_mem(elf_file, &mut aspace, Some(args_), Some(envs))?;
 
     axhal::arch::flush_tlb(None);
 
