@@ -12,6 +12,7 @@ use alloc::{
     sync::Arc,
     vec::Vec,
 };
+use core::ffi::c_int;
 use arceos_posix_api::{FD_TABLE, ctypes::*};
 use axerrno::{AxError, AxResult, LinuxError, LinuxResult};
 use axfs::{
@@ -26,7 +27,6 @@ use axprocess::Pid;
 use axsignal::{Signal, SignalContext};
 use axsync::Mutex;
 use axtask::{AxTaskRef, TaskExtRef, WaitQueue, current};
-use core::ffi::c_int;
 use memory_addr::VirtAddrRange;
 use spin::RwLock;
 use xmas_elf::program;

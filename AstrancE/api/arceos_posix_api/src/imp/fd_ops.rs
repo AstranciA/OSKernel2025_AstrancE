@@ -92,14 +92,11 @@ impl FD_TABLE {
 
 /// Get a file by `fd`.
 pub fn get_file_like(fd: c_int) -> LinuxResult<Arc<dyn FileLike>> {
-    let a = FD_TABLE
+    FD_TABLE
         .read()
         .get(fd as usize)
         .cloned()
-        .ok_or(LinuxError::EBADF);
-    a.inspect(|a| {
-        warn!("asdf , {:?}", a.stat());
-    })
+        .ok_or(LinuxError::EBADF)
 }
 
 /// Add a file to the file descriptor table.
@@ -109,20 +106,17 @@ pub fn add_file_like(f: Arc<dyn FileLike>) -> LinuxResult<c_int> {
 
 /// Close a file by `fd`.
 pub fn close_file_like(fd: c_int) -> LinuxResult {
-    warn!("close :{:?}", FD_TABLE.read().ids());
     let f = FD_TABLE
         .write()
         .remove(fd as usize)
         .ok_or(LinuxError::EBADF)?;
     drop(f);
-    warn!("close :{:?}", FD_TABLE.read().ids());
     Ok(())
 }
 
 /// Close a file by `fd`.
 pub fn sys_close(fd: c_int) -> c_int {
     debug!("sys_close <= {}", fd);
-    warn!("close :{:?}", FD_TABLE.read().ids());
     // FIXME:
     /*
      *if (0..=2).contains(&fd) {
