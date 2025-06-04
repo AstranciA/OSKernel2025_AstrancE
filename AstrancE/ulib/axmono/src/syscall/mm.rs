@@ -35,32 +35,6 @@ pub(crate) fn sys_mprotect(addr: usize, size: usize, prot: usize) -> LinuxResult
     Ok(0)
 }
 
-/*
- *pub(crate) fn sys_mmap(
- *    addr: usize,
- *    len: usize,
- *    prot: usize,
- *    flags: usize,
- *    fd: c_int,
- *    offset: usize,
- *) -> LinuxResult<isize> {
- *    let curr = current();
- *    let mut aspace = curr.task_ext().process_data().aspace.lock();
- *    let perm = MmapPerm::from_bits(prot).ok_or(LinuxError::EINVAL)?;
- *    let flags = MmapFlags::from_bits(flags).ok_or(LinuxError::EINVAL)?;
- *
- *    let mmap_io = MmapIOImpl {
- *        resource: MmapResource::file(fd)?,
- *        file_offset: offset,
- *        flags,
- *    };
- *    if let Ok(va) = aspace.mmap(addr.into(), len, perm, flags, Arc::new(mmap_io), false) {
- *        return Ok(va.as_usize() as isize);
- *    }
- *    Err(LinuxError::EPERM)
- *}
- */
-
 pub(crate) fn sys_mmap(
     addr: usize,
     len: usize,
@@ -71,14 +45,14 @@ pub(crate) fn sys_mmap(
 ) -> LinuxResult<isize> {
     let curr = current();
     let mut aspace = curr.task_ext().process_data().aspace.lock();
-    
+
     if len == 0 {
         return Err(LinuxError::EINVAL);
     }
-    
+
     let perm = MmapPerm::from_bits(prot).ok_or(LinuxError::EINVAL)?;
     let flags = MmapFlags::from_bits(flags).ok_or(LinuxError::EINVAL)?;
-    
+
     // 检查共享类型标志是否有效
     /*
      *if (flags & MmapFlags::MAP_TYPE_MASK).bits() > MmapFlags::MAP_SHARED_VALIDATE.bits() {
@@ -92,7 +66,7 @@ pub(crate) fn sys_mmap(
             return Err(LinuxError::EINVAL);
         }
         Arc::new(MmapIOImpl {
-            start: addr,
+            base: 0x0.into(),
             resource: MmapResource::Anonymous,
             file_offset: 0,
             flags,
@@ -103,7 +77,7 @@ pub(crate) fn sys_mmap(
             return Err(LinuxError::EBADF);
         }
         Arc::new(MmapIOImpl {
-            start: addr,
+            base: addr.into(),
             resource: MmapResource::file(fd)?,
             file_offset: offset,
             flags,

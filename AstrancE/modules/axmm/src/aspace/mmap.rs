@@ -67,6 +67,8 @@ impl From<MmapPerm> for MappingFlags {
 }
 
 pub trait MmapIO: Send + Sync {
+    // require inner mutability
+    fn set_base(&self, base: VirtAddr);
     fn read(&self, va: usize, buf: &mut [u8]) -> AxResult<usize>;
     fn write(&self, va: usize, data: &[u8]) -> AxResult<usize>;
     fn flags(&self) -> MmapFlags;
@@ -107,7 +109,7 @@ impl AddrSpace {
                     .unwrap_or(MMAP_END)
                     .into();
                 self.find_free_area(
-                    0x10000.into(),
+                    0x1000.into(),
                     size,
                     addr_range!(self.base().as_usize()..heap_start),
                 )
@@ -116,7 +118,7 @@ impl AddrSpace {
             #[cfg(not(feature = "heap"))]
             {
                 self.find_free_area(
-                    0x10000.into(),
+                    0x1000.into(),
                     size,
                     addr_range!(self.base().as_usize()..MMAP_END.into()),
                 )
@@ -128,6 +130,7 @@ impl AddrSpace {
         let mut map_flags: MappingFlags = perm.into();
         map_flags = map_flags | MappingFlags::DEVICE;
         debug!("mmap at: [{:#x}, {:#x}), {map_flags:?}", start, start + size);
+        mmap_io.set_base(start);
 
         let area = MemoryArea::new_mmap(
             start,

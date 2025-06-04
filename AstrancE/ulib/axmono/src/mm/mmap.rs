@@ -10,6 +10,7 @@ use axio::SeekFrom;
 use axmm::{MmapFlags, MmapIO};
 use axsync::Mutex;
 use memory_addr::VirtAddr;
+use spin::RwLock;
 
 pub(crate) enum MmapResource {
     Anonymous,
@@ -28,24 +29,30 @@ impl MmapResource {
 
 pub(crate) struct MmapIOImpl {
     /// start of area
-    pub start: usize,
+    pub base: RwLock<usize>,
     pub file_offset: usize,
     pub resource: MmapResource,
     pub flags: axmm::MmapFlags,
 }
 
 impl MmapIO for MmapIOImpl {
+    fn set_base(&self, base: VirtAddr) {
+        let mut base_ = self.base.write();
+        *base_ = base.as_usize()
+    }
     /// 参数
     ///   - start: 映射区的起始地址
     ///   - buf: 映射区的缓冲区
     fn read(&self, start: usize, buf: &mut [u8]) -> AxResult<usize> {
+        let base = *self.base.read();
+        let start = start - base + self.file_offset;
         debug!(
-            "mmap read start=0x{:x} len={} offset=0x{:x}",
+            "mmap read start=0x{:x} len={} with base=0x{:x} file_offset=0x{:x}",
             start,
             buf.len(),
+            base,
             self.file_offset
         );
-        let start = start - self.start + self.file_offset;
         match &self.resource {
             MmapResource::Anonymous => {
                 debug!("mmap map anonymous");
