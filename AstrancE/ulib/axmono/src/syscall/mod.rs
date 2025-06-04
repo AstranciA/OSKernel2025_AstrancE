@@ -29,7 +29,7 @@ mod mm;
 
 syscall_handler_def!(
         exit => [code,..] {
-            crate::task::sys_exit((code & 0xff) as i32)
+            task::sys_exit((code & 0xff) as i32)
         }
         exit_group => [code,..]{
             task::exit::sys_exit_group((code & 0xff) as i32)
@@ -146,4 +146,13 @@ syscall_handler_def!(
         setxattr => _ {
             Ok(0)
         }
+        futex => _ {
+            warn!("futex syscall not implemented, task exit");
+            task::sys_exit(-1);
+            Ok(-1)
+        }
 );
+
+fn foo() {
+    
+}

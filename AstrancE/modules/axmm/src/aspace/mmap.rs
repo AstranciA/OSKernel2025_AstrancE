@@ -127,7 +127,7 @@ impl AddrSpace {
 
         let mut map_flags: MappingFlags = perm.into();
         map_flags = map_flags | MappingFlags::DEVICE;
-        warn!("mmap at: [{:#x}, {:#x}), {map_flags:?}", start, start + size);
+        debug!("mmap at: [{:#x}, {:#x}), {map_flags:?}", start, start + size);
 
         let area = MemoryArea::new_mmap(
             start,

@@ -107,7 +107,6 @@ impl ELFInfo {
                     SegmentData::Undefined(data) => data,
                     _ => panic!("failed to get ELF segment data"),
                 };
-                warn!("{:x}, {:x}, {:?}", st_va, ed_vaddr_align, ph.virtual_addr());
 
                 ELFSegment {
                     flags,
@@ -120,7 +119,6 @@ impl ELFInfo {
             })
             .collect();
 
-        info!("{:x}, {:x}", elf.header.pt2.entry_point(), elf_offset);
         Ok(ELFInfo {
             base: elf_offset.into(),
             entry: VirtAddr::from(elf.header.pt2.entry_point() as usize + elf_offset),

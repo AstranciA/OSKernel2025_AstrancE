@@ -278,16 +278,13 @@ pub fn clone_task(
 
         curr.task_ext().thread.process()
     } else {
-        error!("setting parent");
         let parent = if flags.contains(CloneFlags::PARENT) {
-            error!("setting parent 1");
             curr.task_ext()
                 .thread
                 .process()
                 .parent()
                 .ok_or(LinuxError::EINVAL)?
         } else {
-            error!("setting parent 2");
             curr.task_ext().thread.process().clone()
         };
         let builder = parent.fork(tid);

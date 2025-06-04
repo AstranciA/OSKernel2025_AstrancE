@@ -460,7 +460,6 @@ impl SignalContext {
     }
 
     pub fn take_pending_in(&mut self, filter: SignalSet) -> Option<Signal> {
-        warn!("{:?}", self.pending);
         self.pending.take_one_in(filter)
     }
 

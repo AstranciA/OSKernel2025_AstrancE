@@ -30,7 +30,7 @@ pub fn do_exit(exit_code: i32, group_exit: bool) -> ! {
              *}
              */
             if let Some(data) = parent.data::<ProcessData>() {
-                trace!("send SIGCHLD to parent {:?}", parent.pid());
+                debug!("send SIGCHLD to parent {:?}", parent.pid());
                 data.signal.lock().send_signal(SignalSet::SIGCHLD);
                 data.child_exit_wq.notify_all(false);
             }
