@@ -6,7 +6,7 @@ use axfs::api::{DirEntry, create_dir, read_dir, remove_file};
 use axfs::root::ROOT_DIR;
 use axfs_vfs::{VfsDirEntry, VfsNodeAttr, VfsNodeOps, VfsNodeType};
 use core::ffi::{c_char, c_int, c_long, c_longlong, c_uint, c_void};
-use core::{panic, ptr};
+use core::{panic, ptr, slice};
 use static_assertions::assert_eq_size;
 
 use super::fd_ops::{FileLike, get_file_like};
@@ -88,19 +88,29 @@ impl FileLike for File {
         Ok(attr2stat(metadata))
     }
 
+    fn read_at(&self, _buf: &mut [u8], _offset: u64) -> LinuxResult<usize> {
+        self.inner.lock()
+          .read_at(_offset,_buf).map_err(LinuxError::from)
+    }
+
+    fn write_at(&self, _buf: &[u8], _offset: u64) -> LinuxResult<usize> {
+        self.inner.lock()
+            .write_at(_offset, _buf).map_err(LinuxError::from)
+    }
+
     fn set_atime(&self, atime: u32, atime_n: u32) -> LinuxResult<usize> {
-        self.inner
+        let r =self.inner
             .lock()
             .set_atime(atime, atime_n)
             .map_err(|_| LinuxError::EIO)?;
-        Ok(0)
+        Ok(r)
     }
     fn set_mtime(&self, mtime: u32, mtime_n: u32) -> LinuxResult<usize> {
-        self.inner
+        let r = self.inner
             .lock()
             .set_mtime(mtime, mtime_n)
             .map_err(|_| LinuxError::EIO)?;
-        Ok(0)
+        Ok(r)
     }
     fn into_any(self: Arc<Self>) -> Arc<dyn core::any::Any + Send + Sync> {
         self
@@ -724,6 +734,21 @@ impl FileLike for Directory {
         Ok(())
     }
 
+    fn set_atime(&self, atime: u32, atime_n: u32) -> LinuxResult<usize> {
+        let r =self.inner
+            .lock()
+            .set_atime(atime, atime_n)
+            .map_err(|_| LinuxError::EIO)?;
+        Ok(r)
+    }
+    fn set_mtime(&self, mtime: u32, mtime_n: u32) -> LinuxResult<usize> {
+        let r = self.inner
+            .lock()
+            .set_mtime(mtime, mtime_n)
+            .map_err(|_| LinuxError::EIO)?;
+        Ok(r)
+    }
+    
     fn fgetxattr(
         &self,
         name: *const c_char,
@@ -1067,12 +1092,12 @@ pub fn sys_utimensat(
                     _ => LinuxError::ENOTDIR,
                 }
             })?;
-            if let Some((sec, nsec)) = atime_opt {
-                file.set_atime(sec, nsec).map_err(|_| LinuxError::EIO)?;
-            }
-            if let Some((sec, nsec)) = mtime_opt {
-                file.set_mtime(sec, nsec).map_err(|_| LinuxError::EIO)?;
-            }
+            // if let Some((sec, nsec)) = atime_opt {
+            //     file.set_atime(sec, nsec).map_err(|_| LinuxError::EIO)?;
+            // }
+            // if let Some((sec, nsec)) = mtime_opt {
+            //     file.set_mtime(sec, nsec).map_err(|_| LinuxError::EIO)?;
+            // }
             return Ok(0);
         }
         if dirfd < 0 {
@@ -1111,4 +1136,26 @@ pub fn sys_utimensat(
         // }
         Ok(0)
     }
+}
+
+pub fn sys_pread64(
+    fd: c_int,
+    buf: *mut u8,
+    count:usize,
+    offset:isize
+) -> LinuxResult<isize> {
+    let file = get_file_like(fd).map_err(|_| LinuxError::EBADF)?;
+    let mut slice = unsafe { slice::from_raw_parts_mut(buf, count) };
+    file.read_at(slice , offset as u64).map(|n| n as isize)
+}
+
+pub fn sys_pwrite64(
+    fd: c_int,
+    buf: *const u8,
+    count:usize,
+    offset:isize
+) -> LinuxResult<isize> {
+    let file = get_file_like(fd).map_err(|_| LinuxError::EBADF)?;
+    let mut slice = unsafe { slice::from_raw_parts(buf, count) };
+    file.write_at(slice , offset as u64).map(|n| n as isize)
 }
