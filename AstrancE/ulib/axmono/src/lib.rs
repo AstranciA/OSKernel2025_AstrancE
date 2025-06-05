@@ -17,7 +17,7 @@ pub mod ctypes;
 pub mod ptr;
 pub mod utils;
 
-//mod dynamic;
+mod dynamic;
 use core::clone;
 
 use axerrno::AxResult;
@@ -36,6 +36,8 @@ mod syscall;
 
 #[cfg(feature = "process")]
 pub mod task;
+#[cfg(feature = "process")]
+pub use task::init_proc;
 
 #[cfg(feature = "mm")]
 pub mod mm;
@@ -54,4 +56,9 @@ pub fn copy_from_kernel(aspace: &mut axmm::AddrSpace) -> AxResult {
     }
 
     Ok(())
+}
+
+pub fn init() {
+    let curr = current();
+    Process::new_init(curr.id().as_u64().try_into().unwrap()).build();
 }

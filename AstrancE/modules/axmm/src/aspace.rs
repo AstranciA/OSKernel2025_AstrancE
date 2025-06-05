@@ -275,6 +275,7 @@ impl AddrSpace {
     /// To remove user area mappings from address space.
     pub fn unmap_user_areas(&mut self) -> AxResult {
         for area in self.areas.iter() {
+            warn!("range:{:?} flag: {:?}", area.va_range(), area.flags());
             assert!(area.start().is_aligned_4k());
             assert!(area.size() % PAGE_SIZE_4K == 0);
             assert!(area.flags().contains(MappingFlags::USER));
@@ -474,7 +475,9 @@ impl AddrSpace {
         }
         if let Some(area) = self.areas.find(vaddr) {
             let orig_flags = area.flags();
-            debug!("Page fault original flags: {:?}", orig_flags);
+            debug!("Page fault area flags: {:?}", orig_flags);
+            debug!("Page fault pte flags: {:?}", self.pt.query(vaddr));
+
             if orig_flags.contains(access_flags) {
                 return area
                     .backend()
@@ -585,7 +588,7 @@ impl AddrSpace {
             // area keeps the origin flags but pt flags will be marked as COW
             new_aspace
                 .areas
-                .insert(area.clone())
+                .insert(area.clone(), false)
                 .map_err(mapping_err_to_ax_err)?;
 
             let mut pte_flags = area.flags();

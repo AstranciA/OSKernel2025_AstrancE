@@ -75,7 +75,6 @@ pub fn sys_waitpid(pid: i32, exit_code_ptr: UserPtr<i32>, options: u32) -> Linux
         WaitPid::Pgid(-pid as _)
     };
     let pch = process.children();
-    error!("children {:?}",pch.len());
     let children = pch
         .into_iter()
         .filter(|child| pid.apply(child))
@@ -93,9 +92,8 @@ pub fn sys_waitpid(pid: i32, exit_code_ptr: UserPtr<i32>, options: u32) -> Linux
 
     let exit_code = exit_code_ptr.nullable(UserPtr::get)?;
     loop {
-        warn!("waiting");
         if let Some(child) = children.iter().find(|child| child.is_zombie()) {
-            warn!("found zombie child: {:?}", child);
+            debug!("found zombie child: {:?}", child);
             if !options.contains(WaitOptions::WNOWAIT) {
                 child.free();
             }
@@ -106,7 +104,7 @@ pub fn sys_waitpid(pid: i32, exit_code_ptr: UserPtr<i32>, options: u32) -> Linux
         } else if options.contains(WaitOptions::WNOHANG) {
             return Ok(0);
         } else {
-            warn!("wait");
+            debug!("keep waiting for children");
             proc_data.child_exit_wq.wait();
         }
     }

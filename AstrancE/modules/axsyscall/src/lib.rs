@@ -114,10 +114,12 @@ syscall_handler_def!(
              apply!(syscall_imp::fs::sys_unlinkat, dirfd, path_name)
         }
 
-        #[cfg(all(feature = "fs", feature = "fd"))]
-        statfs => _args {
-            todo!()
-        }
+        /* TODO:
+         *#[cfg(all(feature = "fs", feature = "fd"))]
+         *statfs => _args {
+         *    //todo!()
+         *}
+         */
 
         #[cfg(all(feature = "fs", feature = "fd"))]
         chdir => [path, ..] apply!(sys_chdir, path),
@@ -347,5 +349,4 @@ syscall_handler_def!(
         getpeername => [fd, addr, addrlen, ..] {
             unsafe { apply!(syscall_imp::net::sys_getpeername, fd, addr, addrlen) }
         }
-
 );

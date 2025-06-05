@@ -1,20 +1,21 @@
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
+use alloc::vec::Vec;
 use axfs::CURRENT_DIR;
-use axfs::root::ROOT_DIR;
 use axfs::api::{DirEntry, create_dir, read_dir, remove_file};
+use axfs::root::ROOT_DIR;
 use axfs_vfs::{VfsDirEntry, VfsNodeAttr, VfsNodeOps, VfsNodeType};
 use core::ffi::{c_char, c_int, c_long, c_longlong, c_uint, c_void};
 use core::{panic, ptr};
 use static_assertions::assert_eq_size;
 
+use super::fd_ops::{FileLike, get_file_like};
+use crate::AT_FDCWD;
+use crate::ctypes::{__IncompleteArrayField, stat, time_t, timespec, timeval};
 use axerrno::{LinuxError, LinuxResult};
 use axfs::fops::OpenOptions;
 use axio::{PollState, SeekFrom};
 use axsync::Mutex;
-use super::fd_ops::{FileLike, get_file_like};
-use crate::AT_FDCWD;
-use crate::ctypes::{__IncompleteArrayField, stat, time_t, timespec, timeval};
 // use crate::ctypes::{__IncompleteArrayField, time_t};
 use crate::utils::str_to_cstr;
 use crate::{ctypes, utils::char_ptr_to_str};
@@ -39,7 +40,7 @@ impl File {
         super::fd_ops::add_file_like(Arc::new(self))
     }
 
-    fn from_fd(fd: c_int) -> LinuxResult<Arc<Self>> {
+    pub fn from_fd(fd: c_int) -> LinuxResult<Arc<Self>> {
         let f = super::fd_ops::get_file_like(fd)?;
         f.into_any()
             .downcast::<Self>()
@@ -87,12 +88,18 @@ impl FileLike for File {
         Ok(attr2stat(metadata))
     }
 
-    fn set_atime(&self, atime:u32,atime_n:u32) -> LinuxResult<usize> {
-        self.inner.lock().set_atime(atime,atime_n).map_err(|_| LinuxError::EIO)?;
+    fn set_atime(&self, atime: u32, atime_n: u32) -> LinuxResult<usize> {
+        self.inner
+            .lock()
+            .set_atime(atime, atime_n)
+            .map_err(|_| LinuxError::EIO)?;
         Ok(0)
     }
-    fn set_mtime(&self,mtime:u32,mtime_n:u32) -> LinuxResult<usize> {
-        self.inner.lock().set_mtime(mtime,mtime_n).map_err(|_| LinuxError::EIO)?;
+    fn set_mtime(&self, mtime: u32, mtime_n: u32) -> LinuxResult<usize> {
+        self.inner
+            .lock()
+            .set_mtime(mtime, mtime_n)
+            .map_err(|_| LinuxError::EIO)?;
         Ok(0)
     }
     fn into_any(self: Arc<Self>) -> Arc<dyn core::any::Any + Send + Sync> {
@@ -114,20 +121,19 @@ impl FileLike for File {
         &self,
         name: *const c_char,
         buf: *mut c_void,
-        buf_size: usize
+        buf_size: usize,
     ) -> LinuxResult<usize> {
         let name_len = get_c_string_length(name.clone());
         let data_size: *mut usize = &mut 0;
-        Ok(self.inner.lock().get_xattr(name,name_len,buf,buf_size,data_size)?)
+        Ok(self
+            .inner
+            .lock()
+            .get_xattr(name, name_len, buf, buf_size, data_size)?)
     }
 
-    fn flistxattr(
-        &self,
-        list: *mut c_char,
-        size: usize,
-    ) -> LinuxResult<usize> {
+    fn flistxattr(&self, list: *mut c_char, size: usize) -> LinuxResult<usize> {
         let ret_size: *mut usize = &mut 0;
-        self.inner.lock().list_xattr(list,size,ret_size)?;
+        self.inner.lock().list_xattr(list, size, ret_size)?;
         Ok(ret_size as usize)
     }
     fn fsetxattr(
@@ -135,18 +141,15 @@ impl FileLike for File {
         name: *const c_char,
         value: *mut c_void,
         size: usize,
-        flags: usize
+        flags: usize,
     ) -> LinuxResult<usize> {
         let name_len = get_c_string_length(name.clone());
-        Ok(self.inner.lock().set_xattr(name,name_len,value,size)?)
+        Ok(self.inner.lock().set_xattr(name, name_len, value, size)?)
     }
 
-    fn fremovexattr(
-        &self,
-        name: *const c_char,
-    ) -> LinuxResult<usize> {
+    fn fremovexattr(&self, name: *const c_char) -> LinuxResult<usize> {
         let name_len = get_c_string_length(name.clone());
-        Ok(self.inner.lock().remove_xattr(name,name_len)?)
+        Ok(self.inner.lock().remove_xattr(name, name_len)?)
     }
 }
 
@@ -154,7 +157,7 @@ fn attr2stat(metadata: VfsNodeAttr) -> ctypes::stat {
     let ty = metadata.file_type() as u8;
     let perm = metadata.perm().bits() as u32;
     let st_mode = ((ty as u32) << 12) | perm;
-    debug!("!!!!mode is {}",st_mode);
+    debug!("!!!!mode is {}", st_mode);
     ctypes::stat {
         st_dev: metadata.dev() as _,
         st_ino: metadata.st_ino() as _,
@@ -300,59 +303,130 @@ pub fn sys_mkdirat(dirfd: c_int, dirname: *const c_char, mode: ctypes::mode_t) -
 
 /// Create a directory by `dirname` relatively to `dirfd`.
 /// TODO: handle `mode`
+// pub unsafe fn sys_fstatat(
+//     dirfd: c_int,
+//     pathname_p: *const c_char,
+//     statbuf: *mut ctypes::stat,
+//     flags: c_int,
+// ) -> LinuxResult<c_int> {
+//     let pathname = char_ptr_to_str(pathname_p)?;
+//
+//     debug!(
+//         "sys_fstatat <= {} {pathname_p:p} {:?} {:#o}",
+//         dirfd, pathname, flags
+//     );
+//     debug!("{:?}", unsafe {
+//         core::slice::from_raw_parts(pathname_p, 20)
+//     });
+//     static mut IDX: usize = 0;
+//     unsafe {
+//         if IDX == 7 {
+//             //panic!()
+//         }
+//         IDX += 1;
+//     }
+//
+//     if pathname.starts_with('/') || dirfd == AT_FDCWD as _ {
+//         let dir = CURRENT_DIR.lock().clone();
+//         let file = dir.lookup(pathname)?;
+//         let stat = attr2stat(file.get_attr()?);
+//         unsafe { *statbuf = stat };
+//         return Ok(0);
+//     }
+//
+//     let dir: Arc<Directory> = Directory::from_fd(dirfd)?;
+//     // FIXME: correct path; flags
+//     let file: File = File::new(
+//         dir.inner
+//             .lock()
+//             .open_file_at(pathname, &flags_to_options(flags, 0))?,
+//         pathname.into(),
+//     );
+//     let stat = file.stat()?;
+//     unsafe { *statbuf = stat };
+//     Ok(0)
+// }
 pub unsafe fn sys_fstatat(
     dirfd: c_int,
     pathname_p: *const c_char,
     statbuf: *mut ctypes::stat,
     flags: c_int,
 ) -> LinuxResult<c_int> {
-    let pathname = char_ptr_to_str(pathname_p)?;
+    // 将 C 字符串转换为 Rust 字符串，并处理错误
+    let pathname = match char_ptr_to_str(pathname_p) {
+        Ok(s) => s,
+        Err(e) => {
+            debug!("sys_fstatat: failed to convert pathname: {:?}", e);
+            return Err(e.into()); // 转换为 LinuxError
+        }
+    };
 
     debug!(
         "sys_fstatat <= {} {pathname_p:p} {:?} {:#o}",
         dirfd, pathname, flags
     );
-    debug!("{:?}", unsafe {
-        core::slice::from_raw_parts(pathname_p, 20)
-    });
-    static mut IDX: usize = 0;
-    unsafe {
-        if IDX == 7 {
-            //panic!()
-        }
-        IDX += 1;
-    }
-    if pathname.starts_with('/'){
+    if pathname.starts_with('/') {
         let dir = ROOT_DIR.clone();
         let file = dir.lookup(pathname)?;
         let stat = attr2stat(file.get_attr()?);
         unsafe { *statbuf = stat };
         return Ok(0);
     }
-    if dirfd == AT_FDCWD as _{
+    if dirfd == AT_FDCWD as _ {
         let dir = CURRENT_DIR.lock().clone();
-        let file = dir.lookup(pathname)?;
-        let stat = attr2stat(file.get_attr()?);
+        let file = match dir.lookup(pathname) {
+            Ok(f) => f,
+            Err(e) => {
+                debug!("sys_fstatat: lookup failed for {}: {:?}", pathname, e);
+                return Err(e.into()); // 转换为 LinuxError
+            }
+        };
+        let attr = match file.get_attr() {
+            Ok(a) => a,
+            Err(e) => {
+                debug!("sys_fstatat: get_attr failed for {}: {:?}", pathname, e);
+                return Err(e.into()); // 转换为 LinuxError
+            }
+        };
+        let stat = attr2stat(attr);
         unsafe { *statbuf = stat };
         return Ok(0);
     }
 
-    let dir: Arc<Directory> = Directory::from_fd(dirfd)?;
-    // FIXME: correct path; flags
-    let file: File = File::new(
-        dir.inner
-            .lock()
-            .open_file_at(pathname, &flags_to_options(flags, 0))?,
-        pathname.into(),
-    );
-    let stat = file.stat()?;
+    // 处理相对路径
+    let dir: Arc<Directory> = match Directory::from_fd(dirfd) {
+        Ok(d) => d,
+        Err(e) => {
+            debug!("sys_fstatat: from_fd failed for dirfd {}: {:?}", dirfd, e);
+            return Err(e.into()); // 转换为 LinuxError
+        }
+    };
+    // 获取文件对象，处理 open_file_at 的 Result 返回值
+    let inner_file = match dir.inner.lock().open_file_at(pathname, &flags_to_options(flags, 0)) {
+        Ok(f) => f,
+        Err(e) => {
+            debug!("sys_fstatat: open_file_at failed for {}: {:?}", pathname, e);
+            return Err(e.into()); // 转换为 LinuxError
+        }
+    };
+    // 使用 inner_file 创建 File 实例，File::new 不返回 Result
+    let file = File::new(inner_file, pathname.into());
+    let stat = match file.stat() {
+        Ok(s) => s,
+        Err(e) => {
+            debug!("sys_fstatat: stat failed for {}: {:?}", pathname, e);
+            return Err(e.into()); // 转换为 LinuxError
+        }
+    };
     unsafe { *statbuf = stat };
     Ok(0)
 }
 
+
+
 /// Use the function to open file or directory, then add into file descriptor table.
 /// First try opening files, if fails, try directory.
-fn add_file_or_directory_fd<F, D, E>(
+pub fn add_file_or_directory_fd<F, D, E>(
     open_file: F,
     open_dir: D,
     filename: &str,
@@ -446,12 +520,7 @@ pub unsafe fn sys_lstat(path: *const c_char, buf: *mut ctypes::stat) -> ctypes::
 }
 
 ///get the xattr by fd and write into 'buf'
-pub fn sys_fgetxattr(
-    fd: c_int,
-    name: *const c_char,
-    buf: *mut c_void,
-    sizes: usize
-) -> usize {
+pub fn sys_fgetxattr(fd: c_int, name: *const c_char, buf: *mut c_void, sizes: usize) -> usize {
     debug!("sys_fgetxattr <= fd: {:?}, buf: {:#x}", fd, buf as usize);
     syscall_body!(sys_fgetxattr, {
         if fd < 0 {
@@ -465,11 +534,10 @@ pub fn sys_fgetxattr(
         if buf.is_null() {
             return Err(LinuxError::EINVAL);
         }
-        file.fgetxattr(name,buf,sizes)
-            .map_err(|e| {
-                debug!("Failed to get xattr: {:?}", e);
-                e
-            })
+        file.fgetxattr(name, buf, sizes).map_err(|e| {
+            debug!("Failed to get xattr: {:?}", e);
+            e
+        })
     })
 }
 ///write the buf into  the xattr by fd
@@ -493,11 +561,10 @@ pub fn sys_fsetxattr(
         if buf.is_null() {
             return Err(LinuxError::EINVAL);
         }
-        file.fsetxattr(name, buf, size, flags)
-            .map_err(|e| {
-                debug!("Failed to set xattr: {:?}", e);
-                e
-            })
+        file.fsetxattr(name, buf, size, flags).map_err(|e| {
+            debug!("Failed to set xattr: {:?}", e);
+            e
+        })
     })
 }
 /// remove the axttr by fd
@@ -523,14 +590,10 @@ pub fn sys_fremovexattr(fd: c_int, name: *const c_char) -> usize {
     })
 }
 
-pub fn sys_listxattr(
-    fd:c_int,
-    list: *mut c_char,
-    size: usize,
-)->usize{
+pub fn sys_listxattr(fd: c_int, list: *mut c_char, size: usize) -> usize {
     debug!("sys_listxattr <= fd: {:?}, list: {:#x}", fd, list as usize);
     syscall_body!(sys_listxattr, {
-            if fd < 0 {
+        if fd < 0 {
             debug!("Invalid file descriptor: {}", fd);
             return Err(LinuxError::EBADF);
         }
@@ -665,19 +728,18 @@ impl FileLike for Directory {
         &self,
         name: *const c_char,
         buf: *mut c_void,
-        buf_size: usize
+        buf_size: usize,
     ) -> LinuxResult<usize> {
         let name_len = get_c_string_length(name.clone());
         let data_size: *mut usize = &mut 0;
-        Ok(self.inner.lock().get_xattr(name,name_len,buf,buf_size,data_size)?)
+        Ok(self
+            .inner
+            .lock()
+            .get_xattr(name, name_len, buf, buf_size, data_size)?)
     }
-    fn flistxattr(
-        &self,
-        list: *mut c_char,
-        size: usize,
-    ) -> LinuxResult<usize> {
+    fn flistxattr(&self, list: *mut c_char, size: usize) -> LinuxResult<usize> {
         let ret_size: *mut usize = &mut 0;
-        self.inner.lock().list_xattr(list,size,ret_size)?;
+        self.inner.lock().list_xattr(list, size, ret_size)?;
         Ok(ret_size as usize)
     }
     fn fsetxattr(
@@ -685,17 +747,14 @@ impl FileLike for Directory {
         name: *const c_char,
         value: *mut c_void,
         size: usize,
-        flags: usize
+        flags: usize,
     ) -> LinuxResult<usize> {
         let name_len = get_c_string_length(name.clone());
-        Ok(self.inner.lock().set_xattr(name,name_len,value,size)?)
+        Ok(self.inner.lock().set_xattr(name, name_len, value, size)?)
     }
-    fn fremovexattr(
-        &self,
-        name: *const c_char,
-    ) -> LinuxResult<usize> {
+    fn fremovexattr(&self, name: *const c_char) -> LinuxResult<usize> {
         let name_len = get_c_string_length(name.clone());
-        Ok(self.inner.lock().remove_xattr(name,name_len)?)
+        Ok(self.inner.lock().remove_xattr(name, name_len)?)
     }
 }
 
@@ -744,6 +803,81 @@ impl FileLike for Directory {
  *    return Ok(nread as isize);
  *}
  */
+// pub unsafe fn sys_getdents(
+//     dir_fd: i32,
+//     buf: *mut ctypes::dirent,
+//     count: c_int,
+// ) -> LinuxResult<isize> {
+//     const MAX_NAME_LEN: usize = 255; // Linux NAME_MAX
+//     const DIRENT_MIN_SIZE: usize = core::mem::size_of::<ctypes::dirent>();
+// 
+//     let dir = Directory::from_fd(dir_fd)?;
+//     let mut inner = dir.inner.lock();
+// 
+//     let buf_start = buf as *const u8;
+//     let buf_end = buf_start.wrapping_add(count as usize);
+//     let mut curr_ptr = buf as *mut u8;
+//     let mut entries_written = 0;
+// 
+//     // Temporary buffer for directory entries
+//     let mut dirent_buf = [VfsDirEntry::default(); 1];
+// 
+//     loop {
+//         // Check remaining space (need space for struct + name + null terminator)
+//         let remaining = buf_end as usize - curr_ptr as usize;
+//         if remaining < DIRENT_MIN_SIZE + MAX_NAME_LEN + 1 {
+//             break;
+//         }
+// 
+//         // Read next directory entry
+//         match inner.read_dir(&mut dirent_buf) {
+//             Ok(0) => break, // No more entries
+//             Ok(_) => (),
+//             Err(e) => {
+//                 if entries_written == 0 {
+//                     return Err(e.into());
+//                 }
+//                 break;
+//             }
+//         }
+// 
+//         let entry = &dirent_buf[0];
+//         let name = entry.name_as_bytes();
+//         let name_len = name.len().min(MAX_NAME_LEN);
+// 
+//         // Calculate required space
+//         let reclen = core::mem::align_of::<ctypes::dirent>()
+//             .max(8)
+//             .max(DIRENT_MIN_SIZE + name_len + 1);
+// 
+//         if (curr_ptr as usize + reclen) > buf_end as usize {
+//             break;
+//         }
+// 
+//         // Fill dirent structure
+//         let dirent = curr_ptr as *mut ctypes::dirent;
+//         unsafe {
+//             (*dirent).d_ino = 1;
+//             (*dirent).d_off = 0;
+//             (*dirent).d_reclen = reclen as u16;
+//             (*dirent).d_type = entry.entry_type() as u8;
+// 
+//             // Copy name (including null terminator)
+//             let name_dst = (*dirent).d_name.as_mut_ptr();
+//             core::ptr::copy_nonoverlapping(name.as_ptr(), name_dst as *mut u8, name_len);
+//             *name_dst.add(name_len) = 0;
+// 
+//             curr_ptr = curr_ptr.add(reclen);
+//         }
+//         entries_written += 1;
+//     }
+// 
+//     Ok(if entries_written > 0 {
+//         (curr_ptr as usize - buf_start as usize) as isize
+//     } else {
+//         0
+//     })
+// }
 pub unsafe fn sys_getdents(
     dir_fd: i32,
     buf: *mut ctypes::dirent,
@@ -751,6 +885,7 @@ pub unsafe fn sys_getdents(
 ) -> LinuxResult<isize> {
     const MAX_NAME_LEN: usize = 255; // Linux NAME_MAX
     const DIRENT_MIN_SIZE: usize = core::mem::size_of::<ctypes::dirent>();
+    const BATCH_SIZE: usize = 128; // 大幅增加批量读取目录项数量以提高性能
 
     let dir = Directory::from_fd(dir_fd)?;
     let mut inner = dir.inner.lock();
@@ -760,42 +895,56 @@ pub unsafe fn sys_getdents(
     let mut curr_ptr = buf as *mut u8;
     let mut entries_written = 0;
 
-    // Temporary buffer for directory entries
-    let mut dirent_buf = [VfsDirEntry::default(); 1];
+    // 获取当前读取进度
+    let start_idx = inner.get_entry_index();
 
-    loop {
-        // Check remaining space (need space for struct + name + null terminator)
-        let remaining = buf_end as usize - curr_ptr as usize;
-        if remaining < DIRENT_MIN_SIZE + MAX_NAME_LEN + 1 {
-            break;
+    // 使用 Vec 作为临时缓冲区
+    let mut dirent_buf: Vec<VfsDirEntry> = Vec::with_capacity(BATCH_SIZE);
+
+    // 清空之前的缓冲区内容
+    dirent_buf.clear();
+
+    // 手动填充缓冲区
+    for _ in 0..BATCH_SIZE {
+        dirent_buf.push(VfsDirEntry::default());
+    }
+
+    // 一次性读取大量目录项
+    let num_entries = match inner.read_dir(&mut dirent_buf) {
+        Ok(n) => n,
+        Err(e) => {
+            return if entries_written == 0 {
+                Err(e.into())
+            } else {
+                Ok(entries_written as isize)
+            };
         }
+    };
 
-        // Read next directory entry
-        match inner.read_dir(&mut dirent_buf) {
-            Ok(0) => break, // No more entries
-            Ok(_) => (),
-            Err(e) => {
-                if entries_written == 0 {
-                    return Err(e.into());
-                }
-                break;
-            }
-        }
+    if num_entries == 0 {
+        return Ok(0); // 没有更多目录项
+    }
 
-        let entry = &dirent_buf[0];
+    // 重置读取进度，以便在处理过程中追踪
+    inner.set_entry_index(start_idx);
+
+    // 处理批量读取的每个目录项
+    for i in 0..num_entries {
+        let entry = &dirent_buf[i];
         let name = entry.name_as_bytes();
         let name_len = name.len().min(MAX_NAME_LEN);
 
-        // Calculate required space
-        let reclen = core::mem::align_of::<ctypes::dirent>()
-            .max(8)
-            .max(DIRENT_MIN_SIZE + name_len + 1);
+        // 动态计算所需空间
+        let reclen = (DIRENT_MIN_SIZE + name_len + 1 + 7) & !7; // 对齐到8字节
 
+        // 检查缓冲区空间是否足够
         if (curr_ptr as usize + reclen) > buf_end as usize {
+            // 空间不足，设置进度到当前位置，确保下次从这里继续读取
+            inner.set_entry_index(start_idx + i);
             break;
         }
 
-        // Fill dirent structure
+        // 填充 dirent 结构
         let dirent = curr_ptr as *mut ctypes::dirent;
         unsafe {
             (*dirent).d_ino = 1;
@@ -803,7 +952,7 @@ pub unsafe fn sys_getdents(
             (*dirent).d_reclen = reclen as u16;
             (*dirent).d_type = entry.entry_type() as u8;
 
-            // Copy name (including null terminator)
+            // 复制文件名（包括空终止符）
             let name_dst = (*dirent).d_name.as_mut_ptr();
             core::ptr::copy_nonoverlapping(name.as_ptr(), name_dst as *mut u8, name_len);
             *name_dst.add(name_len) = 0;
@@ -811,14 +960,14 @@ pub unsafe fn sys_getdents(
             curr_ptr = curr_ptr.add(reclen);
         }
         entries_written += 1;
+
+        // 更新进度（重要：确保即使在内部循环中也会更新进度）
+        inner.set_entry_index(start_idx + i + 1);
     }
 
-    Ok(if entries_written > 0 {
-        (curr_ptr as usize - buf_start as usize) as isize
-    } else {
-        0
-    })
+    Ok((curr_ptr as usize - buf_start as usize) as isize)
 }
+
 
 pub fn sys_unlink(path: *const c_char) -> LinuxResult<isize> {
     let path = char_ptr_to_str(path).map_err(|_| LinuxError::EFAULT)?;
@@ -837,7 +986,12 @@ pub fn sys_unlinkat(dir_fd: i32, path: *const c_char) -> LinuxResult<isize> {
     Ok(0)
 }
 
-pub fn sys_mount(src: *const c_char,mnt: *const c_char, fstype: *const c_char, mntflag: usize) -> LinuxResult<isize> {
+pub fn sys_mount(
+    src: *const c_char,
+    mnt: *const c_char,
+    fstype: *const c_char,
+    mntflag: usize,
+) -> LinuxResult<isize> {
     debug!("mount simple return");
     Ok(0)
 }
@@ -852,11 +1006,12 @@ pub fn parse_time(ts: &timespec, now: timeval) -> Result<Option<(u32, u32)>, Lin
         x if x == UTIME_NOW as i64 => {
             let nsec = (now.tv_usec as i64) * 1000;
             // 检查 tv_sec 和 nsec 是否在 u32 范围内
-            if now.tv_sec < 0 || now.tv_sec > u32::MAX as i64 || nsec < 0 || nsec > u32::MAX as i64 {
+            if now.tv_sec < 0 || now.tv_sec > u32::MAX as i64 || nsec < 0 || nsec > u32::MAX as i64
+            {
                 return Err(LinuxError::EINVAL);
             }
             Ok(Some((now.tv_sec as u32, nsec as u32)))
-        },
+        }
         x if x == UTIME_OMIT as i64 => Ok(None),
         _ => {
             if ts.tv_nsec < 0 || ts.tv_nsec >= 1_000_000_000 {
@@ -867,7 +1022,7 @@ pub fn parse_time(ts: &timespec, now: timeval) -> Result<Option<(u32, u32)>, Lin
                 return Err(LinuxError::EINVAL);
             }
             Ok(Some((ts.tv_sec as u32, ts.tv_nsec as u32)))
-        },
+        }
     }
 }
 fn extract_times(
@@ -898,7 +1053,7 @@ pub fn sys_utimensat(
     path: *const c_char,
     times: *const timespec,
     now: timeval,
-    flags: c_int
+    flags: c_int,
 ) -> LinuxResult<isize> {
     debug!("syscall sys_utimensat<={},{:?},{:?}", dirfd, path, times);
     let (atime_opt, mtime_opt) = extract_times(times, now)?;
@@ -934,8 +1089,8 @@ pub fn sys_utimensat(
                         _ => LinuxError::ENOENT,
                     }
                 })?,
-                pathname.into(),
-            );
+            pathname.into(),
+        );
         if let Some((sec, nsec)) = atime_opt {
             file.set_atime(sec, nsec).map_err(|_| LinuxError::EIO)?;
         }
@@ -957,4 +1112,3 @@ pub fn sys_utimensat(
         Ok(0)
     }
 }
-

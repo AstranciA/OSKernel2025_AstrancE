@@ -1,7 +1,10 @@
 pub mod mmap;
 use alloc::string::String;
+use alloc::vec::Vec;
+use arceos_posix_api::{add_file_or_directory_fd, sys_open};
 use axerrno::AxResult;
 use axfs::api::write;
+use axfs::fops::OpenOptions;
 use axhal::trap::{PAGE_FAULT, register_trap_handler};
 use axhal::{
     mem::{VirtAddr, virt_to_phys},
@@ -9,8 +12,13 @@ use axhal::{
 };
 use axmm::AddrSpace;
 use axtask::{TaskExtRef, current};
+use kernel_elf_parser::{AuxvEntry, AuxvType};
+use linux_raw_sys::general::{AT_ENTRY, AT_PHDR, AT_PHENT, AT_PHNUM};
+use memory_addr::va;
 use xmas_elf::ElfFile;
 
+use crate::dynamic::{find_interpreter, load_interpreter, relocate_interpreter_segments};
+use crate::elf::{check_segments_overlap, find_safe_base_address, get_program_address_range};
 use crate::{
     copy_from_kernel,
     elf::{ELFInfo, OwnedElfFile},
@@ -31,18 +39,142 @@ pub fn new_user_aspace_empty() -> AxResult<AddrSpace> {
 /// - The last return value is the address space of the user app.
 pub fn load_elf_to_mem(
     elf_file: OwnedElfFile,
+    uspace: &mut AddrSpace,
     args: Option<&[String]>,
     envs: Option<&[String]>,
-) -> AxResult<(VirtAddr, VirtAddr, Option<VirtAddr>, AddrSpace)> {
-    let mut uspace = new_user_aspace_empty()
-        .and_then(|mut it| {
-            copy_from_kernel(&mut it)?;
-            Ok(it)
-        })
-        .expect("Failed ot create user address space");
-    let elf_info = ELFInfo::new(elf_file, uspace.base());
-    let (entry, ustack_pointer, tp) = map_elf_sections(elf_info, &mut uspace, args, envs)?;
-    Ok((entry, ustack_pointer, tp, uspace))
+) -> AxResult<(VirtAddr, VirtAddr, Option<VirtAddr>)> {
+    // 检查是否需要动态链接器
+    let interpreter_path = find_interpreter(&elf_file)?;
+
+    // 如果有动态链接器，加载它
+    if let Some(interp_path) = interpreter_path {
+        let prog_max = get_program_address_range(&elf_file).end;
+        //let interp_base = find_safe_base_address(prog_max);
+        let interp_base = va!(axconfig::plat::USER_INTERP_BASE);
+        // 加载主程序
+        let elf_info = ELFInfo::new(elf_file, uspace.base(), Some(interp_base), None)?;
+        // 加载解释器ELF文件
+        let interpreter_elf = load_interpreter(&interp_path)?;
+        //let mut interp_info = ELFInfo::new(interpreter_elf, uspace.base())?;
+        let mut interp_info = ELFInfo::new(
+            interpreter_elf,
+            uspace.base(),
+            None,
+            Some(interp_base.as_usize() as isize),
+        )?;
+
+        /*
+         *        // 检查解释器和主程序之间是否存在段重叠
+         *        let is_overlapping = check_segments_overlap(&interp_info, &elf_info);
+         *
+         *        if is_overlapping {
+         *            debug!("Detected overlap between interpreter and main program segments");
+         *
+         *            // 重定位解释器到一个安全的地址 (通常重定位到高地址)
+         *            let safe_base = find_safe_base_address(&elf_info);
+         *            relocate_interpreter_segments(&mut interp_info, safe_base);
+         *            debug!("Relocated interpreter to base address {:#x}", safe_base);
+         *        }
+         */
+
+        // 映射主程序段到内存
+        debug!("mapping main elf");
+        //map_elf_segments(&elf_info, uspace, &mut None)?;
+
+        // 映射解释器段到内存，并获取其入口点
+        debug!("mapping interp elf");
+        let (interp_entry, ustack_pointer, tp) =
+            map_elf_sections_with_auxv(interp_info, uspace, args, envs, &elf_info)?;
+
+        // 返回解释器的入口点作为程序入口
+        Ok((interp_entry, ustack_pointer, tp))
+    } else {
+        // 加载主程序
+        let elf_info = ELFInfo::new(elf_file, uspace.base(), None, None)?;
+        // 无需动态链接器，直接映射并返回
+        let (entry, ustack_pointer, tp) = map_elf_sections(elf_info, uspace, args, envs)?;
+        Ok((entry, ustack_pointer, tp))
+    }
+}
+
+/// 设置用户栈并返回栈指针偏移
+fn setup_user_stack(
+    uspace: &mut AddrSpace,
+    args: Option<&[String]>,
+    envs: Option<&[String]>,
+    auxv: &mut [AuxvEntry],
+    ustack_start: VirtAddr,
+    ustack_size: usize,
+) -> Result<usize, axerrno::AxError> {
+    debug!(
+        "Mapping user stack: {:#x?}..{:#x?}",
+        ustack_start,
+        ustack_start + ustack_size
+    );
+
+    // 构建栈数据
+    let stack_data = kernel_elf_parser::app_stack_region(
+        args.unwrap_or_default(),
+        envs.unwrap_or_default(),
+        auxv,
+        ustack_start,
+        ustack_size,
+    );
+    //debug!("Stack data: {:?}", stack_data);
+
+    // 映射栈空间
+    uspace.map_alloc(
+        ustack_start,
+        ustack_size,
+        MappingFlags::READ | MappingFlags::WRITE | MappingFlags::USER,
+        true,
+    )?;
+
+    // 写入栈数据并返回偏移量
+    let ustack_end = ustack_start + ustack_size;
+    uspace.write(ustack_end - stack_data.len(), stack_data.as_slice())?;
+    Ok(stack_data.len())
+}
+
+/// 映射ELF文件的段到地址空间
+fn map_elf_segments(
+    elf_info: &ELFInfo,
+    uspace: &mut AddrSpace,
+    tp: &mut Option<VirtAddr>,
+) -> Result<(), axerrno::AxError> {
+    for segment in elf_info.segments.iter() {
+        match segment.type_ {
+            xmas_elf::program::Type::Load => {
+                let segment_end = segment.start_va + segment.size;
+                trace!(
+                    "Mapping ELF segment: [{:#x?}, {:#x?}) -> [{:#x?}, {:#x?}), flags: {:#x?}",
+                    segment.start_va + segment.offset,
+                    segment_end + segment.offset,
+                    segment.start_va,
+                    segment_end,
+                    segment.flags
+                );
+
+                uspace.map_alloc(segment.start_va, segment.size, segment.flags, true)?;
+
+                if !segment.data.is_empty() {
+                    uspace.write(segment.start_va + segment.offset, segment.data)?;
+                    uspace.fill_zero(
+                        segment.start_va + segment.offset + segment.data.len(),
+                        segment.size - segment.data.len(),
+                    );
+                }
+                // TODO: flush the I-cache
+            }
+            xmas_elf::program::Type::Tls => {
+                *tp = Some(segment.start_va + segment.offset);
+            }
+            _ => {
+                panic!("Unsupported segment type");
+            }
+        }
+    }
+    Ok(())
 }
 
 /**
@@ -62,82 +194,146 @@ pub fn map_elf_sections(
     envs: Option<&[String]>,
 ) -> Result<(VirtAddr, VirtAddr, Option<VirtAddr>), axerrno::AxError> {
     let mut tp: Option<VirtAddr> = None;
-    for segement in elf_info.segments.iter() {
-        match segement.type_ {
-            xmas_elf::program::Type::Load => {
-                let segement_end = segement.start_va + segement.size;
-                trace!(
-                    "Mapping ELF segment: [{:#x?}, {:#x?}) -> [{:#x?}, {:#x?}), flags: {:#x?}",
-                    segement.start_va + segement.offset,
-                    segement_end + segement.offset,
-                    segement.start_va,
-                    segement_end,
-                    segement.flags
-                );
 
-                uspace.map_alloc(segement.start_va, segement.size, segement.flags, true)?;
+    // 映射ELF段
+    map_elf_segments(&elf_info, uspace, &mut tp)?;
 
-                if segement.data.is_empty() {
-                    continue;
-                }
-                //uspace.populate_area(segement.start_va, segement.size);
+    // 设置用户栈
+    let ustack_end = VirtAddr::from_usize(axconfig::plat::USER_STACK_TOP);
+    let ustack_size = axconfig::plat::USER_STACK_SIZE;
+    let ustack_start = ustack_end - ustack_size;
+    let sp_offset = setup_user_stack(
+        uspace,
+        args,
+        envs,
+        elf_info.auxv.as_mut_slice(),
+        ustack_start,
+        ustack_size,
+    )?;
 
-                uspace.write(segement.start_va + segement.offset, segement.data)?;
-                uspace.fill_zero(
-                    segement.start_va + segement.offset + segement.data.len(),
-                    segement.size - segement.data.len(),
-                );
-                // TDOO: flush the I-cache
-            }
-            xmas_elf::program::Type::Tls => {
-                tp = Some(segement.start_va + segement.offset);
-            }
-            _ => {
-                panic!("Unsupported segment type");
-            }
-        }
-    }
+    // 映射陷入机制
+    map_trampoline(uspace);
 
-    // heap
+    // 初始化堆（如果启用）
     #[cfg(feature = "heap")]
     uspace.init_heap(
         axconfig::plat::USER_HEAP_BASE.into(),
         axconfig::plat::USER_HEAP_SIZE,
     );
 
-    // The user stack is divided into two parts:
-    // `ustack_start` -> `ustack_pointer`: It is the stack space that users actually read and write.
-    // `ustack_pointer` -> `ustack_end`: It is the space that contains the arguments, environment variables and auxv passed to the app.
-    //  When the app starts running, the stack pointer points to `ustack_pointer`.
+    Ok((elf_info.entry, ustack_end - sp_offset, tp))
+}
+
+/// 映射ELF段并设置包含主程序信息的辅助向量
+fn map_elf_sections_with_auxv(
+    mut interp_info: ELFInfo,
+    uspace: &mut AddrSpace,
+    args: Option<&[String]>,
+    envs: Option<&[String]>,
+    main_elf_info: &ELFInfo,
+) -> Result<(VirtAddr, VirtAddr, Option<VirtAddr>), axerrno::AxError> {
+    let mut tp: Option<VirtAddr> = None;
+    let mut args_ = vec![interp_info.path()];
+    args.map(|args| args_.extend_from_slice(args));
+    let mut envs_ = Vec::new();
+    envs.map(|env| envs_.extend_from_slice(env));
+/*
+ *    envs_.push("MUSL_DEBUG=2".into());
+ *    envs_.push("LD_DEBUG=all".into());
+ *    envs_.push("MUSL_DEBUGFLAGS=6".into());
+ *
+ */
+    // 映射ELF段
+    map_elf_segments(&interp_info, uspace, &mut tp)?;
+
+    let path = interp_info.path();
+    // 更新辅助向量，包含主程序信息
+    for auxv in interp_info.auxv.iter_mut() {
+        let a_type = auxv.get_type();
+        let mut a_val = auxv.value_mut_ref();
+        match a_type {
+            /*
+             *AuxvType::PHDR => {
+             *    *a_val = main_elf_info.segments[0].start_va.as_usize()
+             *        + main_elf_info
+             *            .auxv
+             *            .iter()
+             *            .find(|a| a.get_type() == AuxvType::PHDR)
+             *            .map_or(0, |a| a.value());
+             *}
+             *AuxvType::PHENT => {
+             *    *a_val = main_elf_info
+             *        .auxv
+             *        .iter()
+             *        .find(|a| a.get_type() == AuxvType::PHENT)
+             *        .map_or(0, |a| a.value());
+             *}
+             *AuxvType::PHNUM => {
+             *    *a_val = main_elf_info
+             *        .auxv
+             *        .iter()
+             *        .find(|a| a.get_type() == AuxvType::PHNUM)
+             *        .map_or(0, |a| a.value());
+             *}
+             *AuxvType::ENTRY => {
+             *    *a_val = main_elf_info.entry.as_usize();
+             *}
+             */
+            AuxvType::BASE => {
+                warn!("base: {:?}", interp_info.base);
+                *a_val = interp_info.base.as_usize();
+            }
+            /*
+             *AuxvType::EXECFD => {
+             *    let fd = add_file_or_directory_fd(
+             *        axfs::fops::File::open,
+             *        axfs::fops::Directory::open_dir,
+             *        path.as_str(),
+             *        &OpenOptions::new().set_read(true),
+             *    ).unwrap();
+             *    error!("execfd: {fd}");
+             *    *a_val = fd as usize;
+             *}
+             * // FIXME:
+             *AuxvType::EXECFN => {
+             *}
+             */
+            _ => {}
+        }
+    }
+
+    // 设置用户栈
     let ustack_end = VirtAddr::from_usize(axconfig::plat::USER_STACK_TOP);
     let ustack_size = axconfig::plat::USER_STACK_SIZE;
     let ustack_start = ustack_end - ustack_size;
-    debug!(
-        "Mapping user stack: {:#x?}..{:#x?}",
-        ustack_start, ustack_end
-    );
-    // FIXME: Add more arguments and environment variables
-    let stack_data = kernel_elf_parser::app_stack_region(
-        args.unwrap_or_default(),
-        envs.unwrap_or_default(),
-        elf_info.auxv.as_mut_slice(),
+    let mut auxv = Vec::from(interp_info.auxv);
+    //auxv.push(AuxvEntry::new(AuxvType::NULL, 0));
+
+    debug!("args: {args_:?} envs: {envs_:?}");
+    let sp_offset = setup_user_stack(
+        uspace,
+        Some(args_.as_slice()),
+        Some(envs_.as_slice()),
+        auxv.as_mut_slice(),
         ustack_start,
         ustack_size,
-    );
-    uspace.map_alloc(
-        ustack_start,
-        ustack_size,
-        MappingFlags::READ | MappingFlags::WRITE | MappingFlags::USER,
-        true,
     )?;
+    for auxv in interp_info.auxv.iter_mut() {
+        let a_type = auxv.get_type();
+        let mut a_val = auxv.value_mut_ref();
+    }
 
-    uspace.write(ustack_end - stack_data.len(), stack_data.as_slice())?;
-    let sp_offset = stack_data.len();
+    // 映射跳板
+    map_trampoline(uspace);
 
-    // map trapoline
-    map_trapoline(uspace);
+    // 初始化堆（如果启用）
+    #[cfg(feature = "heap")]
+    uspace.init_heap(
+        axconfig::plat::USER_HEAP_BASE.into(),
+        axconfig::plat::USER_HEAP_SIZE,
+    );
 
-    Ok((elf_info.entry, ustack_end - sp_offset, tp))
+    Ok((interp_info.entry, ustack_end - sp_offset, None))
 }
 
 unsafe extern "C" {
@@ -145,7 +341,7 @@ unsafe extern "C" {
     fn _etrampoline();
 }
 
-pub(crate) fn map_trapoline(aspace: &mut AddrSpace) {
+pub(crate) fn map_trampoline(aspace: &mut AddrSpace) {
     aspace
         .map_linear(
             axconfig::plat::USER_TRAMPOLINE_BASE.into(),

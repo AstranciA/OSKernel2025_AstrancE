@@ -166,7 +166,7 @@ impl SignalSet {
     /// get lowest signal in the set that is in the filter set
     /// will return None if no signal in the set is in the filter set
     pub fn get_one_in(&self, filter: SignalSet) -> Option<Signal> {
-        Signal::from_u32(self.intersection(filter).bits().trailing_zeros())
+        Signal::from_u32(self.intersection(filter).bits().trailing_zeros() + 1)
     }
 
     /// take the lowest signal in the set and remove it from the set
@@ -310,7 +310,7 @@ impl TryFrom<sigaction> for SigAction {
         let mask = act.sa_mask.into();
         warn!("act: {act:?}");
         let handler = if let Some(sa_handler) = act.sa_handler {
-             if flags.contains(SigFlags::SIG_INFO) {
+            if flags.contains(SigFlags::SIG_INFO) {
                 SigHandler::Handler(sa_handler)
             } else {
                 SigHandler::Action(sa_handler)
@@ -322,12 +322,14 @@ impl TryFrom<sigaction> for SigAction {
             {
                 SigHandler::Default(default_signal_handler)
             }
-            #[cfg(not(feature = "default_handler"))]     
+            #[cfg(not(feature = "default_handler"))]
             {
-                SigHandler::Default(|signal , _| error!("Unassigned default handler for signal {signal:?}"))
+                SigHandler::Default(|signal, _| {
+                    error!("Unassigned default handler for signal {signal:?}")
+                })
             }
         };
-        
+
         Ok(Self {
             handler,
             mask,
@@ -417,7 +419,7 @@ impl SignalContext {
     /// 向进程发送信号
     pub fn send_signal(&mut self, sig: SignalSet) {
         // 如果信号未被阻塞，则加入待处理队列
-        warn!(
+        trace!(
             "send signal: {:?}, pending: {:?}, blocked: {:?}",
             sig, self.pending, self.blocked
         );
@@ -437,7 +439,7 @@ impl SignalContext {
     }
     /// 设置信号处理动作，返回之前的动作
     pub fn set_action(&mut self, sig: Signal, act: SigAction) -> SigAction {
-        warn!("set action: {act:?}");
+        trace!("set action: {act:?}");
         let old_act = self.actions[sig as usize];
         self.actions[sig as usize] = act;
         old_act
@@ -460,7 +462,6 @@ impl SignalContext {
     }
 
     pub fn take_pending_in(&mut self, filter: SignalSet) -> Option<Signal> {
-        warn!("{:?}", self.pending);
         self.pending.take_one_in(filter)
     }
 
@@ -680,7 +681,6 @@ pub fn handle_pending_signals(
                 // 设置信号处理栈帧
                 let mask = old_mask.union(act_mask);
                 (*sigctx).blocked = mask;
-                // TODO: 储存tf
                 assert_eq!(
                     sigctx.load(unsafe { axhal::arch::read_trap_frame() }, SignalFrameData {
                         signal: sig,

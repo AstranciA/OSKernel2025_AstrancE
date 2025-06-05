@@ -252,18 +252,6 @@ pub fn sys_pipe(fds: &mut [c_int]) -> c_int {
         let write_fd = add_file_like(Arc::new(write_end)).inspect_err(|_| {
             close_file_like(read_fd).unwrap();
         })?;
-        /*
-         *let write_fd = match add_file_like(Arc::new(write_end)) {
-         *    Ok(fd) => fd,
-         *    Err(e) => {
-         *        // 尝试清理 read_fd，若 close 也失败则优先返回其错误
-         *        if let Err(close_err) = close_file_like(read_fd) {
-         *            return Err(close_err); // 优先返回 close 的错误
-         *        }
-         *        return Err(e); // 若 close 成功，返回原始的 add 错误
-         *    }
-         *};
-         */
         debug!("sys_pipe => {read_fd:#x}, {write_fd:#x}");
 
         fds[0] = read_fd as c_int;

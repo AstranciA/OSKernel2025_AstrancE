@@ -45,10 +45,6 @@ fn riscv_trap_handler(tf: &mut TrapFrame, from_user: bool) {
     let scause = scause::read();
     pre_trap(tf, from_user);
     trace!("trap from {:x?}", tf.get_ip());
-    if tf.get_ip() == 0x105330 {
-        //unsafe { core::arch::asm!("ebreak") }; // 手动触发断点
-    }
-    //warn!("trap from {:x?}", tf);
     if let Ok(cause) = scause.cause().try_into::<I, E>() {
         // Interrupts modify the value of `stval`, which must be saved before the
         // interrupt is enabled
@@ -60,19 +56,27 @@ fn riscv_trap_handler(tf: &mut TrapFrame, from_user: bool) {
             #[cfg(feature = "uspace")]
             Trap::Exception(E::UserEnvCall) => {
                 tf.regs.a0 = crate::trap::handle_syscall(tf, tf.regs.a7) as usize;
+                post_trap(tf, from_user);
                 tf.sepc += 4;
             }
             Trap::Exception(E::LoadPageFault) => {
+                post_trap(tf, from_user);
                 handle_page_fault(tf, vaddr, MappingFlags::READ, from_user)
             }
             Trap::Exception(E::StorePageFault) => {
+                post_trap(tf, from_user);
                 handle_page_fault(tf, vaddr, MappingFlags::WRITE, from_user)
             }
             Trap::Exception(E::InstructionPageFault) => {
+                post_trap(tf, from_user);
                 handle_page_fault(tf, vaddr, MappingFlags::EXECUTE, from_user)
             }
-            Trap::Exception(E::Breakpoint) => handle_breakpoint(&mut tf.sepc),
+            Trap::Exception(E::Breakpoint) => {
+                post_trap(tf, from_user);
+                handle_breakpoint(&mut tf.sepc)
+            }
             Trap::Interrupt(_) => {
+                post_trap(tf, from_user);
                 //warn!("asdaf");
                 handle_trap!(IRQ, scause.bits());
             }
@@ -80,7 +84,6 @@ fn riscv_trap_handler(tf: &mut TrapFrame, from_user: bool) {
                 panic!("Unhandled trap {:?} @ {:#x}:\n{:#x?}", cause, tf.sepc, tf);
             }
         }
-        post_trap(tf, from_user);
         mask_irqs();
     } else {
         panic!(

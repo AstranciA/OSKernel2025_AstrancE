@@ -19,7 +19,6 @@ mmap = ["memory_set/mmap"]
 axhal = { workspace = true, features = ["paging"] }
 axalloc = { workspace = true }
 axconfig = { workspace = true }
-
 log = "=0.4.21"
 axerrno = "0.1"
 lazyinit = "0.2"

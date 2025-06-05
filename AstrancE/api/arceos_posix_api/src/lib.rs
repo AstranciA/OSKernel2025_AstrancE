@@ -31,7 +31,7 @@ pub mod config {
 #[allow(dead_code, non_snake_case, non_camel_case_types, non_upper_case_globals, clippy::upper_case_acronyms, missing_docs)]
 pub mod ctypes;
 
-pub use imp::io::{sys_read, sys_write, sys_writev,sys_readv};
+pub use imp::io::{sys_read, sys_readv, sys_write, sys_writev};
 #[cfg(feature = "fs")]
 pub use imp::path_link::{AT_FDCWD, FilePath, HARDLINK_MANAGER, handle_file_path};
 pub use imp::resources::{sys_getrlimit, sys_prlimit64, sys_setrlimit};
@@ -41,14 +41,15 @@ pub use imp::time::{sys_clock_gettime, sys_get_time_of_day, sys_nanosleep};
 
 #[cfg(feature = "fd")]
 pub use imp::fd_ops::{
-    FD_TABLE, add_file_like, get_file_like, ps2event, sys_close, sys_dup, sys_dup2, sys_fcntl,
-    sys_ppoll,
+    FD_TABLE, FileLike, add_file_like, get_file_like, ps2event, sys_close, sys_dup, sys_dup2,
+    sys_fcntl, sys_ppoll,
 };
-#[cfg(feature = "fs")]
+//#[cfg(feature = "fs")]
 pub use imp::fs::{
-    Directory, File, sys_fstat, sys_fstatat, sys_getcwd, sys_getdents, sys_lseek, sys_lstat,
-    sys_mkdirat, sys_open, sys_openat, sys_rename, sys_stat, sys_unlink, sys_unlinkat,
-    sys_fgetxattr,sys_fsetxattr,sys_fremovexattr,sys_listxattr,sys_mount,sys_umount2,sys_utimensat
+    Directory, File, add_file_or_directory_fd, sys_fgetxattr, sys_fremovexattr, sys_fsetxattr,
+    sys_fstat, sys_fstatat, sys_getcwd, sys_getdents, sys_listxattr, sys_lseek, sys_lstat,
+    sys_mkdirat, sys_mount, sys_open, sys_openat, sys_rename, sys_stat, sys_umount2, sys_unlink,
+    sys_unlinkat, sys_utimensat,
 };
 #[cfg(feature = "select")]
 pub use imp::io_mpx::sys_select;

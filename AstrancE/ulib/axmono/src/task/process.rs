@@ -1,12 +1,18 @@
 use core::sync::atomic::{AtomicUsize, Ordering};
 
-use crate::{ctypes::TimeStat, elf::OwnedElfFile, mm::map_trapoline, task::add_thread_to_table};
+use crate::{
+    ctypes::TimeStat,
+    elf::OwnedElfFile,
+    mm::{load_elf_to_mem, map_trampoline},
+    task::add_thread_to_table,
+};
 use alloc::{
     boxed::Box,
     string::{String, ToString},
     sync::Arc,
     vec::Vec,
 };
+use core::ffi::c_int;
 use arceos_posix_api::{FD_TABLE, ctypes::*};
 use axerrno::{AxError, AxResult, LinuxError, LinuxResult};
 use axfs::{
@@ -21,9 +27,9 @@ use axprocess::Pid;
 use axsignal::{Signal, SignalContext};
 use axsync::Mutex;
 use axtask::{AxTaskRef, TaskExtRef, WaitQueue, current};
-use core::ffi::c_int;
 use memory_addr::VirtAddrRange;
 use spin::RwLock;
+use xmas_elf::program;
 
 use crate::{
     copy_from_kernel,
@@ -267,23 +273,19 @@ pub fn clone_task(
     let tid = new_task.id().as_u64() as Pid;
     debug!("new process data");
     let process = if flags.contains(CloneFlags::THREAD) {
-        new_task.ctx_mut().set_page_table_root(
-            current_aspace
-                .page_table_root(),
-        );
+        new_task
+            .ctx_mut()
+            .set_page_table_root(current_aspace.page_table_root());
 
         curr.task_ext().thread.process()
     } else {
-        error!("setting parent");
         let parent = if flags.contains(CloneFlags::PARENT) {
-            error!("setting parent 1");
             curr.task_ext()
                 .thread
                 .process()
                 .parent()
                 .ok_or(LinuxError::EINVAL)?
         } else {
-            error!("setting parent 2");
             curr.task_ext().thread.process().clone()
         };
         let builder = parent.fork(tid);
@@ -375,37 +377,30 @@ pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxR
     );
     let mut args_ = vec![];
     let (oldpwd, pwd) = get_pwd_from_envs(envs);
-    let mut program_path = if let Some(ref pwd) = pwd {
-        pwd.clone() + "/" + program_name
-    } else {
-        program_name.to_string()
-    };
-    // try reading shebang
+    let mut program_path = axfs::path::canonicalize(program_name, pwd.as_ref().map(|s| s.as_str()));
+
+    // 读取文件头部以检测类型
     let mut buffer: [u8; 64] = [0; 64];
     let mut file = axfs::api::File::open(program_path.as_str())?;
     file.read(&mut buffer)?;
 
-    // FIXME: parse shebang
+    // 确定执行类型（ELF 或 Shell 脚本）
     let exec_type = if buffer.len() >= 4 && buffer[..4] == *b"\x7fELF" {
         ExecType::Elf
     } else if buffer[..2] == [b'#', b'!'] {
-        // FIXME: read real shabang
         ExecType::Shell
     } else {
         ExecType::Shell
     };
 
+    // 加载 ELF 文件
     let elf_file: OwnedElfFile = match exec_type {
         ExecType::Elf => load_elf_from_disk(&program_path)
             .inspect_err(|err| debug!("load_elf_from_disk failed: {:?}", err))?,
         ExecType::Shell => {
-            // try reading shebang
-            //debug!("execve:{:?} starts with shebang #!...", program_name);
-            program_path = "/usr/bin/busybox".parse().unwrap(); // busybox
-
-            args_.push(program_path.clone().into());
-            args_.push("ash".into());
-
+            program_path = "/usr/bin/busybox".to_string();
+            args_.push(program_path.clone());
+            args_.push("ash".to_string());
             load_elf_from_disk(program_path.as_str()).unwrap()
         }
         _ => {
@@ -417,21 +412,26 @@ pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxR
     let args_: &[String] = args_.as_slice();
     let current_task = current();
 
+    // 检查地址空间是否被多个任务共享
     if Arc::strong_count(&current_task.task_ext().process_data().aspace) != 1 {
         warn!("Address space is shared by multiple tasks, exec is not supported.");
         return Err(AxError::Unsupported);
     }
+
+    // 释放旧的用户地址空间映射
     let mut aspace = current_task.task_ext().process_data().aspace.lock();
-    let elf_info = ELFInfo::new(elf_file, aspace.base());
     aspace.unmap_user_areas()?;
     axhal::arch::flush_tlb(None);
 
-    //TODO: clone envs??
+    // 使用之前定义的 load_elf_to_mem 函数加载 ELF 文件到内存
     let (entry_point, user_stack_base, thread_pointer) =
-        map_elf_sections(elf_info, &mut aspace, Some(args_), Some(envs))?;
+        load_elf_to_mem(elf_file, &mut aspace, Some(args_), Some(envs))?;
+
+    axhal::arch::flush_tlb(None);
 
     unsafe { current_task.task_ext().process_data().aspace.force_unlock() };
 
+    // 设置当前任务名称和目录
     current_task.set_name(&program_path);
     if let Some(pwd) = pwd {
         set_current_dir(pwd.as_str())?;
@@ -442,6 +442,7 @@ pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxR
         entry_point, user_stack_base,
     );
 
+    // 设置用户上下文并进入用户空间
     let mut uctx = UspaceContext::new(entry_point.as_usize(), user_stack_base, 0);
     if let Some(tp) = thread_pointer {
         uctx.set_tp(tp.as_usize());
@@ -454,3 +455,92 @@ pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxR
         )
     }
 }
+
+/*
+ *pub fn exec_current(program_name: &str, args: &[String], envs: &[String]) -> AxResult<!> {
+ *    warn!(
+ *        "exec: {} with args {:?}, envs {:?}",
+ *        program_name, args, envs
+ *    );
+ *    let mut args_ = vec![];
+ *    let (oldpwd, pwd) = get_pwd_from_envs(envs);
+ *    let mut program_path = if let Some(ref pwd) = pwd {
+ *        pwd.clone() + "/" + program_name
+ *    } else {
+ *        program_name.to_string()
+ *    };
+ *    // try reading shebang
+ *    let mut buffer: [u8; 64] = [0; 64];
+ *    let mut file = axfs::api::File::open(program_path.as_str())?;
+ *    file.read(&mut buffer)?;
+ *
+ *    // FIXME: parse shebang
+ *    let exec_type = if buffer.len() >= 4 && buffer[..4] == *b"\x7fELF" {
+ *        ExecType::Elf
+ *    } else if buffer[..2] == [b'#', b'!'] {
+ *        // FIXME: read real shabang
+ *        ExecType::Shell
+ *    } else {
+ *        ExecType::Shell
+ *    };
+ *
+ *    let elf_file: OwnedElfFile = match exec_type {
+ *        ExecType::Elf => load_elf_from_disk(&program_path)
+ *            .inspect_err(|err| debug!("load_elf_from_disk failed: {:?}", err))?,
+ *        ExecType::Shell => {
+ *            // try reading shebang
+ *            //debug!("execve:{:?} starts with shebang #!...", program_name);
+ *            program_path = "/usr/bin/busybox".parse().unwrap(); // busybox
+ *
+ *            args_.push(program_path.clone().into());
+ *            args_.push("ash".into());
+ *
+ *            load_elf_from_disk(program_path.as_str()).unwrap()
+ *        }
+ *        _ => {
+ *            unimplemented!()
+ *        }
+ *    };
+ *    args_.extend_from_slice(args);
+ *
+ *    let args_: &[String] = args_.as_slice();
+ *    let current_task = current();
+ *
+ *    if Arc::strong_count(&current_task.task_ext().process_data().aspace) != 1 {
+ *        warn!("Address space is shared by multiple tasks, exec is not supported.");
+ *        return Err(AxError::Unsupported);
+ *    }
+ *    let mut aspace = current_task.task_ext().process_data().aspace.lock();
+ *    let elf_info = ELFInfo::new(elf_file, aspace.base())?;
+ *    aspace.unmap_user_areas()?;
+ *    axhal::arch::flush_tlb(None);
+ *
+ *    //TODO: clone envs??
+ *    let (entry_point, user_stack_base, thread_pointer) =
+ *        map_elf_sections(elf_info, &mut aspace, Some(args_), Some(envs))?;
+ *
+ *    unsafe { current_task.task_ext().process_data().aspace.force_unlock() };
+ *
+ *    current_task.set_name(&program_path);
+ *    if let Some(pwd) = pwd {
+ *        set_current_dir(pwd.as_str())?;
+ *    }
+ *
+ *    debug!(
+ *        "exec: enter uspace, entry: {:?}, stack: {:?}",
+ *        entry_point, user_stack_base,
+ *    );
+ *
+ *    let mut uctx = UspaceContext::new(entry_point.as_usize(), user_stack_base, 0);
+ *    if let Some(tp) = thread_pointer {
+ *        uctx.set_tp(tp.as_usize());
+ *    }
+ *    unsafe {
+ *        uctx.enter_uspace(
+ *            current_task
+ *                .kernel_stack_top()
+ *                .expect("No kernel stack top"),
+ *        )
+ *    }
+ *}
+ */

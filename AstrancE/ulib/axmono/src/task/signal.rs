@@ -26,12 +26,12 @@ pub fn default_signal_handler(signal: Signal, ctx: &mut SignalContext) {
         Signal::SIGINT | Signal::SIGKILL => {
             // 杀死进程
             let curr = current();
-            error!("kill myself");
+            debug!("kill myself");
             exit(curr.task_ext().thread.process().exit_code());
         }
         _ => {
             // 忽略信号
-            warn!("Ignoring signal: {:?}", signal)
+            debug!("Ignoring signal: {:?}", signal)
         }
     }
 }
@@ -61,9 +61,7 @@ pub(crate) fn sys_sigaction(
     let curr = current();
     let mut sigctx = curr.task_ext().process_data().signal.lock();
     if !act.is_null() {
-        warn!("2222");
         let act = SigAction::try_from(unsafe { *act }).inspect_err(|e| {})?;
-        warn!("1111");
         let old = sigctx.set_action(sig, act);
         // 设置旧动作（如果有）
         unsafe { old_act.as_mut().map(|ptr| unsafe { *ptr = old.into() }) };
@@ -131,7 +129,6 @@ pub(crate) fn sys_sigtimedwait(
     info: *mut siginfo_t,
     timeout: *const timespec,
 ) -> LinuxResult<isize> {
-    warn!("sigset: {:?}", unsafe { *sigset });
     let sigset: SignalSet = unsafe { *(sigset.as_ref().ok_or(LinuxError::EFAULT)?) }.into();
     let curr = current();
     let start_time = monotonic_time();
@@ -158,11 +155,6 @@ pub(crate) fn sys_sigtimedwait(
 
     // 主等待循环
     loop {
-        warn!(
-            "{:?} {:?}",
-            sigset,
-            curr.task_ext().process_data().signal().lock().has_pending()
-        );
         // 检查是否有待处理的信号
         if let Some(sig) = curr
             .task_ext()
@@ -171,7 +163,7 @@ pub(crate) fn sys_sigtimedwait(
             .lock()
             .take_pending_in(sigset)
         {
-            warn!("Received signal: {:?}", sig);
+            debug!("Received signal: {:?}", sig);
             return Ok(sig as isize);
         }
 
@@ -242,7 +234,7 @@ pub(crate) fn handle_pending_signals(current_tf: &TrapFrame) {
 pub(crate) fn sys_sigreturn() -> LinuxResult<isize> {
     let curr = current();
     let mut sigctx = curr.task_ext().process_data().signal.lock();
-    let (sscratch, tf) = sigctx.unload().unwrap();
+    let (sscratch, mut tf) = sigctx.unload().unwrap();
     // 交换回tf, 返回a0以防止覆盖
     unsafe { write_trapframe_to_kstack(curr.get_kernel_stack_top().unwrap(), &tf) };
     unsafe { axhal::arch::exchange_trap_frame(sscratch) };

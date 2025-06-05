@@ -584,7 +584,7 @@ fn gc_entry() {
             if let Some(task) = task {
                 if Arc::strong_count(&task) == 1 {
                     // If I'm the last holder of the task, drop it immediately.
-                    error!("drop task:{:}", task.id_name());
+                    info!("drop task:{:}", task.id_name());
                     drop(task);
                 } else {
                     // Otherwise (e.g, `switch_to` is not compeleted, held by the
