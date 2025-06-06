@@ -4,8 +4,7 @@ use arceos_posix_api::{self as api, char_ptr_to_str, ctypes};
 use axfs::api::set_current_dir;
 use axlog::debug;
 use core::ffi::{c_char, c_int, c_long, c_longlong, c_void};
-use axerrno::LinuxResult;
-use crate::syscall_imp::time::sys_get_time_of_day;
+use axfs_vfs::FileSystemInfo;
 
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
@@ -220,4 +219,11 @@ pub fn sys_pwrite64(
     offset:isize
 ) -> SyscallResult{
     api::sys_pwrite64(fd, buf, count, offset)?.to_linux_result()
+}
+
+pub fn sys_statfs(
+    _path: *const c_char,
+    stat_fs:*mut FileSystemInfo
+)->SyscallResult {
+    api::sys_statfs(_path,stat_fs)?.to_linux_result()
 }

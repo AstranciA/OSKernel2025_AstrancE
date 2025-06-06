@@ -216,6 +216,9 @@ syscall_handler_def!(
             sys_get_time_of_day(&mut now).unwrap();
             sys_utimesat(dirfd as _, path as _, times as _, now as _, flags as _)
         }
+        statfs => [path, buf,..]{
+            syscall_imp::fs::sys_statfs(path as _, buf as _)
+        }
         mount => [src, mnt, fstype, mntflag,..]{
             syscall_imp::fs::sys_mount(src as _,mnt as _,fstype as _,mntflag)
         }

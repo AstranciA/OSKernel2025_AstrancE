@@ -3,10 +3,11 @@ use alloc::sync::Arc;
 use alloc::vec::Vec;
 use axfs::CURRENT_DIR;
 use axfs::api::{DirEntry, create_dir, read_dir, remove_file};
-use axfs::root::ROOT_DIR;
-use axfs_vfs::{VfsDirEntry, VfsNodeAttr, VfsNodeOps, VfsNodeType};
+use axfs::root::{RootDirectory, ROOT_DIR};
+use axfs_vfs::{FileSystemInfo, VfsDirEntry, VfsNodeAttr, VfsNodeOps, VfsNodeType};
 use core::ffi::{c_char, c_int, c_long, c_longlong, c_uint, c_void};
 use core::{panic, ptr, slice};
+use core::str::from_utf8;
 use static_assertions::assert_eq_size;
 
 use super::fd_ops::{FileLike, get_file_like};
@@ -1158,4 +1159,25 @@ pub fn sys_pwrite64(
     let file = get_file_like(fd).map_err(|_| LinuxError::EBADF)?;
     let mut slice = unsafe { slice::from_raw_parts(buf, count) };
     file.write_at(slice , offset as u64).map(|n| n as isize)
+}
+
+pub unsafe fn c_char_to_str(c_str: *const c_char) -> Result<&'static str, LinuxError> {
+    if c_str.is_null() {
+        return Err(LinuxError::EINVAL); // 或其它适当错误
+    }
+    let mut len = 0;
+    while *c_str.add(len) != 0 {
+        len += 1;
+    }
+    let bytes = slice::from_raw_parts(c_str as *const u8, len);
+    from_utf8(bytes).map_err(|_| LinuxError::EINVAL) // 或其它编码错误
+}
+pub fn sys_statfs(
+    mount_point: *const c_char,
+    stat_fs: *mut FileSystemInfo
+)->LinuxResult<isize>{
+    let path = unsafe{c_char_to_str(mount_point.clone())?};
+    let (mountpoint, fs) = ROOT_DIR.find_mountpoint_and_fs(path)?;
+    let ret = fs.statfs(mount_point,stat_fs)?;
+    Ok(ret as isize)
 }
