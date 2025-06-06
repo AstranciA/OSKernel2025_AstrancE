@@ -999,7 +999,6 @@ pub fn sys_unlink(path: *const c_char) -> LinuxResult<isize> {
     let path = char_ptr_to_str(path).map_err(|_| LinuxError::EFAULT)?;
     warn!("sys_unlink <= {:?}", path);
     remove_file(path)?;
-    warn!("sys_unlink <= {:?}", path);
     Ok(0)
 }
 pub fn sys_unlinkat(dir_fd: i32, path: *const c_char) -> LinuxResult<isize> {
@@ -1093,12 +1092,12 @@ pub fn sys_utimensat(
                     _ => LinuxError::ENOTDIR,
                 }
             })?;
-            // if let Some((sec, nsec)) = atime_opt {
-            //     file.set_atime(sec, nsec).map_err(|_| LinuxError::EIO)?;
-            // }
-            // if let Some((sec, nsec)) = mtime_opt {
-            //     file.set_mtime(sec, nsec).map_err(|_| LinuxError::EIO)?;
-            // }
+            if let Some((sec, nsec)) = atime_opt {
+                file.set_atime(sec, nsec).map_err(|_| LinuxError::EIO)?;
+            }
+            if let Some((sec, nsec)) = mtime_opt {
+                file.set_mtime(sec, nsec).map_err(|_| LinuxError::EIO)?;
+            }
             return Ok(0);
         }
         if dirfd < 0 {
@@ -1129,12 +1128,12 @@ pub fn sys_utimensat(
             return Err(LinuxError::EBADF);
         }
         let file = get_file_like(dirfd).map_err(|_| LinuxError::EBADF)?;
-        // if let Some((sec, nsec)) = atime_opt {
-        //     file.set_atime(sec, nsec).map_err(|_| LinuxError::EIO)?;
-        // }
-        // if let Some((sec, nsec)) = mtime_opt {
-        //     file.set_mtime(sec, nsec).map_err(|_| LinuxError::EIO)?;
-        // }
+        if let Some((sec, nsec)) = atime_opt {
+            file.set_atime(sec, nsec).map_err(|_| LinuxError::EIO)?;
+        }
+        if let Some((sec, nsec)) = mtime_opt {
+            file.set_mtime(sec, nsec).map_err(|_| LinuxError::EIO)?;
+        }
         Ok(0)
     }
 }
