@@ -105,6 +105,8 @@ syscall_handler_def!(
         }
         getuid => _{
             Ok(0)
+            //TODO: to acomplish the puid() 
+            // Ok(current().task_ext().thread.process().group().puid() as _)
         }
         // FIXME: cutime cstimes
         times => args {
