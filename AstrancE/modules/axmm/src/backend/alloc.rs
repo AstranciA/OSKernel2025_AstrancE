@@ -138,7 +138,12 @@ impl Backend {
         }
 
         trace!("handle_page_fault_cow: COW page fault at {:#x}", vaddr);
-        let origin = aspace.find_frame(vaddr.align_down_4k()).unwrap();
+        let origin = if let Some(origin) = aspace.find_frame(vaddr.align_down_4k()) {
+            origin
+        } else {
+            debug!("frame not found in aspace");
+            return false;
+        };
         let count = Arc::strong_count(&origin) - 1; // exclude origin self
         let origin_pa = origin.pa;
 

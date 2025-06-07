@@ -603,7 +603,6 @@ impl AddrSpace {
                     }
                 }
             }
-            warn!("pte flags: {pte_flags:?}");
             // clone mappings
             // TODO: Better way to clone mapping
             // TODO: COW for page table

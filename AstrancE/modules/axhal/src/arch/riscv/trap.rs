@@ -81,7 +81,13 @@ fn riscv_trap_handler(tf: &mut TrapFrame, from_user: bool) {
                 handle_trap!(IRQ, scause.bits());
             }
             _ => {
-                panic!("Unhandled trap {:?} @ {:#x}:\n{:#x?}", cause, tf.sepc, tf);
+                panic!(
+                    "Unhandled trap {:?} @ {:#x}:\nstval: 0x{:#x}\n{:#x?}",
+                    cause,
+                    tf.sepc,
+                    stval::read(),
+                    tf
+                );
             }
         }
         mask_irqs();
