@@ -86,20 +86,25 @@ pub(crate) fn sys_sigprocmask(
     let curr = current();
     let mut sigctx = curr.task_ext().process_data().signal.lock();
 
+    // 先保存旧的 mask
+    let old_mask = sigctx.get_blocked();
+
+    // 如果 set 非 null，则根据 how 修改 mask
     if !set.is_null() {
         let set: SignalSet = unsafe { *set }.into();
-
-        let old = match how as u32 {
+        match how as u32 {
             SIG_BLOCK => sigctx.block(set),
             SIG_UNBLOCK => sigctx.unblock(set),
             SIG_SETMASK => sigctx.set_mask(set),
             _ => return Err(LinuxError::EINVAL),
         };
+    }
+
+    // 如果用户请求 oldset，则写入旧的 mask
+    if !oldset.is_null() {
         unsafe {
-            oldset
-                .as_mut()
-                .map(|ptr| unsafe { *ptr }.sig[0] = old.bits())
-        };
+            (*oldset).sig[0] = old_mask.bits();
+        }
     }
 
     Ok(0)
@@ -144,7 +149,7 @@ pub(crate) fn sys_sigtimedwait(
                 .process_data()
                 .signal
                 .lock()
-                .take_pending_in(sigset)
+                .consume_one_in(sigset)
                 .ok_or(LinuxError::EAGAIN)
                 .map(|sig| sig as isize);
         }
@@ -156,13 +161,7 @@ pub(crate) fn sys_sigtimedwait(
     // 主等待循环
     loop {
         // 检查是否有待处理的信号
-        if let Some(sig) = curr
-            .task_ext()
-            .process_data()
-            .signal
-            .lock()
-            .take_pending_in(sigset)
-        {
+        if let Some(sig) = curr.task_ext().process_data().signal.lock().consume_one_in(sigset) {
             debug!("Received signal: {:?}", sig);
             return Ok(sig as isize);
         }
@@ -180,7 +179,10 @@ pub(crate) fn sys_sigtimedwait(
     }
 }
 
-pub(crate) fn sys_rt_sigsuspend(mask_ptr: *const sigset_t, sigsetsize: usize) -> LinuxResult<isize> {
+pub(crate) fn sys_rt_sigsuspend(
+    mask_ptr: *const sigset_t,
+    sigsetsize: usize,
+) -> LinuxResult<isize> {
     // 1. 验证信号集大小
     if sigsetsize != core::mem::size_of::<sigset_t>() {
         return Err(LinuxError::EINVAL);

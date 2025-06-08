@@ -14,10 +14,10 @@ pub use default::*;
 
 use core::{
     arch::naked_asm,
-    error,
     ffi::{c_int, c_void},
     fmt,
     mem::MaybeUninit,
+    ops::Not,
     sync::atomic::{AtomicBool, AtomicUsize, Ordering},
     u64,
 };
@@ -306,9 +306,7 @@ impl TryFrom<sigaction> for SigAction {
          *};
          */
         let flags = SigFlags::from_bits_retain(act.sa_flags as usize);
-        debug!("flags: {flags:?}");
         let mask = act.sa_mask.into();
-        warn!("act: {act:?}");
         let handler = if let Some(sa_handler) = act.sa_handler {
             if flags.contains(SigFlags::SIG_INFO) {
                 SigHandler::Handler(sa_handler)
@@ -418,14 +416,11 @@ impl Default for SignalContext {
 impl SignalContext {
     /// 向进程发送信号
     pub fn send_signal(&mut self, sig: SignalSet) {
-        // 如果信号未被阻塞，则加入待处理队列
-        trace!(
+        debug!(
             "send signal: {:?}, pending: {:?}, blocked: {:?}",
             sig, self.pending, self.blocked
         );
-        if self.blocked.intersection(sig).is_empty() {
-            self.pending = self.pending.union(sig);
-        }
+        self.pending = self.pending.union(sig);
     }
 
     /// 检查是否有待处理信号
@@ -461,9 +456,33 @@ impl SignalContext {
         self.blocked
     }
 
-    pub fn take_pending_in(&mut self, filter: SignalSet) -> Option<Signal> {
-        self.pending.take_one_in(filter)
+    pub fn get_pending(&self) -> SignalSet {
+        self.pending
     }
+
+    pub fn deliver_one(&mut self) -> Option<Signal> {
+        self.pending
+            .take_one_in(self.blocked.not())
+            .inspect(|sig| debug!("deliver signal: {:?}", sig))
+    }
+
+    pub fn consume_one(&mut self) -> Option<Signal> {
+        self.pending
+            .take_one()
+            .inspect(|sig| debug!("consume signal: {:?}", sig))
+    }
+
+    pub fn consume_one_in(&mut self, filter: SignalSet) -> Option<Signal> {
+        self.pending
+            .take_one_in(filter)
+            .inspect(|sig| debug!("consume signal: {:?}", sig))
+    }
+
+    /*
+     *pub fn take_pending_in(&mut self, filter: SignalSet) -> Option<Signal> {
+     *    self.pending.take_one_in(filter)
+     *}
+     */
 
     pub fn block(&mut self, mask: SignalSet) -> SignalSet {
         let old = self.blocked;
@@ -662,7 +681,7 @@ pub fn handle_pending_signals(
     thread_tf: &TrapFrame,
     trampoline: VirtAddr,
 ) -> SignalResult<Option<(UspaceContext, VirtAddr)>> {
-    while let Some(sig) = sigctx.pending.take_one() {
+    while let Some(sig) = sigctx.deliver_one() {
         // 找到最高优先级的待处理信号
         debug!("handle signal: {sig:?}");
         let old_mask = (*sigctx).blocked;
@@ -672,7 +691,7 @@ pub fn handle_pending_signals(
             mask: act_mask,
             flags,
         } = action;
-        warn!("handler: {handler:?}, action_mask: {act_mask:?}, flags: {flags:?}");
+        debug!("handler: {handler:?}, action_mask: {act_mask:?}, flags: {flags:?}");
 
         match handler {
             SigHandler::Default(f) => f(sig, &mut *sigctx),
@@ -705,6 +724,7 @@ pub fn handle_pending_signals(
                 return Ok(Some((uctx, kstack_top)));
             }
             SigHandler::Action(handler) => {
+                error!("sig action argument not implemented");
                 // 设置信号处理栈帧
                 let mask = old_mask.union(act_mask);
                 (*sigctx).blocked = mask;
