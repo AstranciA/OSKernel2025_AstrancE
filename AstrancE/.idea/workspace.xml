@@ -31,6 +31,7 @@
         <enabledFeature name="fs" />
         <enabledFeature name="fd" />
         <enabledFeature name="axfs_devfs" />
+        <enabledFeature name="uspace" />
       </package>
       <package file="$PROJECT_DIR$/modules/axalloc">
         <enabledFeature name="tlsf" />
@@ -66,6 +67,7 @@
         <enabledFeature name="axsync" />
         <enabledFeature name="irq" />
         <enabledFeature name="paging" />
+        <enabledFeature name="tls" />
         <enabledFeature name="axtask" />
         <enabledFeature name="alloc" />
         <enabledFeature name="net" />
@@ -76,6 +78,7 @@
         <enabledFeature name="devfs" />
         <enabledFeature name="lwext4_rs" />
         <enabledFeature name="sysfs" />
+        <enabledFeature name="dyn" />
         <enabledFeature name="procfs" />
         <enabledFeature name="fatfs" />
         <enabledFeature name="ramfs" />
@@ -154,6 +157,7 @@
       <package file="$PROJECT_DIR$/modules/axsyscall">
         <enabledFeature name="default" />
         <enabledFeature name="pipe" />
+        <enabledFeature name="multitask" />
         <enabledFeature name="fs" />
         <enabledFeature name="fd" />
       </package>
@@ -198,31 +202,19 @@
     </cargoProject>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="7c2d0aa3-ed80-457d-a6b3-f7e100db3c2a" name="Changes" comment="support the open_file_limit and fflush syscall">
+    <list default="true" id="7c2d0aa3-ed80-457d-a6b3-f7e100db3c2a" name="Changes" comment="pr">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Cargo.lock" beforeDir="false" afterPath="$PROJECT_DIR$/Cargo.lock" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/api/arceos_posix_api/src/imp/fs.rs" beforeDir="false" afterPath="$PROJECT_DIR$/api/arceos_posix_api/src/imp/fs.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/api/arceos_posix_api/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/api/arceos_posix_api/src/lib.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/axfs_crates" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/axfs_crates/axfs_vfs/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_vfs/src/lib.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/axfs_crates/axfs_vfs/src/structs.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_vfs/src/structs.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lwext4_rust" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4/Makefile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4/src/CMakeLists.txt" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust/c/lwext4/src/CMakeLists.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/crates/lwext4_rust/src/file.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust/src/file.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lwext4_rust_d/.gitmodules" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust_d/.gitmodules" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lwext4_rust_d/build.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust_d/build.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lwext4_rust_d/c/lwext4" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust_d/c/lwext4" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lwext4_rust_d/c/lwext4/src/ext4.c" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust_d/c/lwext4/src/ext4.c" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lwext4_rust_d/src/blockdev.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust_d/src/blockdev.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lwext4_rust_d/src/file.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust_d/src/file.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/axfs/src/fs/lwext4_rust.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axfs/src/fs/lwext4_rust.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/axfs/src/root.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axfs/src/root.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/axsyscall/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axsyscall/Cargo.toml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/axsyscall/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axsyscall/src/lib.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/axsyscall/src/syscall_imp/fs.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axsyscall/src/syscall_imp/fs.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/axhal/src/arch/loongarch64/context.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axhal/src/arch/loongarch64/context.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/axhal/src/arch/loongarch64/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axhal/src/arch/loongarch64/mod.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/axhal/src/arch/loongarch64/trap.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axhal/src/arch/loongarch64/trap.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/axsignal/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axsignal/src/lib.rs" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -303,10 +295,10 @@
       <window_info id="Merge Requests" />
       <window_info id="Backup and Sync History" />
       <window_info id="Commit_Guest" show_stripe_button="false" />
-      <window_info active="true" content_ui="combo" id="Project" order="0" sideWeight="0.87625" visible="true" weight="0.19018266" />
-      <window_info id="Commit" order="1" weight="0.15761718" />
+      <window_info active="true" content_ui="combo" id="Project" order="0" sideWeight="0.87625" visible="true" weight="0.105242565" />
+      <window_info id="Commit" order="1" weight="0.22246094" />
       <window_info id="Structure" order="2" sideWeight="0.12375" side_tool="true" weight="0.12050781" />
-      <window_info id="Pull Requests" order="3" weight="0.18424657" />
+      <window_info id="Pull Requests" order="3" weight="0.16894531" />
       <window_info id="VcsChanges" order="4" weight="0.26542968" />
       <window_info anchor="bottom" id="NextEditPredictionSettingsToolwindow" />
       <window_info anchor="bottom" id="Database Changes" />
@@ -314,12 +306,12 @@
       <window_info anchor="bottom" id="Debug" />
       <window_info anchor="bottom" id="File Transfer" />
       <window_info anchor="bottom" id="Services" order="0" weight="0.1914524" />
-      <window_info anchor="bottom" id="Version Control" order="1" weight="0.5471312" />
+      <window_info anchor="bottom" id="Version Control" order="1" />
       <window_info anchor="bottom" id="Problems" order="2" />
-      <window_info anchor="bottom" id="Problems View" order="3" weight="0.32172132" />
-      <window_info anchor="bottom" id="Terminal" order="4" weight="0.51844263" />
+      <window_info anchor="bottom" id="Problems View" order="3" weight="0.53125" />
+      <window_info active="true" anchor="bottom" id="Terminal" order="4" visible="true" weight="0.3727534" />
       <window_info anchor="bottom" id="Find" order="5" weight="0.63685346" />
-      <window_info anchor="bottom" id="Build" order="6" weight="0.14474976" />
+      <window_info anchor="bottom" id="Build" order="6" weight="0.4292385" />
       <window_info anchor="bottom" id="Run" order="7" weight="0.6487051" />
       <window_info anchor="bottom" id="Messages" order="8" weight="0.33113274" />
       <window_info anchor="bottom" id="TODO" order="9" weight="0.33113274" />
@@ -380,7 +372,7 @@
     </list>
   </component>
   <component name="RustProjectSettings">
-    <option name="rustcTarget" value="riscv64gc-unknown-linux-gnu" />
+    <option name="rustcTarget" value="loongarch64-unknown-linux-musl" />
     <option name="toolchainHomeDirectory" value="$PROJECT_DIR$/../.cargo/bin" />
   </component>
   <component name="TaskManager">
@@ -437,7 +429,15 @@
       <workItem from="1748405338632" duration="6447000" />
       <workItem from="1748529820358" duration="6020000" />
       <workItem from="1749126658964" duration="13454000" />
-      <workItem from="1749210400582" duration="2653000" />
+      <workItem from="1749210400582" duration="15748000" />
+      <workItem from="1749272986426" duration="2355000" />
+      <workItem from="1749285214427" duration="3500000" />
+      <workItem from="1749290519808" duration="6034000" />
+      <workItem from="1749308163509" duration="2714000" />
+      <workItem from="1749398989633" duration="2978000" />
+      <workItem from="1749446344389" duration="1951000" />
+      <workItem from="1749627267788" duration="796000" />
+      <workItem from="1749641765943" duration="4406000" />
     </task>
     <task id="LOCAL-00001" summary="Changes">
       <option name="closed" value="true" />
@@ -575,7 +575,47 @@
       <option name="project" value="LOCAL" />
       <updated>1749136906627</updated>
     </task>
-    <option name="localTasksCounter" value="18" />
+    <task id="LOCAL-00018" summary="support statfs">
+      <option name="closed" value="true" />
+      <created>1749213103632</created>
+      <option name="number" value="00018" />
+      <option name="presentableId" value="LOCAL-00018" />
+      <option name="project" value="LOCAL" />
+      <updated>1749213103632</updated>
+    </task>
+    <task id="LOCAL-00019" summary="support setjump">
+      <option name="closed" value="true" />
+      <created>1749214763780</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1749214763780</updated>
+    </task>
+    <task id="LOCAL-00020" summary="fix stat (geteuid, getegid)">
+      <option name="closed" value="true" />
+      <created>1749226218077</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1749226218077</updated>
+    </task>
+    <task id="LOCAL-00021" summary="utime fixed">
+      <option name="closed" value="true" />
+      <created>1749290621749</created>
+      <option name="number" value="00021" />
+      <option name="presentableId" value="LOCAL-00021" />
+      <option name="project" value="LOCAL" />
+      <updated>1749290621749</updated>
+    </task>
+    <task id="LOCAL-00022" summary="pr">
+      <option name="closed" value="true" />
+      <created>1749295674091</created>
+      <option name="number" value="00022" />
+      <option name="presentableId" value="LOCAL-00022" />
+      <option name="project" value="LOCAL" />
+      <updated>1749295674091</updated>
+    </task>
+    <option name="localTasksCounter" value="23" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -648,7 +688,12 @@
     <MESSAGE value="mmap first" />
     <MESSAGE value="lua support" />
     <MESSAGE value="support the open_file_limit and fflush syscall" />
-    <option name="LAST_COMMIT_MESSAGE" value="support the open_file_limit and fflush syscall" />
+    <MESSAGE value="support statfs" />
+    <MESSAGE value="support setjump" />
+    <MESSAGE value="fix stat (geteuid, getegid)" />
+    <MESSAGE value="utime fixed" />
+    <MESSAGE value="pr" />
+    <option name="LAST_COMMIT_MESSAGE" value="pr" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
