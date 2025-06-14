@@ -202,19 +202,34 @@
     </cargoProject>
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="7c2d0aa3-ed80-457d-a6b3-f7e100db3c2a" name="Changes" comment="pr">
+    <list default="true" id="7c2d0aa3-ed80-457d-a6b3-f7e100db3c2a" name="Changes" comment="support axhal for loongarch">
+      <change afterPath="$PROJECT_DIR$/api/arceos_posix_api/src/ctype_my.rs" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/ulib/axlibc/include/sys/statx.h" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/api/arceos_posix_api/build.rs" beforeDir="false" afterPath="$PROJECT_DIR$/api/arceos_posix_api/build.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/api/arceos_posix_api/src/imp/fd_ops.rs" beforeDir="false" afterPath="$PROJECT_DIR$/api/arceos_posix_api/src/imp/fd_ops.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/api/arceos_posix_api/src/imp/fs.rs" beforeDir="false" afterPath="$PROJECT_DIR$/api/arceos_posix_api/src/imp/fs.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/api/arceos_posix_api/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/api/arceos_posix_api/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/axfs_crates" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/axfs_crates/axfs_ramfs/src/dir.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_ramfs/src/dir.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/axfs_crates/axfs_ramfs/src/file.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_ramfs/src/file.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/axfs_crates/axfs_vfs/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_vfs/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/axfs_crates/axfs_vfs/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_vfs/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/axfs_crates/axfs_vfs/src/structs.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/axfs_crates/axfs_vfs/src/structs.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lwext4_rust" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/crates/lwext4_rust/src/file.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust/src/file.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lwext4_rust_d/.gitmodules" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust_d/.gitmodules" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lwext4_rust_d/build.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust_d/build.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lwext4_rust_d/c/lwext4" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust_d/c/lwext4" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lwext4_rust_d/c/lwext4/src/ext4.c" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust_d/c/lwext4/src/ext4.c" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lwext4_rust_d/src/blockdev.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust_d/src/blockdev.rs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/crates/lwext4_rust_d/src/file.rs" beforeDir="false" afterPath="$PROJECT_DIR$/crates/lwext4_rust_d/src/file.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/axhal/src/arch/loongarch64/context.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axhal/src/arch/loongarch64/context.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/axhal/src/arch/loongarch64/mod.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axhal/src/arch/loongarch64/mod.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/axhal/src/arch/loongarch64/trap.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axhal/src/arch/loongarch64/trap.rs" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/modules/axsignal/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axsignal/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/axfs/src/fops.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axfs/src/fops.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/axfs/src/fs/lwext4_rust.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axfs/src/fs/lwext4_rust.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/axsyscall/Cargo.toml" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axsyscall/Cargo.toml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/axsyscall/src/lib.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axsyscall/src/lib.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/modules/axsyscall/src/syscall_imp/fs.rs" beforeDir="false" afterPath="$PROJECT_DIR$/modules/axsyscall/src/syscall_imp/fs.rs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/ulib/axlibc/include/sys/stat.h" beforeDir="false" afterPath="$PROJECT_DIR$/ulib/axlibc/include/sys/stat.h" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -295,8 +310,8 @@
       <window_info id="Merge Requests" />
       <window_info id="Backup and Sync History" />
       <window_info id="Commit_Guest" show_stripe_button="false" />
-      <window_info active="true" content_ui="combo" id="Project" order="0" sideWeight="0.87625" visible="true" weight="0.105242565" />
-      <window_info id="Commit" order="1" weight="0.22246094" />
+      <window_info active="true" content_ui="combo" id="Project" order="0" sideWeight="0.87625" visible="true" weight="0.11230469" />
+      <window_info id="Commit" order="1" weight="0.24936947" />
       <window_info id="Structure" order="2" sideWeight="0.12375" side_tool="true" weight="0.12050781" />
       <window_info id="Pull Requests" order="3" weight="0.16894531" />
       <window_info id="VcsChanges" order="4" weight="0.26542968" />
@@ -306,10 +321,10 @@
       <window_info anchor="bottom" id="Debug" />
       <window_info anchor="bottom" id="File Transfer" />
       <window_info anchor="bottom" id="Services" order="0" weight="0.1914524" />
-      <window_info anchor="bottom" id="Version Control" order="1" />
+      <window_info anchor="bottom" id="Version Control" order="1" weight="0.3724324" />
       <window_info anchor="bottom" id="Problems" order="2" />
-      <window_info anchor="bottom" id="Problems View" order="3" weight="0.53125" />
-      <window_info active="true" anchor="bottom" id="Terminal" order="4" visible="true" weight="0.3727534" />
+      <window_info anchor="bottom" id="Problems View" order="3" weight="0.63379586" />
+      <window_info anchor="bottom" id="Terminal" order="4" weight="0.5405891" />
       <window_info anchor="bottom" id="Find" order="5" weight="0.63685346" />
       <window_info anchor="bottom" id="Build" order="6" weight="0.4292385" />
       <window_info anchor="bottom" id="Run" order="7" weight="0.6487051" />
@@ -330,6 +345,7 @@
   </component>
   <component name="RecentsManager">
     <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/api/arceos_posix_api/src" />
       <recent name="$PROJECT_DIR$" />
       <recent name="$PROJECT_DIR$/modules/axsyscall" />
       <recent name="$PROJECT_DIR$/modules" />
@@ -437,7 +453,11 @@
       <workItem from="1749398989633" duration="2978000" />
       <workItem from="1749446344389" duration="1951000" />
       <workItem from="1749627267788" duration="796000" />
-      <workItem from="1749641765943" duration="4406000" />
+      <workItem from="1749641765943" duration="5405000" />
+      <workItem from="1749656648337" duration="3183000" />
+      <workItem from="1749707141963" duration="10329000" />
+      <workItem from="1749827560227" duration="10457000" />
+      <workItem from="1749874682640" duration="8390000" />
     </task>
     <task id="LOCAL-00001" summary="Changes">
       <option name="closed" value="true" />
@@ -615,7 +635,15 @@
       <option name="project" value="LOCAL" />
       <updated>1749295674091</updated>
     </task>
-    <option name="localTasksCounter" value="23" />
+    <task id="LOCAL-00023" summary="support axhal for loongarch">
+      <option name="closed" value="true" />
+      <created>1749653860432</created>
+      <option name="number" value="00023" />
+      <option name="presentableId" value="LOCAL-00023" />
+      <option name="project" value="LOCAL" />
+      <updated>1749653860432</updated>
+    </task>
+    <option name="localTasksCounter" value="24" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -693,7 +721,8 @@
     <MESSAGE value="fix stat (geteuid, getegid)" />
     <MESSAGE value="utime fixed" />
     <MESSAGE value="pr" />
-    <option name="LAST_COMMIT_MESSAGE" value="pr" />
+    <MESSAGE value="support axhal for loongarch" />
+    <option name="LAST_COMMIT_MESSAGE" value="support axhal for loongarch" />
   </component>
   <component name="XSLT-Support.FileAssociations.UIState">
     <expand />
