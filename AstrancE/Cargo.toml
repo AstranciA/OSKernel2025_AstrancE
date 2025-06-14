@@ -73,6 +73,7 @@ page_table_entry = { path = "./crates/page_table_multiarch/page_table_entry" }
 axfs_vfs = { path = "./crates/axfs_crates/axfs_vfs" }
 axfs_devfs = { path = "./crates/axfs_crates/axfs_devfs" }
 axfs_ramfs = { path = "./crates/axfs_crates/axfs_ramfs" }
+axfs_procfs = { path = "./crates/axfs_crates/axfs_procfs" }
 lwext4_rust = { path = "./crates/lwext4_rust", default-features = false }
 bitflags = "2.9.0"
 linkme = "0.3.32"

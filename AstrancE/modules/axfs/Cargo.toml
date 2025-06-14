@@ -12,7 +12,7 @@ documentation = "https://arceos-org.github.io/arceos/axfs/index.html"
 [features]
 devfs = ["dep:axfs_devfs"]
 ramfs = ["dep:axfs_ramfs"]
-procfs = ["dep:axfs_ramfs"]
+procfs = ["dep:axfs_procfs"]
 sysfs = ["dep:axfs_ramfs"]
 lwext4_rs = ["dep:lwext4_rust"]
 fatfs = ["dep:fatfs"]
@@ -34,12 +34,14 @@ axfs_vfs = { workspace = true }
 spin = "0.9"
 axfs_devfs = { workspace = true, optional = true }
 axfs_ramfs = { workspace = true, optional = true }
+axfs_procfs = { workspace = true, optional = true }
 crate_interface = { version = "0.1", optional = true }
 axsync = { workspace = true }
 axdriver = { workspace = true, features = ["block"] }
 axdriver_block = { git = "https://github.com/arceos-org/axdriver_crates.git", tag = "v0.1.2" }
 lwext4_rust = { workspace = true,  optional = true , features = ["print"] }
 axns = { workspace = true }
+axconfig = { workspace = true }
 
 [dependencies.fatfs]
 git = "https://github.com/rafalh/rust-fatfs"

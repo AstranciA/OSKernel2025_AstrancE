@@ -406,10 +406,12 @@ dependencies = [
 name = "axfs"
 version = "0.1.0"
 dependencies = [
+ "axconfig",
  "axdriver",
  "axdriver_block",
  "axerrno",
  "axfs_devfs",
+ "axfs_procfs",
  "axfs_ramfs",
  "axfs_vfs",
  "axio",
@@ -429,6 +431,15 @@ dependencies = [
 
 [[package]]
 name = "axfs_devfs"
+version = "0.1.0"
+dependencies = [
+ "axfs_vfs",
+ "log",
+ "spin 0.9.8",
+]
+
+[[package]]
+name = "axfs_procfs"
 version = "0.1.0"
 dependencies = [
  "axfs_vfs",

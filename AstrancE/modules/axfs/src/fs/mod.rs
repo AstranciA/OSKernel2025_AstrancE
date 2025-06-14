@@ -22,3 +22,6 @@ pub use axfs_devfs as devfs;
 
 #[cfg(feature = "ramfs")]
 pub use axfs_ramfs as ramfs;
+
+#[cfg(feature = "procfs")]
+pub use axfs_procfs as procfs;

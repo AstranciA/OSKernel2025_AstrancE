@@ -82,10 +82,6 @@ impl AddrSpace {
         size: usize,
         perm: MmapPerm,
         flags: MmapFlags,
-        /*
-         *file: Arc<MmapFile>,
-         *offset: usize,
-         */
         mmap_io: Arc<dyn MmapIO>,
         populate: bool,
     ) -> AxResult<VirtAddr> {
@@ -179,7 +175,6 @@ impl AddrSpace {
                 core::slice::from_raw_parts_mut(phys_to_virt(frame.pa).as_mut_ptr(), size.into())
             };
             mmio.read(vaddr.as_usize(), dst)?;
-            area.insert_frame(vaddr, frame.clone());
 
             self.page_table()
                 .map(vaddr, frame.pa, size, flags)
@@ -221,31 +216,11 @@ impl AddrSpace {
         }?;
 
         area.unmap_frames(start, size, &mut self.pt).unwrap();
-        let is_empty = area.frames_len() == 0;
+        let is_empty = area.frames_count() == 0;
         let area_start = area.start();
         if is_empty {
             self.unmap_area(area_start);
         }
-        /*
-         *        if (start == area.start()) {
-         *            // [unmap_area | back]
-         *            if let Some(back) = area.split(end) {
-         *                self.areas.insert(back);
-         *            };
-         *            area.unmap_area(&mut self.pt);
-         *        } else {
-         *            // split area into three parts
-         *            // [front | unmap_area | back]
-         *            let mut unmap_area = match area.split(start) {
-         *                Some(area) => area,
-         *                None => return Ok(()),
-         *            };
-         *
-         *            if let Some(back) = unmap_area.split(end) {
-         *                self.areas.insert(back);
-         *            };
-         *        };
-         */
 
         Ok(())
     }

@@ -78,6 +78,33 @@ pub(crate) fn sys_sigaction(
     Ok(0)
 }
 
+// pub(crate) fn sys_sigprocmask(
+//     how: c_int,
+//     set: *const sigset_t,
+//     oldset: *mut sigset_t,
+// ) -> LinuxResult<isize> {
+//     let curr = current();
+//     let mut sigctx = curr.task_ext().process_data().signal.lock();
+// 
+//     if !set.is_null() {
+//         let set: SignalSet = unsafe { *set }.into();
+// 
+//         let old = match how as u32 {
+//             SIG_BLOCK => sigctx.block(set),
+//             SIG_UNBLOCK => sigctx.unblock(set),
+//             SIG_SETMASK => sigctx.set_mask(set),
+//             _ => return Err(LinuxError::EINVAL),
+//         };
+//         unsafe {
+//             oldset
+//                 .as_mut()
+//                 .map(|ptr| unsafe { *ptr }.sig[0] = old.bits())
+//         };
+//     }
+// 
+//     Ok(0)
+// }
+
 pub(crate) fn sys_sigprocmask(
     how: c_int,
     set: *const sigset_t,
