@@ -176,7 +176,7 @@ pub(crate) fn sys_sigtimedwait(
                 .process_data()
                 .signal
                 .lock()
-                .take_pending_in(sigset)
+                .consume_one_in(sigset)
                 .ok_or(LinuxError::EAGAIN)
                 .map(|sig| sig as isize);
         }
@@ -188,13 +188,7 @@ pub(crate) fn sys_sigtimedwait(
     // 主等待循环
     loop {
         // 检查是否有待处理的信号
-        if let Some(sig) = curr
-            .task_ext()
-            .process_data()
-            .signal
-            .lock()
-            .take_pending_in(sigset)
-        {
+        if let Some(sig) = curr.task_ext().process_data().signal.lock().consume_one_in(sigset) {
             debug!("Received signal: {:?}", sig);
             return Ok(sig as isize);
         }
@@ -212,7 +206,10 @@ pub(crate) fn sys_sigtimedwait(
     }
 }
 
-pub(crate) fn sys_rt_sigsuspend(mask_ptr: *const sigset_t, sigsetsize: usize) -> LinuxResult<isize> {
+pub(crate) fn sys_rt_sigsuspend(
+    mask_ptr: *const sigset_t,
+    sigsetsize: usize,
+) -> LinuxResult<isize> {
     // 1. 验证信号集大小
     if sigsetsize != core::mem::size_of::<sigset_t>() {
         return Err(LinuxError::EINVAL);

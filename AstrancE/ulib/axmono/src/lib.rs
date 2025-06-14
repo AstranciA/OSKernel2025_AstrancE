@@ -16,6 +16,7 @@ extern crate axsyscall;
 pub mod ctypes;
 pub mod ptr;
 pub mod utils;
+pub mod fs;
 
 mod dynamic;
 use core::clone;

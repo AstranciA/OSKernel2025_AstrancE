@@ -23,25 +23,20 @@ sig = ["dep:axsignal"]
 [dependencies]
 page_table_entry = { workspace = true }
 page_table_multiarch = { workspace = true }
-axfeat = { workspace = true, features = ["tls"]}
+axfeat = { workspace = true, features = ["tls"] }
 axconfig = { workspace = true }
 axhal = { workspace = true }
 axlog = { workspace = true }
 arceos_posix_api = { workspace = true, features = ["uspace"] }
-axfs = { workspace = true , features = ["dyn"]}
+axfs = { workspace = true, features = ["dyn"] }
 axmm = { workspace = true, optional = true }
 axtask = { workspace = true, optional = true }
 axsync = { workspace = true }
 axns = { workspace = true, optional = true }
 axsignal = { workspace = true, optional = true }
-axsyscall = { workspace = true, features = [
-  "fd",
-  "fs",
-  "pipe",
-  "multitask",
-] }
+axsyscall = { workspace = true, features = ["fd", "fs", "pipe", "multitask"] }
 axio = { version = "0.1.1", features = ["alloc"] }
-linux-raw-sys = {workspace = true}
+linux-raw-sys = { workspace = true }
 axerrno = "0.1"
 memory_addr = "0.3.2"
 bitflags = "2.9.0"

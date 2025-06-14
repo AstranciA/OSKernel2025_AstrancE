@@ -43,11 +43,14 @@ pub mod root;
 use api::create_dir;
 use axsync::Mutex;
 use lazyinit::LazyInit;
-pub use root::{CURRENT_DIR, CURRENT_DIR_PATH, ROOT_DIR};
+pub use root::{CURRENT_DIR, CURRENT_DIR_PATH, ROOT_DIR, PROC_ROOT};
 
 pub use crate::dev::Disk;
 use axdriver::{AxDeviceContainer, prelude::*};
-use axfs_vfs::{VfsNodeOps, VfsOps};
+pub use axfs_vfs::{VfsNodeOps, VfsOps, VfsNodeType, VfsResult, VfsError};
+pub mod proc {
+    pub use axfs_procfs::*;
+}
 
 lazy_static::lazy_static! {
     pub static ref DISKS: Mutex<BTreeMap<String, Disk>> = Mutex::new(BTreeMap::new());

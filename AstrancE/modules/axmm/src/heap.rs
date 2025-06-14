@@ -67,9 +67,9 @@ impl AddrSpace {
     pub fn init_heap(&mut self, heap_bottom: VirtAddr, max_size: usize) {
         assert!(self.heap.is_none(), "heap is already initialized");
         let heap = HeapSpace::new(heap_bottom, max_size);
-        debug!("{:?}", heap.size());
 
-        // TODO: don't
+        // alloc a page to avoid zero size area.
+        // FIXME: lazy alloc
         self.map_alloc(
             heap.base(),
             PAGE_SIZE_4K,
@@ -85,17 +85,18 @@ impl AddrSpace {
     }
 
     pub fn set_heap_top(&mut self, top: VirtAddr) -> VirtAddr {
-        debug!("setting heap top from {:?} to {:?}", self.heap().top(), top);
+        let heap = self.heap();
+        debug!("setting heap top from {:?} to {:?}", heap.top(), top);
         if top != self.heap().top() {
+            self.heap().set_heap_top(top);
             self.areas
                 .adjust_area(
-                    self.heap().base(),
-                    self.heap().base(),
+                    heap.base(),
+                    heap.base(),
                     top.align_up_4k(),
                     &mut self.pt,
                 )
                 .unwrap();
-            self.heap().set_heap_top(top);
         }
         top
     }

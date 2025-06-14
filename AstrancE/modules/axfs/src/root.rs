@@ -11,12 +11,13 @@ use crate::{
     fs::{self},
     mounts,
 };
+use alloc::borrow::ToOwned;
 use alloc::string::{String, ToString};
 use alloc::{sync::Arc, vec::Vec};
-use alloc::borrow::ToOwned;
 use axdriver::AxBlockDevice;
 use axerrno::{AxError, AxResult, ax_err};
 use axfs_devfs::DeviceFileSystem;
+use axfs_procfs::ProcDir;
 use axfs_vfs::path::canonicalize;
 use axfs_vfs::{VfsNodeAttr, VfsNodeAttrX, VfsNodeOps, VfsNodeRef, VfsNodeType, VfsOps, VfsResult};
 use axio::Read;
@@ -57,6 +58,8 @@ pub struct RootDirectory {
 }
 
 pub static ROOT_DIR: LazyInit<Arc<RootDirectory>> = LazyInit::new();
+
+pub static PROC_ROOT: LazyInit<Arc<ProcDir>> = LazyInit::new();
 
 impl MountPoint {
     pub fn new(path: &'static str, fs: Arc<dyn VfsOps>) -> Self {
@@ -227,9 +230,9 @@ pub(crate) fn init_rootfs(root_disk: crate::dev::Disk) {
     let root_dir = RootDirectory::new(main_fs);
 
     #[cfg(feature = "devfs")]
-        root_dir
-            .mount("/dev", mounts::devfs())
-            .expect("failed to mount devfs at /dev");
+    root_dir
+        .mount("/dev", mounts::devfs())
+        .expect("failed to mount devfs at /dev");
     #[cfg(feature = "ramfs")]
     root_dir
         .mount("/tmp", mounts::ramfs())
@@ -237,9 +240,13 @@ pub(crate) fn init_rootfs(root_disk: crate::dev::Disk) {
 
     // Mount another ramfs as procfs
     #[cfg(feature = "procfs")]
-    root_dir // should not fail
-        .mount("/proc", mounts::procfs().unwrap())
-        .expect("fail to mount procfs at /proc");
+    {
+        let proc_root = mounts::procfs().unwrap();
+        root_dir // should not fail
+            .mount("/proc", proc_root.clone())
+            .expect("fail to mount procfs at /proc");
+        PROC_ROOT.init_once(proc_root.root_dir_node());
+    }
 
     // Mount another ramfs as sysfs
     #[cfg(feature = "sysfs")]
@@ -250,7 +257,6 @@ pub(crate) fn init_rootfs(root_disk: crate::dev::Disk) {
     ROOT_DIR.init_once(Arc::new(root_dir));
     info!("rootfs initialized");
     CURRENT_DIR.init_new(Mutex::new(ROOT_DIR.clone()));
-    info!("test");
     CURRENT_DIR_PATH.init_new(Mutex::new("/".into()));
 }
 

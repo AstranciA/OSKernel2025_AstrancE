@@ -19,7 +19,7 @@ use crate::mapping_err_to_ax_err;
 /// The virtual memory address space.
 pub struct AddrSpace {
     va_range: VirtAddrRange,
-    pub(crate) areas: MemorySet<Backend>,
+    pub areas: MemorySet<Backend>,
     pub(crate) pt: PageTable,
     #[cfg(feature = "heap")]
     pub(crate) heap: Option<HeapSpace>,
@@ -603,7 +603,6 @@ impl AddrSpace {
                     }
                 }
             }
-            warn!("pte flags: {pte_flags:?}");
             // clone mappings
             // TODO: Better way to clone mapping
             // TODO: COW for page table
