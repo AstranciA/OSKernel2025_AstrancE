@@ -175,6 +175,7 @@ impl AddrSpace {
                 core::slice::from_raw_parts_mut(phys_to_virt(frame.pa).as_mut_ptr(), size.into())
             };
             mmio.read(vaddr.as_usize(), dst)?;
+            area.insert_frame(vaddr, frame.clone());
 
             self.page_table()
                 .map(vaddr, frame.pa, size, flags)
