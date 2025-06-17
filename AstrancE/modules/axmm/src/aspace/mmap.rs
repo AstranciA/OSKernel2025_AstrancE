@@ -95,7 +95,11 @@ impl AddrSpace {
         } else if flags.contains(MmapFlags::MAP_FIXED_NOREPLACE) {
             start
         } else {
-            let start = if start.as_usize() == 0 { va!(0x1000) } else { start };
+            let start = if start.as_usize() == 0 {
+                va!(0x1000)
+            } else {
+                start
+            };
             #[cfg(feature = "heap")]
             {
                 // should below heap
@@ -142,7 +146,7 @@ impl AddrSpace {
 
         if populate {
             for page in PageIter4K::new(area.start(), area.end()).ok_or(AxError::BadAddress)? {
-                self.map_mmap(mmap_io.clone(), page, PageSize::Size4K, map_flags)?;
+                self.populate_mmap(mmap_io.clone(), page, PageSize::Size4K, map_flags)?;
             }
         }
         self.areas
@@ -151,7 +155,7 @@ impl AddrSpace {
         Ok(start)
     }
 
-    pub fn map_mmap(
+    pub fn populate_mmap(
         &mut self,
         mmio: Arc<dyn MmapIO>,
         vaddr: VirtAddr,
@@ -175,11 +179,13 @@ impl AddrSpace {
                 core::slice::from_raw_parts_mut(phys_to_virt(frame.pa).as_mut_ptr(), size.into())
             };
             mmio.read(vaddr.as_usize(), dst)?;
+            area.insert_frame(vaddr, frame.clone());
 
             self.page_table()
                 .map(vaddr, frame.pa, size, flags)
+                .inspect_err(|e| warn!("Error mapping mmap: {:?}", e))
                 .map(|tlb| tlb.flush())
-                .map_err(|e| AxError::BadAddress)?;
+                .map_err(|_| AxError::BadAddress)?;
 
             Ok(())
         } else {
