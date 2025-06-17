@@ -6,7 +6,6 @@ use memory_addr::{
     MemoryAddr, PAGE_SIZE_4K, PageIter4K, PhysAddr, VirtAddr, VirtAddrRange, is_aligned_4k,
 };
 use memory_set::{MappingBackend, MemoryArea, MemorySet};
-use page_table_multiarch::PageSize;
 
 #[cfg(feature = "mmap")]
 pub mod mmap;
@@ -584,6 +583,7 @@ impl AddrSpace {
         }
 
         for area in self.areas.iter() {
+            debug!("map COW: {:?}", area);
             // Remap the memory area in new address space.
             // area keeps the origin flags but pt flags will be marked as COW
             new_aspace
@@ -598,6 +598,7 @@ impl AddrSpace {
                     populate: _,
                 } = area.backend()
                 {
+                    // TODO: share mmap?
                     if let VmAreaType::Normal = va_type {
                         pte_flags = MappingFlags::mark_cow(pte_flags);
                     }

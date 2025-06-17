@@ -29,10 +29,16 @@ pub fn do_exit(exit_code: i32, group_exit: bool) -> ! {
              *    let _ = send_signal_process(&parent, SignalInfo::new(signo, SI_KERNEL as _));
              *}
              */
-            if let Some(data) = parent.data::<ProcessData>() {
-                debug!("send SIGCHLD to parent {:?}", parent.pid());
-                data.signal.lock().send_signal(SignalSet::SIGCHLD);
-                data.child_exit_wq.notify_all(false);
+            if let Some(parent_data) = parent.data::<ProcessData>() {
+                if let Some(sig) = process.data::<ProcessData>().and_then(|it| it.exit_signal) {
+                    debug!(
+                        "send {:?} to parent {:?}",
+                        sig,
+                        parent.pid()
+                    );
+                    parent_data.send_signal(sig);
+                }
+                parent_data.child_exit_wq.notify_all(false);
             }
         }
 

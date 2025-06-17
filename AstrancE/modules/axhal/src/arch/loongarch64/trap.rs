@@ -41,6 +41,7 @@ fn loongarch64_trap_handler(tf: &mut TrapFrame, from_user: bool) {
     let estat = estat::read();
     let trap = estat.cause();
 
+    trace!("trap from {:x?}", tf.get_ip());
     if matches!(trap, Trap::Exception(_)) {
         unmask_irqs(tf);
     }
@@ -48,28 +49,23 @@ fn loongarch64_trap_handler(tf: &mut TrapFrame, from_user: bool) {
     match trap {
         #[cfg(feature = "uspace")]
         Trap::Exception(Exception::Syscall) => {
-            tf.regs.a0 = crate::trap::handle_syscall(tf, tf.regs.a7) as usize;
-            post_trap(tf,from_user);
             tf.era += 4;
+            tf.regs.a0 = crate::trap::handle_syscall(tf, tf.regs.a7) as usize;
         }
         Trap::Exception(Exception::LoadPageFault)
         | Trap::Exception(Exception::PageNonReadableFault) => {
             handle_page_fault(tf, MappingFlags::READ, from_user);
-            post_trap(tf,from_user);
         }
         Trap::Exception(Exception::StorePageFault)
         | Trap::Exception(Exception::PageModifyFault) => {
             handle_page_fault(tf, MappingFlags::WRITE, from_user);
-            post_trap(tf,from_user);
         }
         Trap::Exception(Exception::FetchPageFault)
         | Trap::Exception(Exception::PageNonExecutableFault) => {
             handle_page_fault(tf, MappingFlags::EXECUTE, from_user);
-            post_trap(tf,from_user);
         }
         Trap::Exception(Exception::Breakpoint) => {
             handle_breakpoint(&mut tf.era);
-            post_trap(tf,from_user);
         }
         Trap::Interrupt(_) => {
             let irq_num: usize = estat.is().trailing_zeros() as usize;
@@ -84,6 +80,7 @@ fn loongarch64_trap_handler(tf: &mut TrapFrame, from_user: bool) {
             );
         }
     }
+    post_trap(tf, from_user);
     mask_irqs();
 }
 

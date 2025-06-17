@@ -199,7 +199,7 @@ pub fn spawn_user_task(
     task.into_arc()
 }
 
-pub fn init_proc() -> Arc<Process>{
+pub fn init_proc() -> Arc<Process> {
     axprocess::init_proc()
 }
 
@@ -219,7 +219,8 @@ pub fn read_trapframe_from_kstack(kstack_top: usize) -> TrapFrame {
 
 pub(crate) static THREAD_TABLE: RwLock<WeakMap<Pid, Weak<Thread>>> = RwLock::new(WeakMap::new());
 pub(crate) static PROCESS_TABLE: RwLock<WeakMap<Pid, Weak<Process>>> = RwLock::new(WeakMap::new());
-pub(crate) static PROCESS_GROUP_TABLE: RwLock<WeakMap<Pid, Weak<ProcessGroup>>> = RwLock::new(WeakMap::new());
+pub(crate) static PROCESS_GROUP_TABLE: RwLock<WeakMap<Pid, Weak<ProcessGroup>>> =
+    RwLock::new(WeakMap::new());
 pub(crate) static SESSION_TABLE: RwLock<WeakMap<Pid, Weak<Session>>> = RwLock::new(WeakMap::new());
 
 /// Add the thread and possibly its process, process group and session to the

@@ -162,72 +162,6 @@ impl ThreadData {
     }
 }
 
-/// From starry-next
-/*
- *pub fn wait_pid(task: AxTaskRef, pid: i32, exit_code_ptr: *mut i32) -> Result<u64, WaitStatus> {
- *    let mut exit_task_id: usize = 0;
- *    let mut answer_id: u64 = 0;
- *    let mut answer_status = WaitStatus::NotExist;
- *
- *    for (index, child) in task.task_ext().children.lock().iter().enumerate() {
- *        //warn!("check child: {}", child.id_name());
- *        if pid <= 0 {
- *            if pid == 0 {
- *                axlog::warn!("Don't support for process group.");
- *            }
- *
- *            answer_status = WaitStatus::Running;
- *            if child.state() == axtask::TaskState::Exited {
- *                let exit_code = child.exit_code();
- *                answer_status = WaitStatus::Exited;
- *                debug!(
- *                    "wait pid _{}_ with code _{}_",
- *                    child.id().as_u64(),
- *                    exit_code
- *                );
- *                exit_task_id = index;
- *                if !exit_code_ptr.is_null() {
- *                    unsafe {
- *                        *exit_code_ptr = exit_code << 8;
- *                    }
- *                }
- *                answer_id = child.id().as_u64();
- *                break;
- *            }
- *        } else if child.id().as_u64() == pid as u64 {
- *            if let Some(exit_code) = child.join() {
- *                answer_status = WaitStatus::Exited;
- *                info!(
- *                    "wait pid _{}_ with code _{:?}_",
- *                    child.id().as_u64(),
- *                    exit_code
- *                );
- *                exit_task_id = index;
- *                if !exit_code_ptr.is_null() {
- *                    unsafe {
- *                        *exit_code_ptr = exit_code << 8;
- *                    }
- *                }
- *                answer_id = child.id().as_u64();
- *            } else {
- *                answer_status = WaitStatus::Running;
- *            }
- *            break;
- *        }
- *    }
- *
- *    if answer_status == WaitStatus::Running {
- *        axtask::yield_now();
- *    }
- *
- *    if answer_status == WaitStatus::Exited {
- *        task.task_ext().children.lock().remove(exit_task_id);
- *        return Ok(answer_id);
- *    }
- *    Err(answer_status)
- *}
- */
-
 /// fork current task
 /// **Return**
 /// - `Ok(new_task_ref)` if fork successfully
@@ -257,7 +191,6 @@ pub fn clone_task(
 
     if from_umode {
         trap_frame.set_ret_code(0);
-        trap_frame.step_ip();
     }
 
     // TODO: clone stack since it's always changed.
@@ -344,6 +277,8 @@ pub fn clone_task(
         }
         &builder.data(process_data).build()
     };
+
+    warn!("child tid: {}", process.pid());
 
     let thread_data = ThreadData::new(process.data().unwrap());
     /* TODO: child_tid

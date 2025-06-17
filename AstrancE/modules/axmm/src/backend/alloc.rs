@@ -265,7 +265,7 @@ impl Backend {
                     return false;
                 }
                 return aspace
-                    .map_mmap(mmio, vaddr, PageSize::Size4K, flags)
+                    .populate_mmap(mmio, vaddr, PageSize::Size4K, flags)
                     .is_ok();
 
                 /*
