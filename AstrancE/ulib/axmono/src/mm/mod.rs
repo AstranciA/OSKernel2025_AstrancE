@@ -1,4 +1,6 @@
 pub mod mmap;
+use core::arch::asm;
+
 use alloc::string::String;
 use alloc::vec::Vec;
 use arceos_posix_api::{add_file_or_directory_fd, sys_open};
@@ -353,7 +355,7 @@ pub(crate) fn map_trampoline(aspace: &mut AddrSpace) {
         .unwrap();
 }
 
-pub(crate) unsafe fn trampoline_vaddr(fn_: usize) -> usize {
+pub unsafe fn trampoline_vaddr(fn_: usize) -> usize {
     assert!(
         fn_ >= _strampoline as usize && fn_ < _etrampoline as usize,
         "Invalid trampoline address"
@@ -395,11 +397,11 @@ fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool)
             vaddr
         );
         if let Some(kstack) = current.get_kernel_stack_top() {
-        debug!(
-            "page fault user trap frame:\n{:#x?}",
-            read_trapframe_from_kstack(kstack)
-        );
-        } 
+            debug!(
+                "page fault user trap frame:\n{:#x?}",
+                read_trapframe_from_kstack(kstack)
+            );
+        }
         // TODO: Send SIGSEGV
         drop(aspace);
         task::sys_exit(-139);

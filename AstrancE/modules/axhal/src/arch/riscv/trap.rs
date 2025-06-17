@@ -55,29 +55,22 @@ fn riscv_trap_handler(tf: &mut TrapFrame, from_user: bool) {
         match cause {
             #[cfg(feature = "uspace")]
             Trap::Exception(E::UserEnvCall) => {
-                tf.regs.a0 = crate::trap::handle_syscall(tf, tf.regs.a7) as usize;
-                post_trap(tf, from_user);
                 tf.sepc += 4;
+                tf.regs.a0 = crate::trap::handle_syscall(tf, tf.regs.a7) as usize;
             }
             Trap::Exception(E::LoadPageFault) => {
-                post_trap(tf, from_user);
-                handle_page_fault(tf, vaddr, MappingFlags::READ, from_user)
+                handle_page_fault(tf, vaddr, MappingFlags::READ, from_user);
             }
             Trap::Exception(E::StorePageFault) => {
-                post_trap(tf, from_user);
-                handle_page_fault(tf, vaddr, MappingFlags::WRITE, from_user)
+                handle_page_fault(tf, vaddr, MappingFlags::WRITE, from_user);
             }
             Trap::Exception(E::InstructionPageFault) => {
-                post_trap(tf, from_user);
-                handle_page_fault(tf, vaddr, MappingFlags::EXECUTE, from_user)
+                handle_page_fault(tf, vaddr, MappingFlags::EXECUTE, from_user);
             }
             Trap::Exception(E::Breakpoint) => {
-                post_trap(tf, from_user);
-                handle_breakpoint(&mut tf.sepc)
+                handle_breakpoint(&mut tf.sepc);
             }
             Trap::Interrupt(_) => {
-                post_trap(tf, from_user);
-                //warn!("asdaf");
                 handle_trap!(IRQ, scause.bits());
             }
             _ => {
@@ -90,6 +83,7 @@ fn riscv_trap_handler(tf: &mut TrapFrame, from_user: bool) {
                 );
             }
         }
+        post_trap(tf, from_user);
         mask_irqs();
     } else {
         panic!(

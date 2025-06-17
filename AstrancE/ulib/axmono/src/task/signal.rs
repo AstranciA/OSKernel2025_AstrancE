@@ -85,10 +85,10 @@ pub(crate) fn sys_sigaction(
 // ) -> LinuxResult<isize> {
 //     let curr = current();
 //     let mut sigctx = curr.task_ext().process_data().signal.lock();
-// 
+//
 //     if !set.is_null() {
 //         let set: SignalSet = unsafe { *set }.into();
-// 
+//
 //         let old = match how as u32 {
 //             SIG_BLOCK => sigctx.block(set),
 //             SIG_UNBLOCK => sigctx.unblock(set),
@@ -101,7 +101,7 @@ pub(crate) fn sys_sigaction(
 //                 .map(|ptr| unsafe { *ptr }.sig[0] = old.bits())
 //         };
 //     }
-// 
+//
 //     Ok(0)
 // }
 
@@ -188,7 +188,13 @@ pub(crate) fn sys_sigtimedwait(
     // 主等待循环
     loop {
         // 检查是否有待处理的信号
-        if let Some(sig) = curr.task_ext().process_data().signal.lock().consume_one_in(sigset) {
+        if let Some(sig) = curr
+            .task_ext()
+            .process_data()
+            .signal
+            .lock()
+            .consume_one_in(sigset)
+        {
             debug!("Received signal: {:?}", sig);
             return Ok(sig as isize);
         }
@@ -252,6 +258,9 @@ pub(crate) fn handle_pending_signals(current_tf: &TrapFrame) {
         trampoline_vaddr(sigreturn_trampoline as usize).into()
     }) {
         Ok(Some((mut uctx, kstack_top))) => {
+            warn!("0:\n{:#x?}", uctx.0);
+            let data = unsafe { core::slice::from_raw_parts(0x3ffff9a0 as *const usize, 8) };
+            warn!("data0: {data:x?}");
             // 交换tf
             unsafe { write_trapframe_to_kstack(curr.get_kernel_stack_top().unwrap(), &uctx.0) };
         }
@@ -264,9 +273,10 @@ pub(crate) fn sys_sigreturn() -> LinuxResult<isize> {
     let curr = current();
     let mut sigctx = curr.task_ext().process_data().signal.lock();
     let (sscratch, mut tf) = sigctx.unload().unwrap();
-    // 交换回tf, 返回a0以防止覆盖
+    // 交换回tf, 返回a0
     unsafe { write_trapframe_to_kstack(curr.get_kernel_stack_top().unwrap(), &tf) };
     unsafe { axhal::arch::exchange_trap_frame(sscratch) };
-    debug!("sigreturn");
+    let data = unsafe { core::slice::from_raw_parts(0x3ffff9a0 as *const usize, 8) };
+    trace!("sigreturn");
     Ok(tf.arg0() as isize)
 }

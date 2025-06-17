@@ -23,10 +23,10 @@ use core::{
 };
 
 use alloc::boxed::Box;
-use core::arch::asm;
 use axerrno::{LinuxError, LinuxResult};
 use axhal::arch::{TaskContext, TrapFrame, UspaceContext};
 use bitflags::*;
+use core::arch::asm;
 use linux_raw_sys::general::*;
 use memory_addr::{VirtAddr, VirtAddrRange};
 use syscalls::Sysno;
@@ -376,7 +376,6 @@ impl Into<sigaction> for SigAction {
 pub const SIG_DFL: usize = 0;
 pub const SIG_IGN: usize = 1;
 
-unsafe extern "C" fn tmp(a: i32) {}
 
 #[naked]
 #[unsafe(no_mangle)]
@@ -402,7 +401,6 @@ pub unsafe extern "C" fn sigreturn_trampoline() {
     sysno = const Sysno::rt_sigreturn as usize,
     );
 }
-
 
 // 进程信号上下文
 pub struct SignalContext {
@@ -521,8 +519,7 @@ impl SignalContext {
     /// 用户不能手动调用
     fn load(&mut self, scratch: usize, data: SignalFrameData) -> SignalResult<usize> {
         let curr_frame = self.current_frame()?;
-        curr_frame.load(scratch, data)?;
-        Ok(curr_frame.scratch(scratch))
+        curr_frame.load(scratch, data)
     }
 
     /// 释放当前信号栈帧，恢复blocked，返回原scratch(原陷入栈)，必须和load成对
@@ -612,6 +609,7 @@ impl SignalFrame {
     }
 
     fn scratch(&mut self, scratch: usize) -> usize {
+        trace!("scratch {}->{}", self.scratch.get_mut(), scratch);
         self.scratch
             .swap(scratch, core::sync::atomic::Ordering::SeqCst)
     }
@@ -788,7 +786,7 @@ pub fn handle_pending_signals(
             mask: act_mask,
             flags,
         } = action;
-        warn!("handler: {handler:?}, action_mask: {act_mask:?}, flags: {flags:?}");
+        trace!("handler: {handler:?}, action_mask: {act_mask:?}, flags: {flags:?}");
 
         match handler {
             SigHandler::Default(f) => f(sig, &mut *sigctx),
@@ -798,16 +796,13 @@ pub fn handle_pending_signals(
                 let mask = old_mask.union(act_mask);
                 (*sigctx).blocked = mask;
                 assert_eq!(
-                    sigctx.load(
-                        unsafe { axhal::arch::read_trap_frame() },
-                        SignalFrameData {
-                            signal: sig,
-                            uc_sigmask: old_mask,
-                            sigmask: mask,
-                            flags: flags,
-                            orig_frame: *thread_tf,
-                        }
-                    )?,
+                    sigctx.load(unsafe { axhal::arch::read_trap_frame() }, SignalFrameData {
+                        signal: sig,
+                        uc_sigmask: old_mask,
+                        sigmask: mask,
+                        flags: flags,
+                        orig_frame: *thread_tf,
+                    })?,
                     0,
                     "signal stack scratch is not empty"
                 );
@@ -815,22 +810,7 @@ pub fn handle_pending_signals(
                 let kstack_top = current_frame.ptr();
                 // 在syscall rt_sigreturn中清除信号。
                 let mut uctx = {
-                    #[cfg(any(target_arch = "riscv32", target_arch = "riscv64"))]
-                    {
-                        UspaceContext::new(
-                            handler as usize,
-                            thread_tf.get_sp().into(),
-                            sig as usize,
-                        )
-                    }
-                    #[cfg(target_arch = "loongarch64")]
-                    {
-                        UspaceContext::new(
-                            handler as usize,
-                            thread_tf.get_user_sp().into(),
-                            sig as usize,
-                        )
-                    }
+                    UspaceContext::new(handler as usize, thread_tf.get_sp().into(), sig as usize)
                 };
                 // 设置线程本地存储和全局指针
                 uctx.0.regs.tp = thread_tf.regs.tp;
@@ -848,16 +828,13 @@ pub fn handle_pending_signals(
                 let mask = old_mask.union(act_mask);
                 (*sigctx).blocked = mask;
                 assert_eq!(
-                    sigctx.load(
-                        unsafe { axhal::arch::read_trap_frame() },
-                        SignalFrameData {
-                            signal: sig,
-                            uc_sigmask: old_mask,
-                            sigmask: mask,
-                            flags: flags,
-                            orig_frame: *thread_tf,
-                        }
-                    )?,
+                    sigctx.load(unsafe { axhal::arch::read_trap_frame() }, SignalFrameData {
+                        signal: sig,
+                        uc_sigmask: old_mask,
+                        sigmask: mask,
+                        flags: flags,
+                        orig_frame: *thread_tf,
+                    })?,
                     0,
                     "signal stack scratch is not empty"
                 );
@@ -865,22 +842,7 @@ pub fn handle_pending_signals(
                 let kstack_top = current_frame.ptr();
                 // 在syscall rt_sigreturn中清除信号。
                 let mut uctx = {
-                    #[cfg(any(target_arch = "riscv32", target_arch = "riscv64"))]
-                    {
-                        UspaceContext::new(
-                            handler as usize,
-                            thread_tf.get_sp().into(),
-                            sig as usize,
-                        )
-                    }
-                    #[cfg(target_arch = "loongarch64")]
-                    {
-                        UspaceContext::new(
-                            handler as usize,
-                            thread_tf.get_user_sp().into(),
-                            sig as usize,
-                        )
-                    }
+                    UspaceContext::new(handler as usize, thread_tf.get_sp().into(), sig as usize)
                 };
                 // 设置线程本地存储和全局指针
                 uctx.0.regs.tp = thread_tf.regs.tp;
@@ -899,7 +861,6 @@ pub fn handle_pending_signals(
     }
     Ok(None)
 }
-
 
 fn handle_default_signal(sig: Signal, ctx: &mut SignalContext) {
     #[cfg(feature = "default_handler")]
