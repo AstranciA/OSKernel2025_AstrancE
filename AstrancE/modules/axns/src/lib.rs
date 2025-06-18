@@ -82,37 +82,19 @@ impl AxNamespace {
     /// This function allocates a memory area to store the thread-local resources,
     /// and copies from the global namespace as the initial value.
     #[cfg(feature = "thread-local")]
-    pub fn new_thread_local(copy_global: bool) -> Self {
+    pub fn new_thread_local() -> Self {
         let size = Self::section_size();
         let base = if size == 0 {
             core::ptr::null_mut()
         } else {
             let layout = Layout::from_size_align(size, 64).unwrap();
-            // TODO: delay alloc
             let dst = unsafe { alloc::alloc::alloc(layout) };
-            if copy_global {
-                let src = __start_axns_resource as *const u8;
-                unsafe { core::ptr::copy_nonoverlapping(src, dst, size) };
-            } else {
-                unsafe { dst.write_bytes(0, size) };
-            }
+            let src = __start_axns_resource as *const u8;
+            unsafe { core::ptr::copy_nonoverlapping(src, dst, size) };
             dst
         } as usize;
         Self { base, alloc: true }
     }
-    /*
-     *pub fn as_slice(&self) -> &[u8] {
-     *    let size = Self::section_size();
-     *    unsafe { slice::from_raw_parts(&self.base(), size) }
-     *}
-     *pub fn as_mut_slice(&self) -> &mut [u8] {
-     *    let size = Self::section_size();
-     *    unsafe { slice::from_raw_parts(&self.base(), size) }
-     *}
-     *pub fn replace(&mut self, offset: usize, data: &[u8]) {
-     *    self.as_mut_slice()[offset..].copy_from_slice(data);
-     *}
-     */
 }
 
 impl Drop for AxNamespace {
@@ -248,7 +230,14 @@ macro_rules! def_resource {
 
             impl $name {
                 unsafe fn deref_from_base(&self, ns_base: *mut u8) -> &$ty {
-                    let offset = self.offset();
+                    unsafe extern {
+                        fn __start_axns_resource();
+                    }
+
+                    #[unsafe(link_section = "axns_resource")]
+                    static RES: $ty = $default;
+
+                    let offset = &RES as *const _ as usize - __start_axns_resource as usize;
                     let ptr = unsafe{ ns_base.add(offset) } as *const _;
                     unsafe{ &*ptr }
                 }
@@ -271,26 +260,6 @@ macro_rules! def_resource {
                 /// dereferences from the global namespace.
                 pub fn deref_auto(&self) -> &$ty {
                     unsafe { self.deref_from_base($crate::current_namespace_base()) }
-                }
-
-                pub fn offset(&self) -> usize {
-                    unsafe extern {
-                        fn __start_axns_resource();
-                    }
-
-                    #[unsafe(link_section = "axns_resource")]
-                    static RES: $ty = $default;
-
-                    &RES as *const _ as usize - __start_axns_resource as usize
-                }
-
-                pub fn create(&self, ns: &$crate::AxNamespace) -> &$ty {
-                    let offset = self.offset();
-                    let ns_base = ns.base();
-                    let ptr = unsafe{ ns_base.add(offset) } as *mut $ty;
-
-                    unsafe { *ptr = $default; }
-                    unsafe { &*ptr }
                 }
             }
 

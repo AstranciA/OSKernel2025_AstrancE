@@ -50,10 +50,10 @@ axlog = { path = "modules/axlog" }
 axsignal = { path = "modules/axsignal" }
 axmm = { path = "modules/axmm", features = ["mmap", "heap", "COW"] }
 axnet = { path = "modules/axnet" }
-#axns = { path = "modules/axns" }
-axns = { git = "https://github.com/oscomp/arceos.git", features = [
-  "thread-local",
-] }
+axns = { path = "modules/axns", features = ["thread-local"]}
+#axns = { git = "https://github.com/oscomp/arceos.git", features = [
+  #"thread-local",
+#] }
 axruntime = { path = "modules/axruntime" }
 axsync = { path = "modules/axsync" }
 axtask = { path = "modules/axtask" }
