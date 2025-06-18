@@ -89,6 +89,10 @@ syscall_handler_def!(
         writev => [fd, iov, iocnt, ..] {
             apply!(syscall_imp::io::sys_writev, fd, iov, iocnt)
         }
+        #[cfg(all(feature = "fs", feature = "fd"))]
+        renameat => [old_dirfd, old_path, new_dirfd, new_path, ..] {
+            apply!(syscall_imp::fs::sys_renameat, old_dirfd, old_path, new_dirfd, new_path)
+        }
         // 文件操作相关系统调用
         #[cfg(all(feature = "fs", feature = "fd"))]
         openat => [dirfd, fname, flags, mode, ..] {
@@ -165,11 +169,6 @@ syscall_handler_def!(
         #[cfg(all(feature = "fs", feature = "fd"))]
         getcwd => [buf, size, ..] {
             apply!(syscall_imp::fs::sys_getcwd, buf, size)
-        }
-
-        #[cfg(all(feature = "fs", feature = "fd"))]
-        renameat => [old, new, ..] {
-            apply!(syscall_imp::fs::sys_rename, old, new)
         }
 
         #[cfg(all(feature = "fs", feature = "fd"))]

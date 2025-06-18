@@ -1,7 +1,6 @@
 use crate::alloc::string::String;
 use alloc::string::ToString;
 use alloc::sync::Arc;
-use alloc::vec::Vec;
 use core::ffi::{c_char, c_void, c_long, c_ulong, c_int};
 use core::{mem, ptr};
 use axerrno::AxError;
@@ -583,7 +582,6 @@ impl VfsNodeOps for FileWrapper {
         file.file_seek(offset as i64, SEEK_SET)
             .map_err(|e| <i32 as TryInto<AxError>>::try_into(e).unwrap())?;
         let r = file.file_write(buf);
-
         let _ = file.file_close();
         r.map_err(|e| e.try_into().unwrap())
     }

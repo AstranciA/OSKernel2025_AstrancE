@@ -258,9 +258,6 @@ pub(crate) fn handle_pending_signals(current_tf: &TrapFrame) {
         trampoline_vaddr(sigreturn_trampoline as usize).into()
     }) {
         Ok(Some((mut uctx, kstack_top))) => {
-            warn!("0:\n{:#x?}", uctx.0);
-            let data = unsafe { core::slice::from_raw_parts(0x3ffff9a0 as *const usize, 8) };
-            warn!("data0: {data:x?}");
             // 交换tf
             unsafe { write_trapframe_to_kstack(curr.get_kernel_stack_top().unwrap(), &uctx.0) };
         }
@@ -276,7 +273,6 @@ pub(crate) fn sys_sigreturn() -> LinuxResult<isize> {
     // 交换回tf, 返回a0
     unsafe { write_trapframe_to_kstack(curr.get_kernel_stack_top().unwrap(), &tf) };
     unsafe { axhal::arch::exchange_trap_frame(sscratch) };
-    let data = unsafe { core::slice::from_raw_parts(0x3ffff9a0 as *const usize, 8) };
     trace!("sigreturn");
     Ok(tf.arg0() as isize)
 }

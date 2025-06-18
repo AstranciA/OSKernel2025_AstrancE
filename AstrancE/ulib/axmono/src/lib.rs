@@ -59,6 +59,7 @@ pub fn copy_from_kernel(aspace: &mut axmm::AddrSpace) -> AxResult {
     Ok(())
 }
 
+
 pub fn init() {
     let curr = current();
     Process::new_init(curr.id().as_u64().try_into().unwrap()).build();

@@ -99,6 +99,17 @@ pub unsafe fn sys_fstat(fd: c_int, buf: *mut test_stat) -> SyscallResult {
 
 
 #[inline]
+pub fn sys_renameat(
+    olddfd: c_int,
+    old: *const c_char,
+    newdfd: c_int,
+    new: *const c_char,
+) -> SyscallResult {
+    api::sys_renameat(olddfd, old, newdfd, new).to_linux_result()
+}
+
+
+#[inline]
 pub unsafe fn sys_statx(
     dirfd: c_int,
     pathname: *const c_char,

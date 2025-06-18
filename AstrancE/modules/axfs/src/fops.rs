@@ -288,16 +288,16 @@ impl File {
     pub fn get_attr(&self) -> AxResult<FileAttr> {
         self.access_node(Cap::empty())?.get_attr()
     }
-    
+
     pub fn get_attr_x(&self) -> AxResult<FileAttrX> {
         self.access_node(Cap::empty())?.get_attr_x()
     }
-    pub fn set_atime(&self, atime:u32,  atime_n:u32) -> AxResult<usize> {
-        let r =self.access_node(Cap::empty())?.set_atime(atime,atime_n)?;
+    pub fn set_atime(&self, atime: u32, atime_n: u32) -> AxResult<usize> {
+        let r = self.access_node(Cap::empty())?.set_atime(atime, atime_n)?;
         Ok(r)
     }
-    pub fn set_mtime(&self, mtime:u32, mtime_n:u32) -> AxResult<usize>{
-        let r = self.access_node(Cap::empty())?.set_mtime(mtime,mtime_n)?;
+    pub fn set_mtime(&self, mtime: u32, mtime_n: u32) -> AxResult<usize> {
+        let r = self.access_node(Cap::empty())?.set_mtime(mtime, mtime_n)?;
         Ok(r)
     }
     ///do something for the file extra attributes
@@ -308,8 +308,9 @@ impl File {
         buf: *mut c_void,
         buf_size: usize,
         data_size: *mut usize,
-    ) -> AxResult<usize>  {
-        self.access_node(Cap::empty())?.get_xattr(name, name_len, buf, buf_size, data_size)
+    ) -> AxResult<usize> {
+        self.access_node(Cap::empty())?
+            .get_xattr(name, name_len, buf, buf_size, data_size)
     }
     pub fn set_xattr(
         &self,
@@ -317,8 +318,9 @@ impl File {
         name_len: usize,
         data: *mut c_void,
         data_size: usize,
-    ) -> AxResult<usize>{
-        self.access_node(Cap::WRITE)?.set_xattr(name, name_len, data, data_size)
+    ) -> AxResult<usize> {
+        self.access_node(Cap::WRITE)?
+            .set_xattr(name, name_len, data, data_size)
     }
 
     pub fn list_xattr(
@@ -327,15 +329,12 @@ impl File {
         size: usize,
         ret_size: *mut usize,
     ) -> AxResult<usize> {
-        self.access_node(Cap::WRITE)?.list_xattr(list, size, ret_size)
+        self.access_node(Cap::WRITE)?
+            .list_xattr(list, size, ret_size)
     }
 
-    pub fn remove_xattr(
-        &self,
-        name: *const c_char,
-        name_len: usize,
-    ) -> AxResult<usize> {
-      self.access_node(Cap::WRITE)?.remove_xattr(name, name_len)
+    pub fn remove_xattr(&self, name: *const c_char, name_len: usize) -> AxResult<usize> {
+        self.access_node(Cap::WRITE)?.remove_xattr(name, name_len)
     }
 }
 
@@ -458,11 +457,11 @@ impl Directory {
         self.access_node(Cap::empty())?.get_attr_x()
     }
     ///set atime and mtime
-    pub fn set_atime(&self, atime:u32,  atime_n:u32) -> AxResult<usize> {
-        self.access_node(Cap::WRITE)?.set_atime(atime,atime_n)
+    pub fn set_atime(&self, atime: u32, atime_n: u32) -> AxResult<usize> {
+        self.access_node(Cap::WRITE)?.set_atime(atime, atime_n)
     }
-    pub fn set_mtime(&self, mtime:u32, mtime_n:u32) -> AxResult<usize>{
-        self.access_node(Cap::WRITE)?.set_mtime(mtime,mtime_n)
+    pub fn set_mtime(&self, mtime: u32, mtime_n: u32) -> AxResult<usize> {
+        self.access_node(Cap::WRITE)?.set_mtime(mtime, mtime_n)
     }
     ///do something for the dir extra attributes
     pub fn get_xattr(
@@ -472,8 +471,9 @@ impl Directory {
         buf: *mut c_void,
         buf_size: usize,
         data_size: *mut usize,
-    ) -> AxResult<usize>  {
-        self.access_node(Cap::empty())?.get_xattr(name, name_len, buf, buf_size, data_size)
+    ) -> AxResult<usize> {
+        self.access_node(Cap::empty())?
+            .get_xattr(name, name_len, buf, buf_size, data_size)
     }
     pub fn set_xattr(
         &self,
@@ -481,8 +481,9 @@ impl Directory {
         name_len: usize,
         data: *mut c_void,
         data_size: usize,
-    ) -> AxResult<usize>{
-        self.access_node(Cap::WRITE)?.set_xattr(name, name_len, data, data_size)
+    ) -> AxResult<usize> {
+        self.access_node(Cap::WRITE)?
+            .set_xattr(name, name_len, data, data_size)
     }
 
     pub fn list_xattr(
@@ -491,14 +492,11 @@ impl Directory {
         size: usize,
         ret_size: *mut usize,
     ) -> AxResult<usize> {
-        self.access_node(Cap::WRITE)?.list_xattr(list, size, ret_size)
+        self.access_node(Cap::WRITE)?
+            .list_xattr(list, size, ret_size)
     }
 
-    pub fn remove_xattr(
-        &self,
-        name: *const c_char,
-        name_len: usize,
-    ) -> AxResult<usize> {
+    pub fn remove_xattr(&self, name: *const c_char, name_len: usize) -> AxResult<usize> {
         self.access_node(Cap::WRITE)?.remove_xattr(name, name_len)
     }
 }
