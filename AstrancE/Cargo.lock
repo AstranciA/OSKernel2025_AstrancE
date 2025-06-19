@@ -181,7 +181,7 @@ dependencies = [
  "axio",
  "axlog",
  "axnet",
- "axns 0.1.0 (git+https://github.com/oscomp/arceos.git)",
+ "axns",
  "axruntime",
  "axsync",
  "axtask",
@@ -415,7 +415,7 @@ dependencies = [
  "axfs_ramfs",
  "axfs_vfs",
  "axio",
- "axns 0.1.0 (git+https://github.com/oscomp/arceos.git)",
+ "axns",
  "axsync",
  "axtask",
  "cap_access",
@@ -566,7 +566,7 @@ dependencies = [
  "axio",
  "axlog",
  "axmm",
- "axns 0.1.0 (git+https://github.com/oscomp/arceos.git)",
+ "axns",
  "axprocess",
  "axsignal",
  "axsync",
@@ -612,16 +612,7 @@ dependencies = [
 name = "axns"
 version = "0.1.0"
 dependencies = [
- "axns 0.1.0 (git+https://github.com/oscomp/arceos.git)",
- "crate_interface",
- "lazyinit",
-]
-
-[[package]]
-name = "axns"
-version = "0.1.0"
-source = "git+https://github.com/oscomp/arceos.git#097f415403982aa92f4af2151f9ae8acdf61cd10"
-dependencies = [
+ "axns",
  "crate_interface",
  "lazyinit",
 ]
