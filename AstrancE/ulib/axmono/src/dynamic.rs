@@ -28,10 +28,10 @@ pub(crate) fn find_interpreter(elf: &OwnedElfFile) -> AxResult<Option<String>> {
 
 
         if path.contains("ld-linux-riscv") || path.contains("ld-musl-riscv") {
-            path = "/riscv64/lib/libc.so".into();
+            path = "/lib/libc.so".into();
         }
         if path.contains("ld-linux-loongarch") || path.contains("ld-musl-loongarch") {
-            path = "/loongarch64/lib64/libc.so".into();
+            path = "/lib64/libc.so".into();
         }
         info!("Found interpreter: {}", path);
         Ok(Some(path))
