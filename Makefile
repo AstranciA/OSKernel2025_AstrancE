@@ -1,21 +1,85 @@
-all:
-	cd ./App_oscomp && \
-	export PATH="$$PATH:$$HOME/.cargo/bin" && \
-	export PATH="$$PATH:$(CURDIR)/App_oscomp/bin" && \
-	#export MAKEFLAGS="-j$(shell nproc)" && \
-	make all TOOLCHAIN_DIR=~/.rustup/toolchains/nightly-2025-01-18-x86_64-unknown-linux-gnu && \
-	cd .. && \
-	mv ./App_oscomp/disk-rv.img . || true && \
-	mv ./App_oscomp/disk-la.img . || true && \
-	mv ./App_oscomp/kernel-rv.bin ./kernel-rv || true && \
-	mv ./App_oscomp/kernel-la.elf ./kernel-la || true
+# 定义项目根目录，这是当前Makefile所在的目录
+PROJECT_ROOT := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
-.PHONY: all
+# 定义App_oscomp子目录的完整路径
+APP_OSCOMP_DIR := $(PROJECT_ROOT)App_oscomp
+
+# 定义Rust工具链目录变量
+NIGHTLY_TOOLCHAIN_DIR ?= ~/.rustup/toolchains/nightly-2025-01-18-x86_64-unknown-linux-gnu
+
+# LOG 变量，可以从命令行传递，例如 `make all LOG=1`
+LOG ?= off
+
+.PHONY: all clean help kernel-la kernel-rv rootfs
+
+# 主构建目标
+# 当 make all 时，它会依次构建 kernel-la, kernel-rv, rootfs
+# 各自目标将完成自己的构建和文件移动
+all: kernel-la kernel-rv rootfs
+	@echo "--- All components built and moved to project root ---"
+
+# --- 特定目标: kernel-la ---
+kernel-la:
+	@echo "--- Building kernel-la in App_oscomp ---"
+	( \
+	    cd "$(APP_OSCOMP_DIR)" && \
+	    export PATH="$$PATH:$$HOME/.cargo/bin:./bin" && \
+	    $(MAKE) LOG=$(LOG) kernel-la TOOLCHAIN_DIR="$(NIGHTLY_TOOLCHAIN_DIR)" \
+	)
+	@echo "--- Moving kernel-la artifacts to project root ---"
+	mv -f "$(APP_OSCOMP_DIR)/kernel-la.elf" "$(PROJECT_ROOT)kernel-la" || true
+
+# --- 特定目标: kernel-rv ---
+kernel-rv:
+	@echo "--- Building kernel-rv in App_oscomp ---"
+	( \
+	    cd "$(APP_OSCOMP_DIR)" && \
+	    export PATH="$$PATH:$$HOME/.cargo/bin:./bin" && \
+	    $(MAKE) LOG=$(LOG) kernel-rv TOOLCHAIN_DIR="$(NIGHTLY_TOOLCHAIN_DIR)" \
+	)
+	@echo "--- Moving kernel-rv artifacts to project root ---"
+	mv -f "$(APP_OSCOMP_DIR)/kernel-rv.bin" "$(PROJECT_ROOT)kernel-rv" || true
+
+# --- 特定目标: rootfs ---
+# 假设 rootfs 目标在 App_oscomp 中会生成 disk-rv.img 和 disk-la.img
+rootfs:
+	@echo "--- Building rootfs in App_oscomp ---"
+	( \
+	    cd "$(APP_OSCOMP_DIR)" && \
+	    export PATH="$$PATH:$$HOME/.cargo/bin:./bin" && \
+	    $(MAKE) LOG=$(LOG) rootfs TOOLCHAIN_DIR="$(NIGHTLY_TOOLCHAIN_DIR)" \
+	)
+	@echo "--- Moving rootfs-related artifacts to project root ---"
+	mv -f "$(APP_OSCOMP_DIR)/disk-rv.img" "$(PROJECT_ROOT)disk-rv.img" || true
+	mv -f "$(APP_OSCOMP_DIR)/disk-la.img" "$(PROJECT_ROOT)disk-la.img" || true
 
 clean:
-	rm -f ./disk-la.img || true
-	rm -f ./disk-rv.img || true
-	rm -f ./kernel-rv || true
-	rm -f ./kernel-la || true
-	cd ./App_oscomp && \
-	make clean || true
+	@echo "--- Cleaning main project artifacts ---"
+	# 直接列出所有可能生成的文件，进行清理
+	rm -f "$(PROJECT_ROOT)disk-la.img" \
+	      "$(PROJECT_ROOT)disk-rv.img" \
+	      "$(PROJECT_ROOT)kernel-rv" \
+	      "$(PROJECT_ROOT)kernel-la" || true
+
+	@echo "--- Initiating clean for App_oscomp ---"
+	( \
+		cd "$(APP_OSCOMP_DIR)" && \
+		$(MAKE) clean \
+	) || true
+
+help:
+	@echo "Usage:"
+	@echo "  make all                     Builds all artifacts."
+	@echo "  make kernel-la               Builds kernel-la only."
+	@echo "  make kernel-rv               Builds kernel-rv only."
+	@echo "  make rootfs                  Builds rootfs only."
+	@echo "  make clean                   Cleans the project."
+	@echo "  make all LOG=1               Builds with verbose logging."
+	@echo "  make all NIGHTLY_TOOLCHAIN_DIR=/path/to/your/toolchain  Build with a specific nightly toolchain."
+	@echo ""
+	@echo "Configurable variables:"
+	@echo "  NIGHTLY_TOOLCHAIN_DIR = $(NIGHTLY_TOOLCHAIN_DIR) (Default toolchain directory)"
+	@echo "  LOG = $(LOG) (0 or 1 for verbose logging)"
+
+
+

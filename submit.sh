@@ -527,6 +527,7 @@ cd "$SCRIPT_ORIGIN_DIR" || exit 1 # 回到宿主 Git 仓库根目录
 
 echo ">> 将 ${SANDBOX_ASTRANCE_DIR} 的历史导入宿主仓库的 ${ASTRANCE_FINAL_SUBDIR_NAME}/..."
 git filter-repo --source "${SANDBOX_ASTRANCE_DIR}" --refs master --target . --path-rename ":${ASTRANCE_FINAL_SUBDIR_NAME}/" --force || { echo "错误：导入 AstrancE 历史失败。"; exit 1; }
+cp -r $SANDBOX_ASTRANCE_DIR/crates $APP_OSCOMP_FINAL_SUBDIR_NAME/crates
 echo ">> AstrancE 历史导入完成。"
 
 cp -r $SANDBOX_APP_OSCOMP_DIR $APP_OSCOMP_FINAL_SUBDIR_NAME
