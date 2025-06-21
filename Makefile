@@ -53,7 +53,7 @@ rootfs:
 	    $(MAKE) LOG=$(LOG) rootfs TOOLCHAIN_DIR="$(NIGHTLY_TOOLCHAIN_DIR)" \
 	)
 	@echo "--- Moving rootfs-related artifacts to project root ---"
-	mv -f "$(APP_OSCOMP_DIR)/disk-rv.img" "$(PROJECT_ROOT)disk-rv.img" || true
+	mv -f "$(APP_OSCOMP_DIR)/disk-rv.img" "$(PROJECT_ROOT)disk.img" || true
 	mv -f "$(APP_OSCOMP_DIR)/disk-la.img" "$(PROJECT_ROOT)disk-la.img" || true
 
 clean:

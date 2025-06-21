@@ -24,7 +24,10 @@ fn main() {
     init_fs();
 
     TestCaseBuilder::shell("/ts/musl")
-        .script("/test_busybox.sh")
+        .script("/testrun.sh")
+        .run();
+    TestCaseBuilder::shell("/ts/glibc/basic")
+        .script("/glibc_test.sh")
         .run();
 
 
