@@ -53,8 +53,8 @@ all_1: env oscomp_build
 all: kernel-rv kernel-la rootfs
 
 rootfs:
-	sudo $(MAKE) disk_img DISK_SOURCES="$(PWD)/rootfs/riscv64:disk-rv.img:ext4" DISK_SIZE_MB=50
-	sudo $(MAKE) disk_img DISK_SOURCES="$(PWD)/rootfs/loongarch64:disk-la.img:ext4" DISK_SIZE_MB=50
+	$(MAKE) disk_img DISK_SOURCES="$(PWD)/rootfs/riscv64:disk-rv.img:ext4" DISK_SIZE_MB=50
+	$(MAKE) disk_img DISK_SOURCES="$(PWD)/rootfs/loongarch64:disk-la.img:ext4" DISK_SIZE_MB=50
 
 kernel-rv:
 	echo $(PWD)
@@ -97,7 +97,7 @@ test: defconfig
 	@./scripts/app_test.sh
 
 defconfig build run justrun debug disasm:env ax_root
-	@make -C $(AX_ROOT) A=$(PWD) EXTRA_CONFIG=$(EXTRA_CONFIG) MEM=1G DISK_IMG=$(DISK_IMG) ROOTFS_DISK=$(ROOTFS_DISK) $(AX_MAKE_DEFAULTS) $@
+	@make RUSTUP_TOOLCHAIN=nightly-2025-01-18 -C $(AX_ROOT) A=$(PWD) EXTRA_CONFIG=$(EXTRA_CONFIG) MEM=1G DISK_IMG=$(DISK_IMG) ROOTFS_DISK=$(ROOTFS_DISK) $(AX_MAKE_DEFAULTS) $@
 
 clean: ax_root
 	@make -C $(AX_ROOT) A=$(PWD) ARCH=$(ARCH) clean

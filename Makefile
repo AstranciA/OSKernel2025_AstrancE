@@ -24,6 +24,7 @@ kernel-la:
 	( \
 	    cd "$(APP_OSCOMP_DIR)" && \
 	    export PATH="$$PATH:$$HOME/.cargo/bin:./bin" && \
+		export PATH=$$PATH:$(CURDIR)/App_oscomp/bin && \
 	    $(MAKE) LOG=$(LOG) kernel-la TOOLCHAIN_DIR="$(NIGHTLY_TOOLCHAIN_DIR)" \
 	)
 	@echo "--- Moving kernel-la artifacts to project root ---"
@@ -35,6 +36,7 @@ kernel-rv:
 	( \
 	    cd "$(APP_OSCOMP_DIR)" && \
 	    export PATH="$$PATH:$$HOME/.cargo/bin:./bin" && \
+		export PATH=$$PATH:$(CURDIR)/App_oscomp/bin && \
 	    $(MAKE) LOG=$(LOG) kernel-rv TOOLCHAIN_DIR="$(NIGHTLY_TOOLCHAIN_DIR)" \
 	)
 	@echo "--- Moving kernel-rv artifacts to project root ---"
@@ -47,6 +49,7 @@ rootfs:
 	( \
 	    cd "$(APP_OSCOMP_DIR)" && \
 	    export PATH="$$PATH:$$HOME/.cargo/bin:./bin" && \
+		export PATH=$$PATH:$(CURDIR)/App_oscomp/bin && \
 	    $(MAKE) LOG=$(LOG) rootfs TOOLCHAIN_DIR="$(NIGHTLY_TOOLCHAIN_DIR)" \
 	)
 	@echo "--- Moving rootfs-related artifacts to project root ---"

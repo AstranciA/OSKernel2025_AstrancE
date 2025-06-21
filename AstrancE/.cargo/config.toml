@@ -2,42 +2,13 @@
 offline = true
 git-fetch-with-cli = true
 
-[patch.'https://github.com/AstranciA/AstrancE.git']
-axstd = { path = ".AstrancE/ulib/axstd" }
-arceos_posix_api = { path = ".AstrancE/api/arceos_posix_api" }
-axhal = { path = ".AstrancE/modules/axhal" }
-axmm = { path = ".AstrancE/modules/axmm" }
-axtask = { path = ".AstrancE/modules/axtask" }
-axsync = { path = ".AstrancE/modules/axsync" }
-axruntime = { path = ".AstrancE/modules/axruntime" }
-#axns = { path = ".AstrancE/modules/axns" }
-axfs = { path = ".AstrancE/modules/axfs" }
-axconfig = { path = ".AstrancE/modules/axconfig" }
-acbat = { path = ".AstrancE/crates/acbat" }
-axsyscall = { path = ".AstrancE/modules/axsyscall" }
-axlog = { path = ".AstrancE/modules/axlog" }
-axalloc = { path = ".AstrancE/modules/axalloc" }
-axfeat = { path = ".AstrancE/api/axfeat" }
-axmono = { path = ".AstrancE/ulib/axmono" }
-[patch.crates-io]
-page_table_multiarch = { path = ".AstrancE/crates/page_table_multiarch/page_table_multiarch" }
-page_table_entry = { path = ".AstrancE/crates/page_table_multiarch/page_table_entry" }
-memory_set = { path = ".AstrancE/crates/axmm_crates/memory_set" }
-memory_addr = { path = ".AstrancE/crates/axmm_crates/memory_addr" }
-axfs_vfs = { path = ".AstrancE/crates/axfs_crates/axfs_vfs" }
-axfs_devfs = { path = ".AstrancE/crates/axfs_crates/axfs_devfs" }
-axfs_ramfs = { path = ".AstrancE/crates/axfs_crates/axfs_ramfs" }
-lwext4_rust = { path = ".AstrancE/crates/lwext4_rust" }
-[profile.release]
-debug = 2
-
 # === BEGIN CARGO VENDOR CONFIG === #
-
 [source.crates-io]
 replace-with = "vendored-sources"
 
-[source."git+https://github.com/AstranciA/AstrancE.git"]
-git = "https://github.com/AstranciA/AstrancE.git"
+[source."git+https://github.com/KuangjuX/ixgbe-driver.git?rev=8e5eb74"]
+git = "https://github.com/KuangjuX/ixgbe-driver.git"
+rev = "8e5eb74"
 replace-with = "vendored-sources"
 
 [source."git+https://github.com/MukioXun/cty.git"]
@@ -48,8 +19,8 @@ replace-with = "vendored-sources"
 git = "https://github.com/Starry-OS/axprocess.git"
 replace-with = "vendored-sources"
 
-[source."git+https://github.com/Starry-OS/weak-map"]
-git = "https://github.com/Starry-OS/weak-map"
+[source."git+https://github.com/Starry-OS/weak-map.git"]
+git = "https://github.com/Starry-OS/weak-map.git"
 replace-with = "vendored-sources"
 
 [source."git+https://github.com/arceos-org/allocator.git?tag=v0.1.1"]
@@ -72,8 +43,23 @@ git = "https://github.com/arceos-org/scheduler.git"
 tag = "v0.1.0"
 replace-with = "vendored-sources"
 
+[source."git+https://github.com/arceos-org/slab_allocator.git?tag=v0.3.1"]
+git = "https://github.com/arceos-org/slab_allocator.git"
+tag = "v0.3.1"
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/elliott10/fxmac_rs.git?rev=0dbc3916"]
+git = "https://github.com/elliott10/fxmac_rs.git"
+rev = "0dbc3916"
+replace-with = "vendored-sources"
+
 [source."git+https://github.com/jasonwhite/syscalls.git"]
 git = "https://github.com/jasonwhite/syscalls.git"
+replace-with = "vendored-sources"
+
+[source."git+https://github.com/lhw2002426/bcm2835-sdhci.git?rev=e974f16"]
+git = "https://github.com/lhw2002426/bcm2835-sdhci.git"
+rev = "e974f16"
 replace-with = "vendored-sources"
 
 [source."git+https://github.com/mexus/numeric-enum-macro"]
@@ -85,9 +71,12 @@ git = "https://github.com/rafalh/rust-fatfs"
 rev = "85f06e0"
 replace-with = "vendored-sources"
 
+[source."git+https://github.com/rcore-os/smoltcp.git?rev=2ade274"]
+git = "https://github.com/rcore-os/smoltcp.git"
+rev = "2ade274"
+replace-with = "vendored-sources"
+
 [source.vendored-sources]
 directory = "vendor"
-
-
 # === END CARGO VENDOR CONFIG === #
 
