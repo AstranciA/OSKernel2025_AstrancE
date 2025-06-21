@@ -27,7 +27,7 @@ fn main() {
         .script("/testrun.sh")
         .run();
     TestCaseBuilder::shell("/ts/glibc/basic")
-        .script("/glibc_test.sh")
+        .script("/glibc_basic.sh")
         .run();
 
 
