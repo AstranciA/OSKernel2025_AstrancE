@@ -304,7 +304,6 @@ pub fn sys_ppoll(
         if nfds == 0 {
             return Ok(0);
         }
-        error!("123");
         // 1. 处理超时参数
         let has_timeout = !timeout_ts.is_null();
         let timeout_duration = if has_timeout {
@@ -327,7 +326,6 @@ pub fn sys_ppoll(
         loop {
             // 执行一次poll检查
             ready_count = poll_once(fds, nfds)?;
-            error!("ready_count: {ready_count:?}");
 
             // 如果有就绪的文件描述符，立即返回
             if ready_count > 0 {
@@ -356,7 +354,6 @@ fn poll_once(fds: *mut ctypes::pollfd, nfds: ctypes::nfds_t) -> LinuxResult<usiz
     }
 
     let fds_slice = unsafe { core::slice::from_raw_parts_mut(fds, nfds as usize) };
-    error!("poll_once <= {:?}", fds_slice);
     let mut ready_count = 0;
 
     for fd in fds_slice.iter_mut() {

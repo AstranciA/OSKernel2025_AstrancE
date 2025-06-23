@@ -474,8 +474,8 @@ impl AddrSpace {
         }
         if let Some(area) = self.areas.find(vaddr) {
             let orig_flags = area.flags();
-            debug!("Page fault area flags: {:?}", orig_flags);
-            debug!("Page fault pte flags: {:?}", self.pt.query(vaddr));
+            trace!("Page fault area flags: {:?}", orig_flags);
+            trace!("Page fault pte flags: {:?}", self.pt.query(vaddr));
 
             if orig_flags.contains(access_flags) {
                 return area

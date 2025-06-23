@@ -21,8 +21,7 @@ pub fn do_exit(exit_code: i32, group_exit: bool) -> ! {
     }
 
     let process = thread.process();
-    if thread.exit(exit_code) {
-        process.exit();
+    if thread.exit(exit_code)  || true{
         if let Some(parent) = process.parent() {
             /*
              *if let Some(signo) = process.data::<ProcessData>().and_then(|it| it.exit_signal) {
@@ -30,14 +29,12 @@ pub fn do_exit(exit_code: i32, group_exit: bool) -> ! {
              *}
              */
             if let Some(parent_data) = parent.data::<ProcessData>() {
-                if let Some(sig) = process.data::<ProcessData>().and_then(|it| it.exit_signal) {
-                    debug!(
-                        "send {:?} to parent {:?}",
-                        sig,
-                        parent.pid()
-                    );
-                    parent_data.send_signal(sig);
-                }
+                let sig = process
+                    .data::<ProcessData>()
+                    .and_then(|it| it.exit_signal)
+                    .unwrap_or(Signal::SIGCHLD);
+                debug!("send {:?} to parent {:?}", sig, parent.pid());
+                parent_data.send_signal(sig);
                 parent_data.child_exit_wq.notify_all(false);
             }
         }
