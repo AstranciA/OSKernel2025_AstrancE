@@ -2,7 +2,7 @@
 #![feature(stmt_expr_attributes)]
 // #![cfg(test)]
 
-mod test;
+ mod test;
 extern crate axlog;
 use axerrno::LinuxError;
 use syscall_imp::{
@@ -18,7 +18,9 @@ use syscalls::Sysno::gettimeofday;
 use axlog::debug;
 
 pub mod result;
-use crate::syscall_imp::fs::{sys_flistxattr, sys_fsetxattr, sys_utimesat};
+mod utils;
+
+use crate::syscall_imp::fs::{sys_flistxattr, sys_fremovexattr, sys_fsetxattr, sys_utimesat};
 pub use result::{SyscallResult, ToLinuxResult};
 use crate::syscall_imp::io::sys_write;
 use crate::syscall_imp::time::sys_get_time_of_day;
@@ -32,7 +34,6 @@ macro_rules! syscall_handler_def {
             use $crate::result::{SyscallResult, LinuxResultToIsize};
             let args = [tf.arg0(), tf.arg1(), tf.arg2(), tf.arg3(), tf.arg4(), tf.arg5()];
             let sys_id = Sysno::from(syscall_num as u32);
-
             let result:Option<SyscallResult> = match sys_id {
                 $(
                     $(#[$attr])*
@@ -57,19 +58,108 @@ macro_rules! syscall_handler_def {
     };
 }
 
+/*#[macro_export]
+macro_rules! syscall_handler_def {
+    ($($(#[$attr:meta])* $sys:ident => [$($arg:tt)*] $body:expr $(,)?)*) => {
+        #[axhal::trap::register_trap_handler(axhal::trap::SYSCALL)]
+        pub fn handle_syscall(tf: &mut axhal::arch::TrapFrame, syscall_num: usize) -> Option<isize> {
+            use syscalls::Sysno;
+            use $crate::result::{SyscallResult, LinuxResultToIsize};
+
+            let args = [tf.arg0(), tf.arg1(), tf.arg2(), tf.arg3(), tf.arg4(), tf.arg5()];
+            let sys_id = Sysno::from(syscall_num as u32);
+
+            let result: Option<SyscallResult> = match sys_id {
+                $(
+                    $(#[$attr])*
+                    Sysno::$sys => {
+                        axlog::debug!("handle syscall: {}({:x?})", stringify!($sys), args);
+                        Some((#[inline(always)] || -> SyscallResult {
+                            let aspace = axmm::kernel_aspace().lock();
+                            let mut _arg_idx = 0;
+                            $crate::syscall_args_unpack!(aspace, _arg_idx, [$($arg)*]);
+                            $body
+                        })())
+                    }
+                )*,
+                _ => None,
+            };
+
+            result.map(|r| r.as_isize())
+        }
+    };
+}
+
+
+#[macro_export]
+macro_rules! syscall_args_unpack {
+    // 展开多个参数
+    ($aspace:ident, $idx:ident, [$head:tt $(, $tail:tt)*]) => {
+        syscall_args_unpack!(@one $aspace, $idx, $head);
+        syscall_args_unpack!($aspace, $idx, [$($tail),*]);
+    };
+
+    // 结束
+    ($aspace:ident, $idx:ident, []) => {};
+
+    // 匹配普通参数
+    (@one $aspace:ident, $idx:ident, $arg:ident) => {
+        let $arg = args[$idx];
+        $idx += 1;
+    };
+
+    // 匹配裸指针 + 长度校验（只读）
+    (@one $aspace:ident, $idx:ident, $arg:ident : *const u8 ; $len:ident) => {
+        $crate::ptr::validate_ptr(&$aspace, args[$idx] as *const u8, $len, false)?;
+        let $arg = args[$idx] as *const u8;
+        $idx += 1;
+    };
+
+    // 匹配裸指针 + 长度校验（可写）
+    (@one $aspace:ident, $idx:ident, $arg:ident : *mut u8 ; $len:ident) => {
+        $crate::ptr::validate_ptr(&$aspace, args[$idx] as *const u8, $len, true)?;
+        let $arg = args[$idx] as *mut u8;
+        $idx += 1;
+    };
+
+    // 匹配切片（只读）
+    (@one $aspace:ident, $idx:ident, $arg:ident : [u8 ; $len:ident]) => {
+        let $arg = $crate::ptr::validated_user_slice(&$aspace, args[$idx] as *const u8, $len)?;
+        $idx += 1;
+    };
+
+    // 匹配切片（可写）
+    (@one $aspace:ident, $idx:ident, $arg:ident : &mut [u8 ; $len:ident]) => {
+        let $arg = $crate::ptr::validated_user_slice_mut(&$aspace, args[$idx] as *mut u8, $len)?;
+        $idx += 1;
+    };
+
+    // 匹配 C 字符串
+    (@one $aspace:ident, $idx:ident, $arg:ident : CStr) => {
+        $crate::ptr::validate_c_str(&$aspace, args[$idx] as *const core::ffi::c_char)?;
+        let $arg = args[$idx] as *const core::ffi::c_char;
+        $idx += 1;
+    };
+
+    // 忽略参数
+    (@one $aspace:ident, $idx:ident, ..) => {
+        $idx += 1;
+    };
+}
+*/
 #[macro_export]
 macro_rules! apply {
     ($fn:expr, $($arg:ident),* $(,)?) => {
         $fn($($arg as _),*)
     };
 }
-/*
- *macro_rules! get_args {
- *    ($($arg:ident),* $(,)?) => {
- *        let [$($arg),* ..] = args;
- *    };
- *}
- */
+
+/*macro_rules! get_args {
+     ($($arg:ident),* $(,)?) => {
+        let [$($arg),* ..] = args;
+     };
+}*/
+ 
 
 syscall_handler_def!(
         write => [fd,buf_ptr,size,..] {
@@ -210,7 +300,7 @@ syscall_handler_def!(
             sys_flistxattr(fd as c_int, list as _, size as _)
         }
         fremovexattr =>[fd, name,..]{
-            syscall_imp::fs::sys_fremovexattr(fd as c_int ,name as *const c_char)
+            sys_fremovexattr(fd as c_int ,name as *const c_char)
         }
         utimensat =>[dirfd ,path ,times, flags,..]{
             ///Now it can NOT change atime_nec and mtime_nec and support large number like 1LL<<32
