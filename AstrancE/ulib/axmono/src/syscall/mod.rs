@@ -158,11 +158,13 @@ syscall_handler_def!(
         }
         futex => _ {
             warn!("futex syscall not implemented, task exit");
+            //task::exit::do_exit(-1 << 8, true);
             task::sys_exit(-1);
-            Ok(-1)
+            //Ok(0)
+            //Err(LinuxError::ENOSYS)
         }
 );
 
 fn foo() {
-    
+    //LinuxError::ENOSYS
 }

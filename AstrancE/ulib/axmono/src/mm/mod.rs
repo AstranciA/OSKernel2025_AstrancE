@@ -384,7 +384,7 @@ pub fn is_accessing_user_memory() -> bool {
 }
 #[register_trap_handler(PAGE_FAULT)]
 fn handle_page_fault(vaddr: VirtAddr, access_flags: MappingFlags, is_user: bool) -> bool {
-    debug!(
+    trace!(
         "Page fault at {:#x?}, flags: {:#x?}, is_user: {:?}",
         vaddr, access_flags, is_user
     );

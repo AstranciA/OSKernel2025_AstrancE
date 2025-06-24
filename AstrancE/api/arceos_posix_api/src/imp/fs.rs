@@ -788,6 +788,7 @@ pub fn sys_getcwd(buf: *mut c_char, size: usize) -> *mut c_char {
         }
         let dst = unsafe { core::slice::from_raw_parts_mut(buf as *mut u8, size as _) };
         let cwd = axfs::api::current_dir()?;
+        debug!("sys_getcwd >= {:?}", cwd);
         let cwd = cwd.as_bytes();
         if cwd.len() < size {
             dst[..cwd.len()].copy_from_slice(cwd);
