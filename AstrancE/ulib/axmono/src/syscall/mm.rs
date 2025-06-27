@@ -4,12 +4,13 @@ use alloc::sync::Arc;
 use axerrno::{LinuxError, LinuxResult};
 use axmm::{MmapFlags, MmapPerm};
 use axtask::{TaskExtRef, current};
-use memory_addr::va;
+use memory_addr::{va, MemoryAddr};
 use page_table_entry::MappingFlags;
 
 use crate::mm::mmap::{MmapIOImpl, MmapResource};
 
-pub(crate) fn sys_brk(new_heap_top: usize) -> LinuxResult<isize> {
+// pub(crate) fn sys_brk(new_heap_top: usize) -> LinuxResult<isize> {
+pub fn sys_brk(new_heap_top: usize) -> LinuxResult<isize> {
     let current_task = current();
     let mut aspace = current_task.task_ext().process_data().aspace.lock();
     let old_top = aspace.heap().top();
@@ -22,7 +23,8 @@ pub(crate) fn sys_brk(new_heap_top: usize) -> LinuxResult<isize> {
     //Ok(aspace.heap().top().as_usize() as isize)
 }
 
-pub(crate) fn sys_mprotect(addr: usize, size: usize, prot: usize) -> LinuxResult<isize> {
+// pub(crate) fn sys_mprotect(addr: usize, size: usize, prot: usize) -> LinuxResult<isize> {
+pub fn sys_mprotect(addr: usize, size: usize, prot: usize) -> LinuxResult<isize> {
     let curr = current();
     let mut aspace = curr.task_ext().process_data().aspace.lock();
     let prot = MappingFlags::from_bits(prot).ok_or(LinuxError::EINVAL)?;
@@ -35,7 +37,15 @@ pub(crate) fn sys_mprotect(addr: usize, size: usize, prot: usize) -> LinuxResult
     Ok(0)
 }
 
-pub(crate) fn sys_mmap(
+/*pub(crate) fn sys_mmap(
+    addr: usize,
+    len: usize,
+    prot: usize,
+    flags: usize,
+    fd: c_int,
+    offset: usize,
+) -> LinuxResult<isize> {*/
+pub fn sys_mmap(
     addr: usize,
     len: usize,
     prot: usize,
@@ -91,5 +101,17 @@ pub(crate) fn sys_mmap(
         Ok(va.as_usize() as isize)
     } else {
         Err(LinuxError::ENOMEM)
+    }
+}
+
+pub fn sys_munmap(start: usize, size: usize) -> LinuxResult<isize> {
+    let curr = current();
+    let mut aspace = curr.task_ext().process_data().aspace.lock();
+    let start = start.into();
+    let size = size.align_up_4k();
+    if aspace.munmap(start, size).is_ok() {
+        Ok(0)
+    } else {
+        Err(LinuxError::EPERM)
     }
 }
