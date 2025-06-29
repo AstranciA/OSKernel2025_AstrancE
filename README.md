@@ -136,11 +136,16 @@ make AX_SOURCE=file:/path/to/AstrancE/ AX_ROOT=.AstrancE fetch_ax
 ------
 
 1. 构建测试用例：
+RISCV-64构建方式：
 
 ```sh
 make ARCH=riscv64 AX_ROOT=.AstrancE testcase
 ```
+LoongArch64构建方式：
 
+```sh
+make ARCH=loongarch64 AX_ROOT=.AstrancE testcase
+```
 可阅读 `Makefile` 获取更多细节。构建完成后，生成的二进制文件将自动打包至 `$(AX_ROOT)/disk.img` 中。
 
 ------
