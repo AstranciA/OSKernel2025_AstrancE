@@ -1,0 +1,176 @@
+![HITSZ_LOG](docs/HITSZ_logo.png)
+
+# AstrancE OS
+
+
+## 项目简介
+---
+
+AstrancE 是基于 ArceOS 使用 rust 开发的宏内核操作系统，具备良好的模块化设计与用户态支持能力。项目完成了从微内核向宏内核的架构转变，支持多线程、系统调用、VFS、信号机制、ELF 加载等核心功能，具备较强的可拓展性与移植性。
+
+完成情况
+---
+#初赛情况
+截至6月29日，AstrancE能基本在RISCV-64和LOONGARCH-64通过basic，libc，glibc和luna测例，在实时排名榜上位于19名：
+![Rank](docs/rank.png)
+
+内核介绍：
+---
+## 技术亮点：
+-  **宏内核架构转换**：在保留模块化结构基础上，实现完整系统调用接口。
+-  **增强内存功能**：支持 `mmap`、共享内存、COW 机制与内存安全重构。
+-  **文件系统拓展**：新增 `procfs`，支持动态挂载与设备节点管理。
+-  **异步信号支持**：符合 POSIX 标准，处理可靠，机制健全。
+-  **多线程并发支持**：支持用户态线程与同步原语（如 futex）。
+- **构建工具优化**：开发 `acbat` 模块，简化构建流程与内核集成。
+
+与 ArceOS 的功能对比：
+| 功能模块   | AstrancE OS                     | ArceOS                 | 差异说明                             |
+| ---------- | ------------------------------- | ---------------------- | ------------------------------------ |
+| 进程调度   | 支持用户态进程与线程管理        | 支持内核线程调度       | 实现用户线程生命周期控制             |
+| 文件系统   | VFS 框架、支持 procfs 与 devfs  | 原生多文件系统接口     | 实现统一接口、动态挂载机制           |
+| 虚拟内存   | mmap/COW/共享内存/RAII 管理     | 支持基本页表管理       | 安全封装与内存区生命周期自动控制     |
+| 信号处理   | 完整 POSIX 信号栈               | 简化信号机制           | 支持异步通知、默认处理器与备用信号栈 |
+| 系统调用   | 表驱动注册 + 50POSIX 接口     | 静态匹配/手动注册      | 结构清晰，支持自动化生成与维护       |
+| 用户态支持 | ELF 加载、栈隔离、Rust+C 运行时 | 限制性支持部分用户程序 | 完整支持用户态进程运行与隔离机制     |
+| 多核支持   | 支持调度器感知的核间迁移        | 支持                   | 实现 CPU 间任务平衡与线程分布        |
+| 构建系统   | 支持 acbat 批量构建与嵌入式链接 | 常规构建流程           | 更适配批量用户程序构建与调试流程     |
+
+------
+<p align="center">
+  <img src="docs/sys.png" alt="System" width="500px"><br>
+  <strong>图 1：AstrancE 系统架构图</strong>
+</p>
+
+
+##  项目结构
+```
+AstrancE_OS/                          # 项目根目录
+├── api/                             # 提供给用户程序/外部模块的 API 接口定义
+│   ├── arceos_api/                  # 与 ArceOS 兼容的接口层，便于迁移/对比
+│   ├── arceos_posix_api/            # POSIX 风格的 API 封装，提升用户程序可移植性
+│   └── axfeat/                      # 提供系统特性功能探测与声明（如 feature 宏）
+├── configs/                         # 系统构建配置（目标平台、默认参数等）
+├── crates/                          # 自定义工具库或构建工具集合
+│   ├── acbat/                       # 自定义构建辅助工具（如打包、签名）
+│   ├── acbuilder/                   # 构建镜像/ISO 的工具 crate
+│   ├── axmm_crates/                 # 内存管理相关的扩展 crate
+│   └── page_table_multiarch/        # 多架构页表支持模块
+├── modules/                         # 核心模块源代码
+│   ├── axalloc/                     # 内存分配器模块
+│   ├── axconfig/                    # 配置项管理模块
+│   ├── axdisplay/                   # 图形/显示设备支持模块
+│   ├── axdma/                       # DMA 传输支持模块
+│   ├── axdriver/                    # 设备驱动模块集合
+│   ├── axfs/                        # 文件系统接口与实现
+│   ├── axhal/                       # 硬件抽象层，适配多种平台
+│   ├── axlog/                       # 日志系统
+│   ├── axmm/                        # 内存管理模块（虚拟内存等）
+│   ├── axnet/                       # 网络协议栈支持
+│   ├── axns/                        # 命名空间实现（资源隔离）
+│   ├── axruntime/                   # 系统运行时初始化与支持
+│   ├── axsync/                      # 同步机制（锁/信号量等）
+│   ├── axsyscall/                   # 系统调用处理与注册
+│   └── axtask/                      # 任务与线程管理模块
+├── README.md                        # 项目总览说明文件
+├── rust-toolchain.toml             # 指定使用的 Rust 工具链版本
+├── scripts/                         # 辅助脚本
+│   ├── make/                        # 构建辅助脚本集合
+│   └── net/                         # 网络配置/测试脚本
+├── testcases/                       # 测试用例目录
+│   └── nimbos/                      # 相关测试集/子系统测试
+├── tools/                           # 各平台或调试用工具集合
+│   ├── bsta1000b/                   # 特定 SoC 平台支持工具
+│   ├── bwbench_client/              # 网络/带宽测试工具
+│   ├── deptool/                     # 依赖检查与图生成工具
+│   ├── phytium_pi/                  # Phytium 平台辅助工具
+│   └── raspi4/                      # 树莓派 4 专用工具
+├── ulib/                            # 用户态库（用户程序运行所需）
+│   ├── axlibc/                      # C 标准库实现（或封装）
+│   ├── axmono/                      # Mono运行库（可能是运行时支持库）
+│   └── axstd/                       # Rust 风格的标准库封装
+├── Cargo.lock                       # Rust 自动生成的依赖锁文件
+├── Cargo.toml                       # 项目的主配置文件，定义依赖与元数据
+├── doc/                             # 项目文档与平台说明
+├── Dockerfile                       # 构建 Docker 环境所需的配置
+├── examples/                        # 示例用户程序（Rust / C）
+├── LICENSE.Apache2                  # Apache 2.0 许可证
+├── LICENSE.GPLv3                    # GPLv3 许可证
+├── LICENSE.MulanPSL2                # 木兰宽松许可证第2版
+├── LICENSE.MulanPubL2               # 木兰公共许可证第2版
+└── Makefile                         # 顶层构建脚本，支持 make 编译流程
+
+```
+## 构建与运行
+
+###  构建依赖
+
+- Rust（建议使用 nightly 版本）
+- `cargo-binutils` 与 `llvm-tools-preview`
+- QEMU（用于 RISC-V 模拟器）
+- Make / Bash / Python（用于辅助构建脚本）
+
+------
+
+### 构建命令
+
+#### 获取源码：
+
+1. 从远程仓库拉取 AstrancE 源码：
+
+```sh
+make AX_SOURCE=git:http:#github.com/AstranciA/AstrancE.git AX_ROOT=.AstrancE fetch_ax
+```
+
+或从本地路径拉取：
+
+```sh
+make AX_SOURCE=file:/path/to/AstrancE/ AX_ROOT=.AstrancE fetch_ax
+```
+
+⚠️ 注意：本地路径后面需加上斜杠 `/`。
+
+- `AX_SOURCE` 默认为 `git:http:#github.com/AstranciA/AstrancE.git`，即官方 AstrancE 仓库地址；
+- `AX_ROOT` 默认为 `.AstrancE`，即源码下载与构建目录。
+
+------
+
+1. 构建测试用例：
+
+```sh
+make ARCH=riscv64 AX_ROOT=.AstrancE testcase
+```
+
+可阅读 `Makefile` 获取更多细节。构建完成后，生成的二进制文件将自动打包至 `$(AX_ROOT)/disk.img` 中。
+
+------
+
+### 运行方式
+
+RISCV-64运行方式：
+
+```sh
+make ARCH=riscv64 run
+```
+
+LoongArch64运行方式：
+
+```sh
+make ARCH=loongarch64 run
+```
+
+如需了解更多运行选项与说明，请参考 AstrancE 项目文档。
+
+
+## 项目人员
+哈尔滨工业大学(深圳)：
+
+- 曾熙晨（2972182388@qq.com）：内存管理重构、线程支持、信号机制优化、构建工具
+- 滕奇勋（3045859462@qq.com）：多模块合并与维护，参与系统调用调试
+- 杨纯懿（2695719556@qq.com）：实现 futex 用户态同步、busybox 兼容支持、文件系统接口完善，参与 Lua 支持与用户态运行时环境维护
+- 指导老师：夏文，仇洁婷
+
+------
+
+> 本项目源自对操作系统内核原理的学习和探索，致敬所有开源先行者！
+
