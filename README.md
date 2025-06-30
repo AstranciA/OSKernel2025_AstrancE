@@ -110,7 +110,7 @@ uspace = ["axns/thread-local"]
 
 ##  AstrancE OS 项目结构
 
-```toml
+```
 AstrancE_OS/                          # 项目根目录
 ├── api/                             # 提供给用户程序/外部模块的 API 接口定义
 │   ├── arceos_api/                  # 与 ArceOS 兼容的接口层，便于迁移/对比
