@@ -19,7 +19,9 @@ all: vendor kernel-la kernel-rv rootfs
 	@echo "--- All components built and moved to project root ---"
 
 vendor:
+	cat AstrancE/vendor.tar.gz.* > AstrancE/vendor.tar.gz
 	tar -xzf AstrancE/vendor.tar.gz -C AstrancE/
+	cat App_oscomp/vendor.tar.gz.* > App_oscomp/vendor.tar.gz
 	tar -xzf App_oscomp/vendor.tar.gz -C App_oscomp/
 
 
