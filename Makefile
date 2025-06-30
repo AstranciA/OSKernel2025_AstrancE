@@ -19,8 +19,8 @@ all: vendor kernel-la kernel-rv rootfs
 	@echo "--- All components built and moved to project root ---"
 
 vendor:
-	unzip -o AstrancE/vendor.zip
-	unzip -o App_oscomp/vendor.zip
+	tar -xzf AstrancE/vendor.tar.gz -C AstrancE/
+	tar -xzf App_oscomp/vendor.tar.gz -C App_oscomp/
 
 
 # --- 特定目标: kernel-la ---
