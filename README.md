@@ -8,10 +8,10 @@
 
 AstrancE 是基于 ArceOS 使用 rust 开发的宏内核操作系统，具备良好的模块化设计与用户态支持能力。项目完成了从微内核向宏内核的架构转变，支持多线程、系统调用、VFS、信号机制、ELF 加载等核心功能，具备较强的可拓展性与移植性。
 
-完成情况
+完成情况：
 ---
-#初赛情况
-截至6月29日，AstrancE能基本在RISCV-64和LOONGARCH-64通过basic，libc，glibc和luna测例，在实时排名榜上位于19名：
+初赛情况
+截至6月29日，AstrancE能基本在RISCV-64和LOONGARCH-64通过basic，libc，glibc和luna测例，在实时排名榜上位于18名：
 ![Rank](docs/rank.png)
 
 内核介绍：
@@ -24,7 +24,7 @@ AstrancE 是基于 ArceOS 使用 rust 开发的宏内核操作系统，具备良
 -  **多线程并发支持**：支持用户态线程与同步原语（如 futex）。
 - **构建工具优化**：开发 `acbat` 模块，简化构建流程与内核集成。
 
-与 ArceOS 的功能对比：
+与 `ArceOS` 的功能对比：
 | 功能模块   | AstrancE OS                     | ArceOS                 | 差异说明                             |
 | ---------- | ------------------------------- | ---------------------- | ------------------------------------ |
 | 进程调度   | 支持用户态进程与线程管理        | 支持内核线程调度       | 实现用户线程生命周期控制             |
@@ -37,11 +37,18 @@ AstrancE 是基于 ArceOS 使用 rust 开发的宏内核操作系统，具备良
 | 构建系统   | 支持 acbat 批量构建与嵌入式链接 | 常规构建流程           | 更适配批量用户程序构建与调试流程     |
 
 ------
+
+## AstrancE OS 架构图
 <p align="center">
   <img src="docs/sys.png" alt="System" width="500px"><br>
   <strong>图 1：AstrancE 系统架构图</strong>
 </p>
 
+## 模块化
+<p align="center">
+  <img src="docs/block.png" alt="System" width="500px"><br>
+  <strong>图 2：AstrancE 模块化</strong>
+</p>
 
 ##  项目结构
 ```
@@ -166,15 +173,23 @@ make ARCH=loongarch64 run
 
 如需了解更多运行选项与说明，请参考 AstrancE 项目文档。
 
+------
+
+## 内容链接
+
+- [初赛文档](AstrancE_OS_Report.pdf)
+- [初赛PPT](AstrancE_ppt.pdf)
+- [初赛演示视频](https://pan.hit.edu.cn/l/wFKZre)
+------
 
 ## 项目人员
 哈尔滨工业大学(深圳)：
 
-- 曾熙晨（2972182388@qq.com）：内存管理重构、线程支持、信号机制优化、构建工具
-- 滕奇勋（3045859462@qq.com）：多模块合并与维护，参与系统调用调试
-- 杨纯懿（2695719556@qq.com）：实现 futex 用户态同步、busybox 兼容支持、文件系统接口完善，参与 Lua 支持与用户态运行时环境维护
+- 曾熙晨（[email](2972182388@qq.com)）：内存管理重构、线程支持、信号机制优化、构建工具
+- 滕奇勋（[email](3045859462@qq.com)）：多模块合并与维护，参与系统调用调试
+- 杨纯懿（[email](2695719556@qq.com)）：实现 futex 用户态同步、busybox 兼容支持，参与 Lua 支持与用户态运行时环境维护
 - 指导老师：夏文，仇洁婷
-
+- 项目建设仓库：[Github](https://github.com/AstranciA)
 ------
 
 > 本项目源自对操作系统内核原理的学习和探索，致敬所有开源先行者！
