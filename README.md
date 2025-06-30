@@ -13,9 +13,9 @@ AstrancE 是基于 ArceOS 使用 rust 开发的宏内核操作系统，具备良
 ---
 
 初赛情况
-截至6月30日，AstrancE能基本在RISCV-64和LOONGARCH-64通过basic，libc，glibc和luna测例，在实时排名榜上位于14名,总分为1076.6795：
+截至6月30日，AstrancE能在RISCV-64和LOONGARCH-64通过basic，busybox, libctest, libcbench和lua的绝大部分测例，在实时排名榜上位于14名,总分为1076.6795：
 ![Rank](docs/rank.png)
-
+![Grade](docs/grade.png)
 ## 内核介绍
 ---
 
@@ -239,8 +239,8 @@ make ARCH=loongarch64 run
 
 ## 内容链接
 
-- [初赛文档](AstrancE_OS_Report.pdf)
-- [初赛PPT](AstrancE_ppt.pdf)
+- [初赛文档](AstrancE初赛文档.pdf)
+- [初赛PPT](AstrancE初赛ppt.pdf)
 - [初赛演示视频](https://pan.baidu.com/s/1yeaeVvRJ3UNQ1StyZO0rEA?pwd=fuec)
 
 ------
@@ -265,13 +265,12 @@ make ARCH=loongarch64 run
 | 模块路径                             | 功能简介          | 源项目/地址                                                  |
 | ------------------------------------ | ----------------- | ------------------------------------------------------------ |
 | `modules/axsyscall`                  | 系统调用机制      | 自主开发，部分参考 [starry-next](https://github.com/oscomp/starry-next) |
-| `modules/axsignal`                   | 信号处理子系统    | 同上                                                         |
 | `modules/axmm`、`crates/axmm_crates` | 内存管理框架      | 基于 [ArceOS](https://github.com/arceos-org/arceos) 修改     |
 | `crates/axfs_crates`                 | 文件系统模块封装  | 同上                                                         |
 | `crates/page_table_multiarch`        | 多架构页表支持    | 同上                                                         |
 | `crates/lwext4_rust`                 | EXT4 文件系统适配 | 修改自外部社区代码，作者信息详见各 `Cargo.toml`              |
 | `axconfig-gen`                       | 内核配置生成器    | [axconfig-gen](https://github.com/arceos-org/axconfig-gen)   |
-| `musl toolchain`                     | C 运行时支持      | [musl.cc](https://musl.cc/)     
+  
 其他依赖如 `bitflags`、`linkme`、`linux-raw-sys` 等请参见 `Cargo.toml`。
           
 ### 外部贡献者（不完全统计）
@@ -289,13 +288,6 @@ make ARCH=loongarch64 run
 - Andre Richter
 - 以及其他在 `git log` 中出现的社区贡献者（如 Asakura Mizu、chyyuu、DeathWish5、Mivik、Qix、Su Mingxian、Tim-C1、Youjie Zheng 等）
 
-详细名单请参见命令输出：
-
-```bash
-git log --format='%an <%ae>' | sort | uniq
-```
-
-------
 
 ### 协议与合规说明
 本项目遵循 **GPL-3.0-or-later OR Apache-2.0 OR MulanPSL-2.0** 多重开源协议。
