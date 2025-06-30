@@ -43,6 +43,15 @@ impl MappingFlags {
         }
         flags
     }
+    #[cfg(feature = "COW")]
+    pub fn unmark_cow(flags: Self) -> Self {
+        let mut flags = flags.clone();
+        if flags.contains(Self::COW) {
+            flags.remove(Self::COW);
+            flags.insert(Self::WRITE);
+        }
+        flags
+    }
 
     pub fn protect(&self, flags: Self) -> Self {
         let mut flags = flags.clone();

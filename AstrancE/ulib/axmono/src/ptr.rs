@@ -1,10 +1,28 @@
 use core::{alloc::Layout, ffi::c_char, mem, slice, str};
 
 use crate::mm::access_user_memory;
-use axerrno::{LinuxError, LinuxResult};
+use axerrno::{ax_err, AxError, AxResult, LinuxError, LinuxResult};
+use spin::lock_api::MutexGuard;
 use axhal::paging::MappingFlags;
 use axtask::{TaskExtRef, current};
 use memory_addr::{MemoryAddr, PAGE_SIZE_4K, VirtAddr, VirtAddrRange};
+use axmm::AddrSpace;
+
+#[macro_export]
+macro_rules! validate_ptr {
+    ($ptr:expr, $ty:ty, $flags:expr) => {
+        $crate::ptr::validate_uspace($ptr, core::mem::size_of::<$ty>(), $flags, false)
+    };
+    ($ptr:expr, $ty:ty, $flags:expr, nullable) => {
+        $crate::ptr::validate_uspace($ptr, core::mem::size_of::<$ty>(), $flags, true)
+    };
+    ($ptr:expr, $ty:ty, $cnt:expr, $flags:expr) => {
+        $crate::ptr::validate_uspace($ptr, core::mem::size_of::<$ty>() * $cnt, $flags, false)?
+    };
+    ($ptr:expr, $ty:ty, $cnt:expr, $flags:expr, nullable) => {
+        $crate::ptr::validate_uspace($ptr, core::mem::size_of::<$ty>() * $cnt, $flags, true)?
+    };
+}
 
 fn check_region(start: VirtAddr, layout: Layout, access_flags: MappingFlags) -> LinuxResult<()> {
     let align = layout.align();
@@ -30,6 +48,9 @@ fn check_region(start: VirtAddr, layout: Layout, access_flags: MappingFlags) -> 
     Ok(())
 }
 
+/// **代码来源声明：**
+/// 
+/// [oscomp/starry-next](https://github.com/oscomp/starry-next) 项目。
 fn check_null_terminated<T: Eq + Default>(
     start: VirtAddr,
     access_flags: MappingFlags,
@@ -90,6 +111,9 @@ fn check_null_terminated<T: Eq + Default>(
 /// Converting a `PtrWrapper<T>` to `*T` is done by `PtrWrapper::get` (or
 /// `get_as_*`). It checks whether the pointer along with its layout is valid in
 /// the current task's address space, and raises EFAULT if not.
+/// **代码来源声明：**
+/// 
+/// [oscomp/starry-next](https://github.com/oscomp/starry-next) 项目。
 pub trait PtrWrapper<T>: Sized {
     type Ptr;
 
@@ -150,6 +174,9 @@ pub trait PtrWrapper<T>: Sized {
 /// A pointer to user space memory.
 ///
 /// See [`PtrWrapper`] for more details.
+/// **代码来源声明：**
+/// 
+/// [oscomp/starry-next](https://github.com/oscomp/starry-next) 项目。
 #[repr(transparent)]
 pub struct UserPtr<T>(*mut T);
 
@@ -237,3 +264,42 @@ impl UserConstPtr<c_char> {
         str::from_utf8(slice).map_err(|_| LinuxError::EILSEQ)
     }
 }
+
+/// 校验用户空间指针区间的访问权限
+pub fn validate_uspace(
+    ptr: usize,
+    len: usize,
+    flags: MappingFlags,
+    nullable: bool,
+) -> AxResult {
+    if ptr == 0 && nullable {
+        return Ok(());
+    }
+    let curr = current();
+    let aspace = curr.task_ext().process_data().aspace.lock();
+    let range = VirtAddrRange::from_start_size(VirtAddr::from(ptr), len);
+    if !aspace.check_region_access(range, flags | MappingFlags::USER) {
+        return ax_err!(BadAddress, "invalid user ptr")
+    }
+    Ok(())
+}
+
+//校验用户空间指针区间是否可读
+// pub fn validate_readable( ptr: usize, len: usize) -> bool {
+//     validate_uspace(ptr, len, MappingFlags::READ)
+// }
+
+//校验用户空间指针区间是否可写
+// pub fn validate_writable(aspace: &AddrSpace, ptr: usize, len: usize) -> bool {
+//     validate_uspace(aspace, ptr, len, MappingFlags::WRITE)
+// }
+
+// 校验用户空间指针区间是否可执行
+// pub fn validate_executable(aspace: &AddrSpace, ptr: usize, len: usize) -> bool {
+//     validate_uspace(aspace, ptr, len, MappingFlags::EXECUTE)
+// }
+
+// 获取当前进程的地址空间锁
+// pub fn get_uspace() -> impl core::ops::Deref<Target = AddrSpace> + '_ {
+//     current().task_ext().process_data().aspace
+// }

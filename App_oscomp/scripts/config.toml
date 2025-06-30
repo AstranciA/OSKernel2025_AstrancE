@@ -1,7 +1,6 @@
 [net]
-offline = true
-git-fetch-with-cli = true
-
+offline=true
+git-fetch-with-cli=true
 [patch.'https://github.com/AstranciA/AstrancE.git']
 axstd = { path = "%AX_ROOT%/ulib/axstd" }
 arceos_posix_api = { path = "%AX_ROOT%/api/arceos_posix_api" }
@@ -28,10 +27,12 @@ axfs_vfs = { path = "%AX_ROOT%/crates/axfs_crates/axfs_vfs" }
 axfs_devfs = { path = "%AX_ROOT%/crates/axfs_crates/axfs_devfs" }
 axfs_ramfs = { path = "%AX_ROOT%/crates/axfs_crates/axfs_ramfs" }
 lwext4_rust = { path = "%AX_ROOT%/crates/lwext4_rust" }
+
+[patch."https://github.com/AstranciA/fast-trap"]
+fast-trap = { path = "%AX_ROOT%/crates/fast-trap/fast-trap" }
 [profile.release]
 debug = 2
 
-# === BEGIN CARGO VENDOR CONFIG === #
 
 [source.crates-io]
 replace-with = "vendored-sources"
@@ -87,7 +88,3 @@ replace-with = "vendored-sources"
 
 [source.vendored-sources]
 directory = "vendor"
-
-
-# === END CARGO VENDOR CONFIG === #
-

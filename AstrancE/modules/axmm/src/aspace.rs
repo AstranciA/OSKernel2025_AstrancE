@@ -439,8 +439,10 @@ impl AddrSpace {
         mut range: VirtAddrRange,
         access_flags: MappingFlags,
     ) -> bool {
+        let access_flags  = MappingFlags::unmark_cow(access_flags);
         // TODO: COW
         for area in self.areas.iter() {
+            // warn!("{range:?} {access_flags:?}  {area:?}");
             if area.end() <= range.start {
                 continue;
             }
@@ -474,8 +476,8 @@ impl AddrSpace {
         }
         if let Some(area) = self.areas.find(vaddr) {
             let orig_flags = area.flags();
-            debug!("Page fault area flags: {:?}", orig_flags);
-            debug!("Page fault pte flags: {:?}", self.pt.query(vaddr));
+            trace!("Page fault area flags: {:?}", orig_flags);
+            trace!("Page fault pte flags: {:?}", self.pt.query(vaddr));
 
             if orig_flags.contains(access_flags) {
                 return area
@@ -569,6 +571,7 @@ impl AddrSpace {
     #[cfg(feature = "COW")]
     pub fn clone_on_write(&mut self) -> AxResult<Self> {
         use alloc::vec::Vec;
+        use mmap::MmapFlags;
 
         use crate::backend::VmAreaType;
 
@@ -583,7 +586,7 @@ impl AddrSpace {
         }
 
         for area in self.areas.iter() {
-            debug!("map COW: {:?}", area);
+            debug!("copying : {:?}", area);
             // Remap the memory area in new address space.
             // area keeps the origin flags but pt flags will be marked as COW
             new_aspace
@@ -592,17 +595,20 @@ impl AddrSpace {
                 .map_err(mapping_err_to_ax_err)?;
 
             let mut pte_flags = area.flags();
-            if pte_flags.contains(MappingFlags::USER) {
-                if let Backend::Alloc {
-                    va_type,
-                    populate: _,
-                } = area.backend()
-                {
-                    // TODO: share mmap?
-                    if let VmAreaType::Normal = va_type {
-                        pte_flags = MappingFlags::mark_cow(pte_flags);
-                    }
+
+            let should_mark_cow = {
+                match area.backend() {
+                    Backend::Alloc { va_type, populate } => match va_type {
+                        VmAreaType::Mmap(mmio) => !mmio.flags().contains(MmapFlags::MAP_SHARED),
+                        VmAreaType::Normal => true,
+                        _ => false,
+                    },
+                    _ => false
                 }
+            };
+            if should_mark_cow {
+                pte_flags = MappingFlags::mark_cow(pte_flags);
+                debug!("COW : {:?}", area);
             }
             // clone mappings
             // TODO: Better way to clone mapping

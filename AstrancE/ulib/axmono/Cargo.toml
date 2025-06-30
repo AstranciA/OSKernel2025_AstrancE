@@ -2,7 +2,7 @@
 name = "axmono"
 version.workspace = true
 edition.workspace = true
-authors.workspace = true
+authors = ["ZreXoc <zeexoc@outlook.com>", "MukioXun <3045859462@qq.com>", "LEOibyug <y2695719556@outlook.com>"]
 license.workspace = true
 homepage.workspace = true
 documentation.workspace = true
@@ -25,16 +25,17 @@ page_table_entry = { workspace = true }
 page_table_multiarch = { workspace = true }
 axfeat = { workspace = true, features = ["tls"] }
 axconfig = { workspace = true }
+axalloc = { workspace = true }
 axhal = { workspace = true }
 axlog = { workspace = true }
-arceos_posix_api = { workspace = true, features = ["uspace"] }
+arceos_posix_api = { workspace = true, features = ["uspace", "select"] }
 axfs = { workspace = true, features = ["dyn"] }
 axmm = { workspace = true, optional = true }
 axtask = { workspace = true, optional = true }
 axsync = { workspace = true }
 axns = { workspace = true, optional = true }
 axsignal = { workspace = true, optional = true }
-axsyscall = { workspace = true, features = ["fd", "fs", "pipe", "multitask"] }
+#axsyscall = { workspace = true, features = ["fd", "fs", "pipe", "multitask"] }
 axio = { version = "0.1.1", features = ["alloc"] }
 linux-raw-sys = { workspace = true }
 axerrno = "0.1"

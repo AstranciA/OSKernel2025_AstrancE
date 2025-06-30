@@ -1,25 +1,29 @@
+use crate::ctype_my::statx;
+use crate::ctypes;
+use crate::imp::stdio::{stdin, stdout};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
-use axtask::yield_now;
-use core::ffi::{c_char, c_int, c_short, c_void};
-use core::time::Duration;
-use spin::Mutex;
-use crate::ctypes;
-use crate::ctype_my::statx;
-use crate::imp::stdio::{stdin, stdout};
 use axerrno::{LinuxError, LinuxResult, ax_err};
 use axfs_vfs::{VfsNodeAttr, VfsNodeOps, VfsResult};
 use axio::PollState;
 use axns::{ResArc, def_resource};
+use axtask::yield_now;
+use core::ffi::{c_char, c_int, c_short, c_void};
+use core::time::Duration;
 use flatten_objects::FlattenObjects;
-use spin::{RwLock, Once};
+use spin::Mutex;
+use spin::{Once, RwLock};
 
 pub const AX_FILE_LIMIT: usize = 1024;
 
 static FILE_LIMIT: Mutex<(usize, usize)> = Mutex::new((AX_FILE_LIMIT, AX_FILE_LIMIT));
 
-pub fn get_file_limit() -> usize { FILE_LIMIT.lock().0 }
-pub fn get_file_limit_max() -> usize { FILE_LIMIT.lock().1 }
+pub fn get_file_limit() -> usize {
+    FILE_LIMIT.lock().0
+}
+pub fn get_file_limit_max() -> usize {
+    FILE_LIMIT.lock().1
+}
 
 pub fn set_file_limit(new_cur: usize, new_max: usize) -> Result<(), LinuxError> {
     if new_cur > new_max || new_cur < 1 || new_max < 1 {
@@ -40,8 +44,8 @@ pub trait FileLike: Send + Sync {
     fn read(&self, buf: &mut [u8]) -> LinuxResult<usize>;
     fn write(&self, buf: &[u8]) -> LinuxResult<usize>;
     fn stat(&self) -> LinuxResult<ctypes::stat>;
-    fn statx(&self) ->LinuxResult<statx>{
-       Err(LinuxError::EOPNOTSUPP)
+    fn statx(&self) -> LinuxResult<statx> {
+        Err(LinuxError::EOPNOTSUPP)
     }
 
     fn read_at(&self, _buf: &mut [u8], _offset: u64) -> LinuxResult<usize> {
@@ -119,6 +123,14 @@ impl FD_TABLE {
         }
         RwLock::new(new_table)
     }
+
+    pub fn clear(&self) {
+        let mut table = self.write();
+        let ids: Vec<_> = table.ids().collect();
+        for i in ids {
+            table.remove(i).unwrap();
+        }
+    }
 }
 
 /// Get the current number of open file descriptors
@@ -137,7 +149,7 @@ pub fn get_file_like(fd: c_int) -> LinuxResult<Arc<dyn FileLike>> {
 
 /// Add a file to the file descriptor table.
 pub fn add_file_like(f: Arc<dyn FileLike>) -> LinuxResult<c_int> {
-    if current_fd_count() >= get_file_limit(){
+    if current_fd_count() >= get_file_limit() {
         return Err(LinuxError::EMFILE);
     }
     Ok(FD_TABLE.write().add(f).map_err(|_| LinuxError::EMFILE)? as c_int)
@@ -304,7 +316,6 @@ pub fn sys_ppoll(
         if nfds == 0 {
             return Ok(0);
         }
-        error!("123");
         // 1. 处理超时参数
         let has_timeout = !timeout_ts.is_null();
         let timeout_duration = if has_timeout {
@@ -327,7 +338,6 @@ pub fn sys_ppoll(
         loop {
             // 执行一次poll检查
             ready_count = poll_once(fds, nfds)?;
-            error!("ready_count: {ready_count:?}");
 
             // 如果有就绪的文件描述符，立即返回
             if ready_count > 0 {
@@ -356,7 +366,6 @@ fn poll_once(fds: *mut ctypes::pollfd, nfds: ctypes::nfds_t) -> LinuxResult<usiz
     }
 
     let fds_slice = unsafe { core::slice::from_raw_parts_mut(fds, nfds as usize) };
-    error!("poll_once <= {:?}", fds_slice);
     let mut ready_count = 0;
 
     for fd in fds_slice.iter_mut() {

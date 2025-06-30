@@ -135,11 +135,14 @@ impl AxNamespaceIf for AxNamespaceImpl {
 
 axtask::def_task_ext!(TaskExt);
 
-pub fn spawn_user_task_inner(exe_path: &str, uctx: UspaceContext, pwd: String) -> TaskInner {
+pub fn spawn_user_task_inner(exe_path: &str, uctx: UspaceContext, pwd: String, child_tid: Option<&'static mut Pid>) -> TaskInner {
     let mut task = TaskInner::new(
         move || {
             let curr = axtask::current();
             let kstack_top = curr.kernel_stack_top().unwrap();
+            if let Some(tid) = child_tid {
+                *tid = curr.id().as_u64() as Pid
+            }
             trace!(
                 "Enter user space: entry={:#x}, ustack={:#x}, kstack={:#x}",
                 uctx.get_ip(),
@@ -147,6 +150,7 @@ pub fn spawn_user_task_inner(exe_path: &str, uctx: UspaceContext, pwd: String) -
                 kstack_top,
             );
             // FIXME:
+            warn!("pwd: {pwd:?}");
             set_current_dir(pwd.as_str()).unwrap();
             unsafe { uctx.enter_uspace(kstack_top) };
         },
@@ -164,7 +168,7 @@ pub fn spawn_user_task(
     pwd: String,
     parent: Option<Arc<Process>>,
 ) -> AxTaskRef {
-    let mut task = spawn_user_task_inner(exe_path, uctx, pwd);
+    let mut task = spawn_user_task_inner(exe_path, uctx, pwd, None);
     task.ctx_mut()
         .set_page_table_root(aspace.lock().page_table_root());
     let tid = task.id().as_u64() as Pid;
@@ -190,6 +194,7 @@ pub fn spawn_user_task(
 
     let thread_data = ThreadData {
         clear_child_tid: AtomicUsize::new(0),
+        signal: spawn_signal_ctx()
     };
     let thread = process.new_thread(tid).data(thread_data).build();
 
@@ -276,6 +281,15 @@ pub fn get_session(sid: Pid) -> LinuxResult<Arc<Session>> {
     SESSION_TABLE.read().get(&sid).ok_or(LinuxError::ESRCH)
 }
 
+pub fn find_thread_in_group(tgid: Pid, tid: Pid) -> LinuxResult<Arc<Thread>> {
+    let thr = get_thread(tid)?;
+    if thr.process().pid() != tgid {
+        return Err(LinuxError::ESRCH);
+    }
+    Ok(thr)
+}
+
+
 /// Update the time statistics to reflect a switch from kernel mode to user mode.
 pub fn time_stat_from_kernel_to_user() {
     let curr_task = current();
@@ -333,7 +347,7 @@ pub fn yield_with_time_stat() {
 fn pre_trap_handler(trap_frame: &mut TrapFrame, from_user: bool) -> bool {
     if from_user {
         time_stat_from_user_to_kernel();
-        handle_pending_signals(trap_frame);
+        //handle_pending_signals(trap_frame);
     }
     true
 }

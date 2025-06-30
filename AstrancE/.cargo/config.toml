@@ -2,7 +2,6 @@
 offline = true
 git-fetch-with-cli = true
 
-# === BEGIN CARGO VENDOR CONFIG === #
 [source.crates-io]
 replace-with = "vendored-sources"
 
@@ -78,5 +77,4 @@ replace-with = "vendored-sources"
 
 [source.vendored-sources]
 directory = "vendor"
-# === END CARGO VENDOR CONFIG === #
 

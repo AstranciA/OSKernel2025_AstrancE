@@ -1,7 +1,7 @@
 ## Build
 
 
-1. fetch the AstrancE source code:
+1. fetch the AstracE source code:
 ```sh
 make AX_SOURCE=git:http://github.com/AstranciA/AstrancE.git AX_ROOT=.AstrancE fetch_ax
 ```

@@ -18,15 +18,27 @@ use axfs::{CURRENT_DIR, api::set_current_dir, fops::Directory};
 use axhal::trap::{PRE_TRAP, register_trap_handler};
 use axhal::{arch::TrapFrame, time::nanos_to_ticks};
 use axmm::{MmapFlags, MmapPerm};
-use axsyscall::{ToLinuxResult, apply, syscall_handler_def};
+// use axsyscall::{ToLinuxResult, apply, syscall_handler_def};
 use axtask::{CurrentTask, TaskExtMut, TaskExtRef, current};
 use core::ffi::c_int;
 use linux_raw_sys::general as linux;
 use memory_addr::MemoryAddr;
 use syscalls::Sysno;
 
-mod mm;
+pub mod io;
+pub mod ipc;
+pub mod mm;
+pub mod pthread;
+pub mod process;
+pub mod signal;
+pub mod time;
 
+pub use mm::*;
+pub use process::*;
+pub use signal::*;
+pub use time::*;
+
+/*
 syscall_handler_def!(
         exit => [code,..] {
             task::sys_exit((code & 0xff) as i32)
@@ -34,13 +46,25 @@ syscall_handler_def!(
         exit_group => [code,..]{
             task::exit::sys_exit_group((code & 0xff) as i32)
         }
-        clone => [flags, sp, ..] {
+        clone => [flags, sp, parent_tid, a4, a5, ..] {
             let clone_flags = CloneFlags::from_bits_retain(flags as u32);
+            let child_tid = {
+                #[cfg(any(target_arch = "x86_64", target_arch = "loongarch64"))] {a4}
+                #[cfg(not(any(target_arch = "x86_64", target_arch = "loongarch64")))] {a5}
+            };
+            let tls = {
+                #[cfg(any(target_arch = "x86_64", target_arch = "loongarch64"))] {a5}
+                #[cfg(not(any(target_arch = "x86_64", target_arch = "loongarch64")))] {a4}
+            };
+
 
             let child_task = task::clone_task(
                 if (sp != 0) { Some(sp) } else { None },
                 clone_flags,
                 true,
+                parent_tid,
+                child_tid,
+                tls,
             )?;
             Ok(child_task.task_ext().thread.process().pid() as isize)
         }
@@ -152,17 +176,68 @@ syscall_handler_def!(
         kill => [pid, sig, ..] {
             task::signal::sys_kill(pid as _, sig as _)
         }
+        tkill => [tid, sig, ..] { // 对应 sys_tkill
+            task::signal::sys_tkill(tid as _, sig as _)
+        }
+        tgkill => [tgid, tid, sig, ..] { // 对应 sys_tgkill
+            task::signal::sys_tgkill(tgid as _, tid as _, sig as _)
+        }
         //FIXME incomplete！
         setxattr => _ {
             Ok(0)
         }
-        futex => _ {
-            warn!("futex syscall not implemented, task exit");
-            task::sys_exit(-1);
-            Ok(-1)
+        futex => [uaddr, futex_op, val, timeout, uaddr2, val3, ..] {
+            error!("exit futex");
+            task::sys_exit(-1 as i32);
+            // 调用 syscall/pthread.rs 中实现的 sys_futex
+            pthread::sys_futex(uaddr, futex_op, val, timeout as isize, uaddr2, val3)
+        }
+
+
+        // System V IPC Shared Memory System Calls
+        // shmget(key, size, shmflg)
+        shmget => [key, size, shmflg, ..] {
+            apply!(ipc::sys_shmget, key, size, shmflg)
+        }
+
+        // shmat(shmid, shmaddr, shmflg)
+        shmat => [shmid, shmaddr, shmflg, ..] {
+            // shmid: c_int (i32)
+            // shmaddr: *const c_void (usize -> *const c_void)
+            // shmflg: c_int (i32)
+            // 注意：shmaddr 是一个裸指针，需要从 usize 转换
+            let shmaddr_ptr: *const c_void = shmaddr as *const c_void;
+            apply!(ipc::sys_shmat, shmid, shmaddr_ptr, shmflg)
+        }
+
+        // shmdt(shmaddr)
+        shmdt => [shmaddr, ..] {
+            // shmaddr: *const c_void (usize -> *const c_void)
+            let shmaddr_ptr: *const c_void = shmaddr as *const c_void;
+            apply!(ipc::sys_shmdt, shmaddr_ptr)
+        }
+
+        // shmctl(shmid, cmd, buf)
+        shmctl => [shmid, cmd, buf, ..] {
+            // shmid: c_int (i32)
+            // cmd: c_int (i32)
+            // buf: *mut c_void (usize -> *mut c_void)
+            // 注意：buf 是一个裸指针，需要从 usize 转换
+            let buf_ptr: *mut c_void = buf as *mut c_void;
+            apply!(ipc::sys_shmctl, shmid, cmd, buf_ptr)
+        }
+
+        pselect6 => [nfds, readfds, writefds, exceptfds, timeout, sigmask] {
+            // 因为 sys_pselect 内部可能需要裸指针操作，所以这里也需要 unsafe
+            unsafe {
+                apply!(
+                    io::sys_pselect,
+                    nfds, readfds, writefds, exceptfds, timeout, sigmask
+                )
+            }
         }
 );
-
+*/
 fn foo() {
-    
+    //LinuxError::ENOSYS
 }

@@ -12,11 +12,12 @@ extern crate alloc;
 #[macro_use]
 extern crate axlog;
 
-extern crate axsyscall;
+// extern crate axsyscall;
 pub mod ctypes;
 pub mod ptr;
 pub mod utils;
 pub mod fs;
+pub mod pthread;
 
 mod dynamic;
 use core::clone;
@@ -33,7 +34,7 @@ use task::sys_waitpid;
 pub mod elf;
 pub mod loader;
 #[cfg(feature = "syscalls")]
-mod syscall;
+pub mod syscall;
 
 #[cfg(feature = "process")]
 pub mod task;
