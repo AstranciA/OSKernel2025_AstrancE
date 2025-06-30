@@ -9,7 +9,7 @@ axmm = { path = ".AstrancE/modules/axmm" }
 axtask = { path = ".AstrancE/modules/axtask" }
 axsync = { path = ".AstrancE/modules/axsync" }
 axruntime = { path = ".AstrancE/modules/axruntime" }
-#axns = { path = ".AstrancE/modules/axns" }
+axns = { path = ".AstrancE/modules/axns" }
 axfs = { path = ".AstrancE/modules/axfs" }
 axconfig = { path = ".AstrancE/modules/axconfig" }
 acbat = { path = ".AstrancE/crates/acbat" }
@@ -34,11 +34,8 @@ fast-trap = { path = ".AstrancE/crates/fast-trap/fast-trap" }
 debug = 2
 
 
-[source.crates-io]
-replace-with = "vendored-sources"
 
-[source."git+https://github.com/AstranciA/AstrancE.git"]
-git = "https://github.com/AstranciA/AstrancE.git"
+[source.crates-io]
 replace-with = "vendored-sources"
 
 [source."git+https://github.com/MukioXun/cty.git"]

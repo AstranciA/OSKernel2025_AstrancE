@@ -16,7 +16,7 @@ dependencies = [
  "axlog",
  "axmm",
  "axmono",
- "axns 0.1.0 (git+https://github.com/AstranciA/AstrancE.git)",
+ "axns",
  "axruntime",
  "axstd",
  "axsync",
@@ -147,7 +147,7 @@ dependencies = [
  "axhal",
  "axio",
  "axlog",
- "axns 0.1.0",
+ "axns",
  "axruntime",
  "axsync",
  "axtask",
@@ -308,7 +308,7 @@ dependencies = [
  "axfs_ramfs",
  "axfs_vfs",
  "axio",
- "axns 0.1.0",
+ "axns",
  "axsync",
  "cap_access",
  "cfg-if",
@@ -322,7 +322,7 @@ dependencies = [
 
 [[package]]
 name = "axfs_devfs"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axfs_vfs",
  "log",
@@ -331,7 +331,7 @@ dependencies = [
 
 [[package]]
 name = "axfs_procfs"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axfs_vfs",
  "log",
@@ -340,7 +340,7 @@ dependencies = [
 
 [[package]]
 name = "axfs_ramfs"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axfs_vfs",
  "log",
@@ -349,7 +349,7 @@ dependencies = [
 
 [[package]]
 name = "axfs_vfs"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "axerrno",
  "bitflags 2.9.0",
@@ -443,7 +443,7 @@ dependencies = [
  "axio",
  "axlog",
  "axmm",
- "axns 0.1.0",
+ "axns",
  "axprocess",
  "axsignal",
  "axsync",
@@ -469,15 +469,6 @@ dependencies = [
 [[package]]
 name = "axns"
 version = "0.1.0"
-dependencies = [
- "crate_interface",
- "lazyinit",
-]
-
-[[package]]
-name = "axns"
-version = "0.1.0"
-source = "git+https://github.com/AstranciA/AstrancE.git#d23c8f8251d6d46b81d73bbc44e0d8378bd63f48"
 dependencies = [
  "crate_interface",
  "lazyinit",
