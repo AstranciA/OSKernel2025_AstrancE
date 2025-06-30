@@ -13,7 +13,7 @@ AstrancE 是基于 ArceOS 使用 rust 开发的宏内核操作系统，具备良
 ---
 
 初赛情况
-截至6月30日，AstrancE能基本在RISCV-64和LOONGARCH-64通过basic，libc，glibc和luna测例，在实时排名榜上位于19名：
+截至6月30日，AstrancE能基本在RISCV-64和LOONGARCH-64通过basic，libc，glibc和luna测例，在实时排名榜上位于19名,总分为1041.338：
 ![Rank](docs/rank.png)
 
 内核介绍：
