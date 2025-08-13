@@ -76,14 +76,14 @@ clean:
 	@echo "--- Initiating clean for App_oscomp ---"
 	( \
 		cd "$(APP_OSCOMP_DIR)" && \
-		$(MAKE) clean && \
 		rm -rf vendor vendor.tar.gz\
+		$(MAKE) clean && \
 	) || true
 	@echo "--- Initiating clean for AstrancE ---"
 	( \
 		cd "$(AstrancE_DIR)" && \
-		$(MAKE) clean && \
 		rm -rf vendor vendor.tar.gz\
+		$(MAKE) clean && \
 	) || true
 
 help:
