@@ -3,6 +3,7 @@ PROJECT_ROOT := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 # 定义App_oscomp子目录的完整路径
 APP_OSCOMP_DIR := $(PROJECT_ROOT)App_oscomp
+AstrancE_DIR := $(PROJECT_ROOT)AstrancE
 
 # 定义Rust工具链目录变量
 NIGHTLY_TOOLCHAIN_DIR ?= ~/.rustup/toolchains/nightly-2025-01-18-x86_64-unknown-linux-gnu
@@ -75,7 +76,14 @@ clean:
 	@echo "--- Initiating clean for App_oscomp ---"
 	( \
 		cd "$(APP_OSCOMP_DIR)" && \
-		$(MAKE) clean \
+		$(MAKE) clean && \
+		rm -rf vendor vendor.tar.gz\
+	) || true
+	@echo "--- Initiating clean for AstrancE ---"
+	( \
+		cd "$(AstrancE_DIR)" && \
+		$(MAKE) clean && \
+		rm -rf vendor vendor.tar.gz\
 	) || true
 
 help:
