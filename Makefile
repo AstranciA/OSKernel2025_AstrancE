@@ -13,6 +13,35 @@ LOG ?= off
 
 .PHONY: all clean help kernel-la kernel-rv rootfs vendor
 
+
+# $1: 要重试的命令
+# $2: 目标名称（用于错误信息）
+# $3: 最大重试次数
+# $4: 每次重试的延迟 (秒)
+define RETRY_COMMAND
+	@echo "--- Building $2 in App_oscomp (attempt 1/$(shell echo $(word 3,$(subst -, ,$(1))))) ---"
+	@i=1; \
+	MAX_RETRIES=$3; \
+	RETRY_DELAY=$4; \
+	while true; do \
+	    if $(1) ; then \
+	        break; \
+	    fi; \
+	    if [ $$i -ge $$MAX_RETRIES ]; then \
+	        echo "Error: Building $2 failed after $$i attempts." >&2; \
+	        exit 1; \
+	    fi; \
+	    i=$$(expr $$i + 1); \
+	    echo "--- Building $2 failed, retrying (attempt $$i/$$MAX_RETRIES) ---"; \
+	    sleep $$RETRY_DELAY; \
+	done; \
+	echo "--- Building $2 succeeded! ---"
+endef
+
+# 配置重试参数
+DEFAULT_RETRIES := 3
+DEFAULT_RETRY_DELAY := 5 # 秒
+
 # 主构建目标
 # 当 make all 时，它会依次构建 kernel-la, kernel-rv, rootfs
 # 各自目标将完成自己的构建和文件移动
@@ -26,14 +55,17 @@ vendor:
 	tar -xzf App_oscomp/vendor.tar.gz -C App_oscomp/
 
 
-# --- 特定目标: kernel-la ---
 kernel-la:
 	@echo "--- Building kernel-la in App_oscomp ---"
-	( \
-	    cd "$(APP_OSCOMP_DIR)" && \
-	    export PATH="$$PATH:$$HOME/.cargo/bin:./bin" && \
-		export PATH=$$PATH:$(CURDIR)/App_oscomp/bin && \
-	    $(MAKE) LOG=$(LOG) kernel-la TOOLCHAIN_DIR="$(NIGHTLY_TOOLCHAIN_DIR)" \
+	$(call RETRY_COMMAND, \
+	    ( cd "$(APP_OSCOMP_DIR)" && \
+	      export PATH="$$PATH:$$HOME/.cargo/bin:./bin" && \
+		  export PATH=$$PATH:$(CURDIR)/App_oscomp/bin && \
+	      $(MAKE) LOG=$(LOG) kernel-la TOOLCHAIN_DIR="$(NIGHTLY_TOOLCHAIN_DIR)" \
+	    ), \
+	    kernel-la, \
+	    $(DEFAULT_RETRIES), \
+	    $(DEFAULT_RETRY_DELAY) \
 	)
 	@echo "--- Moving kernel-la artifacts to project root ---"
 	mv -f "$(APP_OSCOMP_DIR)/kernel-la.elf" "$(PROJECT_ROOT)kernel-la" || true
@@ -41,11 +73,15 @@ kernel-la:
 # --- 特定目标: kernel-rv ---
 kernel-rv:
 	@echo "--- Building kernel-rv in App_oscomp ---"
-	( \
-	    cd "$(APP_OSCOMP_DIR)" && \
-	    export PATH="$$PATH:$$HOME/.cargo/bin:./bin" && \
-		export PATH=$$PATH:$(CURDIR)/App_oscomp/bin && \
-	    $(MAKE) LOG=$(LOG) kernel-rv TOOLCHAIN_DIR="$(NIGHTLY_TOOLCHAIN_DIR)" \
+	$(call RETRY_COMMAND, \
+	    ( cd "$(APP_OSCOMP_DIR)" && \
+	      export PATH="$$PATH:$$HOME/.cargo/bin:./bin" && \
+		  export PATH=$$PATH:$(CURDIR)/App_oscomp/bin && \
+	      $(MAKE) LOG=$(LOG) kernel-rv TOOLCHAIN_DIR="$(NIGHTLY_TOOLCHAIN_DIR)" \
+	    ), \
+	    kernel-rv, \
+	    $(DEFAULT_RETRIES), \
+	    $(DEFAULT_RETRY_DELAY) \
 	)
 	@echo "--- Moving kernel-rv artifacts to project root ---"
 	mv -f "$(APP_OSCOMP_DIR)/kernel-rv.bin" "$(PROJECT_ROOT)kernel-rv" || true
@@ -76,14 +112,14 @@ clean:
 	@echo "--- Initiating clean for App_oscomp ---"
 	( \
 		cd "$(APP_OSCOMP_DIR)" && \
-		rm -rf vendor vendor.tar.gz\
-		$(MAKE) clean && \
+		rm -rf vendor vendor.tar.gz && \
+		$(MAKE) clean\
 	) || true
 	@echo "--- Initiating clean for AstrancE ---"
 	( \
 		cd "$(AstrancE_DIR)" && \
-		rm -rf vendor vendor.tar.gz\
-		$(MAKE) clean && \
+		rm -rf vendor vendor.tar.gz && \
+		$(MAKE) clean \
 	) || true
 
 help:
