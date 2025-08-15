@@ -50,6 +50,7 @@ all: prepare vendor kernel-la kernel-rv rootfs
 
 prepare:
 	@cd App_oscomp && \
+		rm -rf .AstrancE && \
 		ln -s ../AstrancE .AstrancE
 
 vendor:
