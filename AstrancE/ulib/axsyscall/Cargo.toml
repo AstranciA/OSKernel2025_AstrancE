@@ -1,0 +1,33 @@
+[package]
+name = "axsyscall"
+version.workspace = true
+edition.workspace = true
+authors = ["ZreXoc <zeexoc@outlook.com>", "MukioXun <3045859462@qq.com>", "LEOibyug <y2695719556@outlook.com>"]
+license.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+[features]
+default = ["basic_impl"]
+basic_impl = ["fs", "fd", "pipe", "multitask"]
+fs = ["arceos_posix_api/fs", "dep:axfs"]
+fd = ["arceos_posix_api/fd"]
+net = ["arceos_posix_api/net"]
+pipe = ["arceos_posix_api/pipe"]
+multitask = ["arceos_posix_api/multitask"]
+[dependencies]
+syscalls = { workspace = true }
+arceos_posix_api = { workspace = true, features = ["select"]}
+axerrno = "0.1"
+axhal = { workspace = true }
+axtask = { workspace = true }
+axfs = { workspace = true, optional = true }
+axmm = { workspace = true }
+axconfig = { workspace = true }
+axlog = { workspace = true }
+axfs_vfs = {workspace = true}
+axmono = {workspace = true}
+linkme = { workspace = true }
+

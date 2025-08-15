@@ -1,0 +1,3 @@
+exclude = ["**/.taplo.toml"]
+[schema]
+url = "https://json.schemastore.org/cargo.json"

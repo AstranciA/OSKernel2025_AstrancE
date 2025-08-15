@@ -1,0 +1,57 @@
+[package]
+name = "axmono"
+version.workspace = true
+edition.workspace = true
+authors = ["ZreXoc <zeexoc@outlook.com>", "MukioXun <3045859462@qq.com>", "LEOibyug <y2695719556@outlook.com>"]
+license.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[features]
+default = ["process", "mm", "syscalls", "mmap", "heap", "sig", "COW", "irq"]
+process = ["axns", "axtask", "axfeat/multitask"]
+mm = ["axmm"]
+COW = ["axmm/COW", "page_table_entry/COW"]
+irq = ["axfeat/irq", "axtask?/sched_rr"]
+syscalls = ["dep:syscalls"]
+heap = ["axmm/heap"]
+mmap = ["axmm/mmap"]
+shm = ["axmm/shm"]
+sig = ["dep:axsignal"]
+[dependencies]
+page_table_entry = { workspace = true }
+page_table_multiarch = { workspace = true }
+axfeat = { workspace = true, features = ["tls"] }
+axconfig = { workspace = true }
+axalloc = { workspace = true }
+axhal = { workspace = true }
+axlog = { workspace = true }
+arceos_posix_api = { workspace = true, features = ["uspace", "select"] }
+axfs = { workspace = true, features = ["dyn"] }
+axmm = { workspace = true, optional = true }
+axtask = { workspace = true, optional = true }
+axsync = { workspace = true }
+axns = { workspace = true, optional = true }
+axsignal = { workspace = true, optional = true }
+#axsyscall = { workspace = true, features = ["fd", "fs", "pipe", "multitask"] }
+axio = { version = "0.1.1", features = ["alloc"] }
+linux-raw-sys = { workspace = true }
+axerrno = "0.1"
+memory_addr = "0.3.2"
+bitflags = "2.9.0"
+crate_interface = "0.1.4"
+xmas-elf = "0.9.1"
+kernel-elf-parser = "0.3.2"
+linkme = "0.3.32"
+numeric-enum-macro = { git = "https://github.com/mexus/numeric-enum-macro" }
+syscalls = { workspace = true, optional = true }
+axprocess = { git = "https://github.com/Starry-OS/axprocess.git" }
+spin = "0.10.0"
+percpu = "0.2.0"
+weak-map = { workspace = true }
+static_assertions = "1.1.0"
+[target.'cfg(any(target_arch = "riscv32", target_arch = "riscv64"))'.dependencies]
+riscv = "0.12"

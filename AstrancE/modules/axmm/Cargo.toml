@@ -1,0 +1,37 @@
+[package]
+name = "axmm"
+version.workspace = true
+edition.workspace = true
+authors = [
+  "Yuekai Jia <equation618@gmail.com>",
+  "ZreXoc <zeexoc@outlook.com>",
+  "MukioXun <3045859462@qq.com>",
+  "LEOibyug <y2695719556@outlook.com>",
+]
+description = "ArceOS virtual memory management module"
+license.workspace = true
+homepage.workspace = true
+repository = "https://github.com/arceos-org/arceos/tree/main/modules/axmm"
+documentation = "https://arceos-org.github.io/arceos/axmm/index.html"
+
+[features]
+RAII = ["memory_set/RAII", "memory_addr/RAII"]
+COW = ["RAII"]
+heap = []
+mmap = ["memory_set/mmap"]
+shm = []
+default = ["COW", "heap", "mmap", "shm"]
+
+[dependencies]
+axsync = { workspace = true }
+axhal = { workspace = true, features = ["paging"] }
+axalloc = { workspace = true }
+axconfig = { workspace = true }
+log = "=0.4.21"
+axerrno = "0.1"
+lazyinit = "0.2"
+memory_addr = { workspace = true }
+memory_set = { workspace = true }
+kspin = "0.1"
+page_table_multiarch = { workspace = true }
+bitflags = { workspace = true }

@@ -1,0 +1,146 @@
+//! Memory mapping backends.
+
+use ::alloc::sync::Arc;
+use axhal::paging::{MappingFlags, PageTable};
+use axsync::Mutex;
+use memory_addr::VirtAddr;
+use memory_set::MappingBackend;
+
+use crate::{aspace::mmap::MmapIO, shm::ShmSegment, AddrSpace};
+
+pub mod alloc;
+pub mod frame;
+pub use frame::*;
+mod linear;
+
+/// A unified enum type for different memory mapping backends.
+///
+/// Currently, two backends are implemented:
+///
+/// - Linear: used for linear mappings. The target physical frames are
+///   contiguous and their addresses should be known when creating the mapping.
+/// - Allocation: used in general, or for lazy mappings. The target physical
+///   frames are obtained from the global allocator.
+#[derive(Clone)]
+pub enum Backend {
+    /// Linear mapping backend.
+    ///
+    /// The offset between the virtual address and the physical address is
+    /// constant, which is specified by pa_va_offset. For example, the virtual
+    /// address vaddr is mapped to the physical address vaddr - pa_va_offset.
+    Linear {
+        /// vaddr - paddr.
+        pa_va_offset: usize,
+    },
+    /// Allocation mapping backend.
+    ///
+    /// If populate is true, all physical frames are allocated when the
+    /// mapping is created, and no page faults are triggered during the memory
+    /// access. Otherwise, the physical frames are allocated on demand (by
+    /// handling page faults).
+    Alloc {
+        va_type: VmAreaType,
+        /// Whether to populate the physical frames when creating the mapping.
+        populate: bool,
+    },
+}
+
+impl MappingBackend for Backend {
+    type Addr = VirtAddr;
+    type Flags = MappingFlags;
+    type PageTable = PageTable;
+    type FrameTrackerImpl = FrameTrackerImpl;
+    type FrameTrackerRef = Arc<FrameTrackerImpl>;
+
+    fn unmap(&self, start: VirtAddr, size: usize, pt: &mut PageTable) -> bool {
+        match self {
+            Self::Linear { pa_va_offset } => Self::unmap_linear(start, size, pt, *pa_va_offset),
+            Self::Alloc { populate, va_type } => {
+                Self::unmap_alloc(start, size, pt, va_type.clone(), *populate)
+            }
+        }
+    }
+
+    fn protect(
+        &self,
+        start: Self::Addr,
+        size: usize,
+        new_flags: Self::Flags,
+        page_table: &mut Self::PageTable,
+    ) -> bool {
+        page_table
+            .protect_region(start, size, new_flags, true)
+            .map(|tlb| tlb.ignore())
+            .is_ok()
+    }
+
+    fn map(
+        &self,
+        start: VirtAddr,
+        size: usize,
+        flags: MappingFlags,
+        pt: &mut PageTable,
+    ) -> Result<FrameTrackerMap, ()> {
+        let frame_refs = match self {
+            Self::Linear { pa_va_offset } => {
+                Self::map_linear(start, size, flags, pt, *pa_va_offset)
+            }
+            Self::Alloc { populate, va_type } => {
+                Self::map_alloc(start, size, flags, pt, va_type.clone(), *populate)
+            }
+        };
+        frame_refs
+    }
+}
+
+impl Backend {
+    pub(crate) fn handle_page_fault(
+        &self,
+        vaddr: VirtAddr,
+        orig_flags: MappingFlags,
+        aspace: &mut AddrSpace,
+    ) -> bool {
+        match self {
+            Self::Linear { .. } => false, // Linear mappings should not trigger page faults.
+            Self::Alloc { populate, va_type } => {
+                let populate = if !populate {
+                    aspace.pt.query(vaddr).is_ok()
+                } else {
+                    *populate
+                };
+                Self::handle_page_fault_alloc(vaddr, va_type.clone(), orig_flags, aspace, populate)
+            }
+        }
+    }
+
+    pub fn get_vm_type(&self) -> Option<VmAreaType> {
+        match self {
+            Self::Linear { .. } => None,
+            Self::Alloc { va_type, .. } => Some(va_type.clone()),
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum VmAreaType {
+    Normal,
+    Elf,
+    Heap,
+    Stack,
+    Mmap(Arc<dyn MmapIO>),
+    Shm(Arc<Mutex<ShmSegment>>),
+}
+
+
+impl core::fmt::Debug for VmAreaType {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        match self {
+            VmAreaType::Normal => write!(f, "Normal"),
+            VmAreaType::Elf => write!(f, "Elf"),
+            VmAreaType::Heap => write!(f, "Heap"),
+            VmAreaType::Stack => write!(f, "Stack"),
+            VmAreaType::Mmap(_) => write!(f, "Mmap"), // 忽略内部数据
+            VmAreaType::Shm(_) => write!(f, "Shm"),   // 忽略内部数据
+        }
+    }
+}
