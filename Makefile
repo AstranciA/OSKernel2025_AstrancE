@@ -61,7 +61,7 @@ kernel-la:
 	    ( cd "$(APP_OSCOMP_DIR)" && \
 	      export PATH="$$PATH:$$HOME/.cargo/bin:./bin" && \
 		  export PATH=$$PATH:$(CURDIR)/App_oscomp/bin && \
-	      $(MAKE) LOG=$(LOG) kernel-la TOOLCHAIN_DIR="$(NIGHTLY_TOOLCHAIN_DIR)" \
+	      $(MAKE) LOG=$(LOG) kernel-la TOOLCHAIN_DIR="$(NIGHTLY_TOOLCHAIN_DIR)" OFFLINE=1\
 	    ), \
 	    kernel-la, \
 	    $(DEFAULT_RETRIES), \
@@ -77,7 +77,7 @@ kernel-rv:
 	    ( cd "$(APP_OSCOMP_DIR)" && \
 	      export PATH="$$PATH:$$HOME/.cargo/bin:./bin" && \
 		  export PATH=$$PATH:$(CURDIR)/App_oscomp/bin && \
-	      $(MAKE) LOG=$(LOG) kernel-rv TOOLCHAIN_DIR="$(NIGHTLY_TOOLCHAIN_DIR)" \
+	      $(MAKE) LOG=$(LOG) kernel-rv TOOLCHAIN_DIR="$(NIGHTLY_TOOLCHAIN_DIR)" OFFLINE=1\
 	    ), \
 	    kernel-rv, \
 	    $(DEFAULT_RETRIES), \
