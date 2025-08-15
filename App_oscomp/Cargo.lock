@@ -244,11 +244,11 @@ dependencies = [
 
 [[package]]
 name = "axdriver_base"
-version = "0.1.0"
+version = "0.1.3"
 
 [[package]]
 name = "axdriver_block"
-version = "0.1.0"
+version = "0.1.3"
 dependencies = [
  "axdriver_base",
  "log",
@@ -256,14 +256,14 @@ dependencies = [
 
 [[package]]
 name = "axdriver_pci"
-version = "0.1.0"
+version = "0.1.3"
 dependencies = [
  "virtio-drivers",
 ]
 
 [[package]]
 name = "axdriver_virtio"
-version = "0.1.0"
+version = "0.1.3"
 dependencies = [
  "axdriver_base",
  "axdriver_block",
@@ -472,7 +472,7 @@ dependencies = [
  "spin 0.10.0",
  "static_assertions",
  "syscalls",
- "weak-map 0.1.1 (git+https://github.com/Starry-OS/weak-map)",
+ "weak-map",
  "xmas-elf",
 ]
 
@@ -500,7 +500,7 @@ source = "git+https://github.com/Starry-OS/axprocess.git#16668091f34fcc7224bbc25
 dependencies = [
  "kspin",
  "lazyinit",
- "weak-map 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "weak-map",
 ]
 
 [[package]]
@@ -1614,13 +1614,7 @@ checksum = "442887c63f2c839b346c192d047a7c87e73d0689c9157b00b53dcc27dd5ea793"
 [[package]]
 name = "weak-map"
 version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "209bc3ff6d982801239e57fa3b8b3505d4fc41102d1d162cca38b325297fe77b"
-
-[[package]]
-name = "weak-map"
-version = "0.1.1"
-source = "git+https://github.com/Starry-OS/weak-map#12bb7455fc8dc2c8f4ed2ba57f021ec167a6deca"
+source = "git+https://github.com/Starry-OS/weak-map.git#12bb7455fc8dc2c8f4ed2ba57f021ec167a6deca"
 
 [[package]]
 name = "which"
@@ -1866,7 +1860,7 @@ dependencies = [
 
 [[patch.unused]]
 name = "axdriver_net"
-version = "0.1.0"
+version = "0.1.3"
 
 [[patch.unused]]
 name = "fast-trap"
