@@ -11,7 +11,7 @@ NIGHTLY_TOOLCHAIN_DIR ?= ~/.rustup/toolchains/nightly-2025-01-18-x86_64-unknown-
 # LOG 变量，可以从命令行传递，例如 `make all LOG=1`
 LOG ?= off
 
-.PHONY: all clean help kernel-la kernel-rv rootfs vendor
+.PHONY: all prepare clean help kernel-la kernel-rv rootfs vendor
 
 
 # $1: 要重试的命令
@@ -45,8 +45,12 @@ DEFAULT_RETRY_DELAY := 5 # 秒
 # 主构建目标
 # 当 make all 时，它会依次构建 kernel-la, kernel-rv, rootfs
 # 各自目标将完成自己的构建和文件移动
-all: vendor kernel-la kernel-rv rootfs
+all: prepare vendor kernel-la kernel-rv rootfs
 	@echo "--- All components built and moved to project root ---"
+
+prepare:
+	@cd App_oscomp && \
+		ln -s ../AstrancE .AstrancE
 
 vendor:
 	#cat AstrancE/vendor.tar.gz.* > AstrancE/vendor.tar.gz
