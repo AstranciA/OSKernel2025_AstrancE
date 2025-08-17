@@ -1,0 +1,8 @@
+target
+.axconfig.*
+.AstrancE
+*.bin
+*.elf
+*.img
+.idea
+.vscode
