@@ -1,0 +1,20 @@
+[package]
+name = "acbat"
+version = "0.1.0"
+description = "A simple command-line tool for managing and analyzing astronomical data"
+authors = ["Xichen Zeng <zeexoc@outlook.com>"]
+edition.workspace = true
+license.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+[dependencies]
+path-clean = "1.0.1"
+pathdiff = "0.2.3"
+relative-path = "1.9.3"
+
+[dev-dependencies]
+tempfile = "3.19.0"

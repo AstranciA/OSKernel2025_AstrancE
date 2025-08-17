@@ -1,0 +1,3 @@
+[submodule "c/lwext4"]
+	path = c/lwext4
+	url = git@github.com:AstranciA/lwext4.git

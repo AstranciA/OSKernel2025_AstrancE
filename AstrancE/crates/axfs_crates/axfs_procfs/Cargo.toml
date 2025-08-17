@@ -1,0 +1,15 @@
+[package]
+name = "axfs_procfs"
+edition = "2024"
+version.workspace = true
+authors.workspace = true
+license.workspace = true
+homepage.workspace = true
+documentation.workspace = true
+repository.workspace = true
+categories.workspace = true
+
+[dependencies]
+axfs_vfs.workspace = true
+spin = "0.9"
+log = "0.4"
